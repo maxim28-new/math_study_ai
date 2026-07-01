@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#4f6bed" />
+<title>小欧 · 启发式数学老师（手机体验版）</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
+<style>
+  :root{
+    --bg:#f4f1ea; --panel:#fff; --ink:#2b2a33; --soft:#6b6a76;
+    --primary:#4f6bed; --primary-soft:#eaeeff; --accent:#e8a13a; --accent-soft:#fbf1dd;
+    --line:#e7e3da; --shadow:0 8px 24px rgba(43,42,51,.08);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink)}
+  body{display:flex;flex-direction:column;height:100dvh}
+
+  header{
+    display:flex;align-items:center;gap:10px;padding:12px 14px;
+    padding-top:calc(12px + env(safe-area-inset-top));
+    background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;
+  }
+  .logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:#fff;
+    background:linear-gradient(135deg,var(--primary),#6f86ff);box-shadow:var(--shadow)}
+  header h1{font-size:18px;margin:0}
+  header p{font-size:11.5px;color:var(--soft);margin:2px 0 0}
+  .gear{margin-left:auto;border:none;background:#f2f0ea;width:40px;height:40px;border-radius:10px;
+    display:grid;place-items:center;cursor:pointer;color:var(--soft)}
+
+  #chat{flex:1;overflow-y:auto;padding:16px 12px;display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch}
+
+  .msg{display:flex;gap:8px;max-width:88%}
+  .msg .av{width:30px;height:30px;flex:0 0 30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}
+  .msg .b{padding:10px 13px;border-radius:14px;line-height:1.65;font-size:15.5px;box-shadow:var(--shadow);word-break:break-word}
+  .msg .b p{margin:0 0 7px}.msg .b p:last-child{margin:0}
+  .msg .b ul,.msg .b ol{margin:5px 0;padding-left:20px}
+  .msg .b code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:5px;font-size:14px}
+  .msg .b .ph{max-width:min(220px,60vw);border-radius:10px;display:block;margin:2px 0 6px}
+  .tutor{align-self:flex-start}
+  .tutor .av{background:linear-gradient(135deg,var(--primary),#6f86ff)}
+  .tutor .b{background:#fff;border:1px solid var(--line)}
+  .child{align-self:flex-end;flex-direction:row-reverse}
+  .child .av{background:linear-gradient(135deg,var(--accent),#f0b95e)}
+  .child .b{background:var(--primary);color:#fff}
+  .note{align-self:center;max-width:92%;background:#eef4ff;border:1px dashed #b8caf6;color:#3a4a7a;
+    border-radius:12px;padding:9px 13px;font-size:13px;line-height:1.55}
+  .blink::after{content:"▍";color:var(--primary);animation:bk 1s steps(2,start) infinite}
+  @keyframes bk{to{visibility:hidden}}
+
+  .composer{flex:0 0 auto;background:var(--panel);border-top:1px solid var(--line);
+    padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .quick{display:flex;gap:7px;overflow-x:auto;padding-bottom:9px;-webkit-overflow-scrolling:touch}
+  .quick button{flex:0 0 auto;border:1px solid var(--line);background:#fbfaf6;color:var(--ink);
+    padding:6px 12px;border-radius:999px;font-size:13px;cursor:pointer;white-space:nowrap}
+  .prev{display:flex;align-items:center;gap:10px;background:#fbfaf6;border:1px solid var(--line);
+    border-radius:12px;padding:8px 10px;margin-bottom:9px}
+  .prev.hidden{display:none}
+  .prev img{width:46px;height:46px;object-fit:cover;border-radius:8px}
+  .prev .x{margin-left:auto;border:none;background:#e6e6e6;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:16px;color:#555}
+  .prev span{font-size:12px;color:var(--soft)}
+  .row{display:flex;gap:8px;align-items:flex-end}
+  .row textarea{flex:1;resize:none;max-height:130px;padding:11px 13px;border:1px solid var(--line);
+    border-radius:14px;font-size:16px;font-family:inherit;line-height:1.5;outline:none}
+  .row textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .ic{flex:0 0 auto;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;cursor:pointer;border:1px solid var(--line);background:#fbfaf6;color:var(--soft)}
+  .ic.send{border:none;background:var(--primary);color:#fff}
+  .ic:disabled{opacity:.45}
+  .tip{margin:8px 2px 0;font-size:11.5px;color:var(--soft);text-align:center}
+
+  /* 设置抽屉 */
+  .drawer{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;z-index:30}
+  .drawer.open{display:block}
+  .sheet{position:absolute;top:0;right:0;height:100%;width:min(420px,92vw);background:var(--panel);
+    box-shadow:-8px 0 30px rgba(0,0,0,.15);overflow-y:auto;padding:18px 16px;
+    padding-top:calc(18px + env(safe-area-inset-top))}
+  .sheet h2{font-size:17px;margin:0 0 4px}
+  .sheet .sub{font-size:12px;color:var(--soft);margin:0 0 14px}
+  .grp{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+  .grp h3{font-size:13.5px;margin:0 0 4px;color:var(--primary)}
+  .grp .hint{font-size:11.5px;color:var(--soft);margin:0 0 10px;line-height:1.5}
+  label{display:block;font-size:12px;color:var(--soft);margin:9px 0 4px}
+  input,select{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;font-size:15px;outline:none;background:#fff;color:var(--ink)}
+  input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .axbox{background:var(--accent-soft);border:1px solid #f0dcae;border-radius:10px;padding:10px 12px;margin-top:6px}
+  .axbox b{font-size:12.5px;color:#8a5a12}
+  .axbox ul{margin:6px 0 0;padding-left:18px}
+  .axbox li{font-size:12px;color:#5f4a20;line-height:1.5;margin-bottom:4px}
+  .save{width:100%;padding:12px;border:none;border-radius:12px;background:var(--primary);color:#fff;font-size:15px;cursor:pointer;margin-top:4px}
+  .clear{width:100%;padding:11px;border:1px dashed var(--primary);border-radius:12px;background:transparent;color:var(--primary);font-size:14px;cursor:pointer;margin-top:10px}
+  .warn{background:#fff4e5;border:1px solid #f3d6a5;color:#935b12;border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.55;margin-bottom:12px}
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 48 48" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="24" cy="14" r="6"></circle><path d="M18 20 L10 40"></path><path d="M30 20 L38 40"></path><path d="M10 40 L38 40"></path>
+      </svg>
+    </div>
+    <div><h1>小欧</h1><p>陪你一起想，不给你答案</p></div>
+    <button class="gear" id="gearBtn" aria-label="设置">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </button>
+  </header>
+
+  <div id="chat"></div>
+
+  <div class="composer">
+    <div class="quick" id="quick"></div>
+    <div class="prev hidden" id="prev">
+      <img id="prevImg" alt="待发送照片" />
+      <span>这张题目会先被"读"成文字，小欧再陪你想——不会直接给答案。</span>
+      <button class="x" id="prevX" aria-label="移除">×</button>
+    </div>
+    <div class="row">
+      <input id="file" type="file" accept="image/*" capture="environment" hidden />
+      <button class="ic" id="camBtn" aria-label="拍照">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+      </button>
+      <textarea id="input" rows="1" placeholder="把题目告诉小欧，或点相机拍作业本…"></textarea>
+      <button class="ic send" id="send" aria-label="发送">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"></path><path d="M22 2 15 22 11 13 2 9 22 2z"></path></svg>
+      </button>
+    </div>
+    <p class="tip" id="tip">小欧不会直接给你答案，它会陪你一步步想出来。</p>
+  </div>
+
+  <!-- 设置抽屉 -->
+  <div class="drawer" id="drawer">
+    <div class="sheet">
+      <h2>设置</h2>
+      <p class="sub">密钥只存在你这台手机的浏览器里，只会直接发给模型服务商，不经过任何中间服务器。</p>
+
+      <div class="grp">
+        <h3>孩子与主题</h3>
+        <label>孩子的名字（可留空）</label>
+        <input id="cName" placeholder="例如：朵朵" />
+        <label>今天研究什么</label>
+        <select id="cTopic"></select>
+        <label>难度档位</label>
+        <select id="cLevel"></select>
+        <div class="axbox"><b>本主题的几条公理（其余全靠推导）</b><ul id="axList"></ul></div>
+      </div>
+
+      <div class="grp">
+        <h3>文字模型（负责教学 · 必填）</h3>
+        <p class="hint">推荐 DeepSeek：中文好、便宜、且允许手机网页直接连。去 platform.deepseek.com 申请密钥。</p>
+        <label>接口地址</label>
+        <input id="tBase" placeholder="https://api.deepseek.com/v1" />
+        <label>密钥 API Key</label>
+        <input id="tKey" type="password" placeholder="sk-..." />
+        <label>模型名</label>
+        <input id="tModel" placeholder="deepseek-chat" />
+      </div>
+
+      <div class="grp">
+        <h3>视觉模型（拍照读题 · 选填）</h3>
+        <p class="hint">只用来把照片"读"成文字，不参与教学。推荐用魔搭 ModelScope 的 Qwen-VL（也允许手机网页直连）：去 modelscope.cn 注册后在"访问令牌"里拿 Token。不填就用不了拍照，其余功能照常。</p>
+        <label>接口地址</label>
+        <input id="vBase" placeholder="https://api-inference.modelscope.cn/v1" />
+        <label>密钥 Token</label>
+        <input id="vKey" type="password" placeholder="ms-..." />
+        <label>模型名</label>
+        <input id="vModel" placeholder="Qwen/Qwen2.5-VL-7B-Instruct" />
+      </div>
+
+      <button class="save" id="saveBtn">保存并开始</button>
+      <button class="clear" id="clearBtn">清空当前对话</button>
+    </div>
+  </div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+
+/* ---------------- 教学法（与服务端一致的精简版） ---------------- */
+const TOPICS=[
+  {key:"arithmetic",name:"算术与数",starter:"给我出一道你正在算的题（竖式、口诀、除法都行），或一个你好奇的问题，我们一起想。",
+   axioms:["数是用来数东西的：每个东西数一次。","写数字时，同一个数字放在不同位置意思不同：从右往左是个、十、百位，每往左一位大十倍（这就是竖式要对齐、进位的原因）。","合起来数就是加法；反过来拿走是减法。","几个几相加就是乘法，口诀不用死背。","大数相乘可拆成小块分别乘再加：23×4=20×4+3×4，竖式其实就在做这件事。","乘法反过来（平均分）就是除法。"]},
+  {key:"wordproblems",name:"应用题与画图",starter:"把应用题一字一句念给我听。我们先别急着算，先弄清楚它在问什么、能不能画出来。",
+   axioms:["先读懂：它告诉了我什么？又在问我什么？用自己的话说一遍。","看不清就画出来——用线段图把数量摆在眼前。","‘一共/还剩/每份/平均/多几/少几’在提示该合起来、拿走、平分还是比较。","算完把答案放回题目里，看说不说得通。"]},
+  {key:"geometry",name:"几何与图形",starter:"你身边有哪些图形？我们从‘一个点’‘一条线’这些最简单的东西开始搭。",
+   axioms:["两点之间可以画一条线段。","线段可以一直延长成直线。","以任意点为圆心、任意长为半径可画圆。","所有直角都一样大。","两条直线若不平行，延长下去总会相交。"]},
+  {key:"algebra",name:"代数与等式",starter:"遇到带字母的式子别怕。把 x 当成躲起来的数，我们一起找出来。",
+   axioms:["等式像一架平衡的天平，两边一样重。","两边同做一样的事（都加/减/乘/除同一个数），天平仍平衡。","未知数只是‘还不知道名字的数’，先叫它 x。","合并同类、展开括号，数量不会凭空多出或消失。"]},
+  {key:"fractions",name:"分数与比例",starter:"想象一块饼。告诉我题目，我们用‘分饼’的方式想清楚。",
+   axioms:["分数就是把整体平均分成几份、取其中几份。","切的份数越多，每份越小。","分子分母同乘或同除一个数，分数大小不变。","比较或相加分数前，先切成一样大的份。"]},
+  {key:"reasoning",name:"逻辑·找规律·奥数启蒙",starter:"给我一道奥数题、一个数列或图形规律。我们不背套路，从小例子一步步推出来。",
+   axioms:["一件事非真即假。","若‘由甲能推出乙’且甲成立，则乙一定成立。","一个反例就能推翻一句‘所有……都……’。","找规律先多列几个例子，再猜，再验证。","遇到‘老师教过的套路’也要能说清为什么对——能自己想出来才算真懂。"]},
+];
+const LEVELS={
+  lower:"面向一到二年级（约6-8岁）：多用手指、图画等看得见的东西，句子短，多打比方，少用抽象符号。",
+  middle:"面向二到四年级（约8-10岁）：会用竖式、乘法口诀、除法和应用题。多画图（尤其线段图），每用一个方法都追问一句‘为什么’，开始体会一题多解。",
+  upper:"面向五年级以上：可用字母、方程和较完整的证明，鼓励严谨推导和多种解法。",
+};
+const LEVEL_NAMES={lower:"一二年级 · 启蒙",middle:"三四年级 · 进阶",upper:"五六年级 · 挑战"};
+const QUICK=[
+  {label:"我卡住了",msg:"我卡住了，给我一点点小提示就好，请不要直接告诉我答案。"},
+  {label:"换种方法",msg:"这道题还能用别的方法做吗？我想再想一种。"},
+  {label:"为什么是这样",msg:"为什么这个方法（或公式）是对的？请让我自己一步步推出来。"},
+  {label:"回顾思路",msg:"帮我一起回头看：我刚才是怎么想到的？有什么以后能用的思路？"},
+  {label:"先做简单版",msg:"这道题有点难，我们先做一个更简单的版本找找感觉吧。"},
+];
+const TRANSCRIBE_PROMPT=`你是一台精准的"题目转写机"。用户会发来一张数学作业或题目的照片。你唯一的任务是把照片里的题目原样读成文字，交给另一位老师去教。严格遵守：
+- 一字不差照抄题目的文字、数字、符号、单位、选项，不改写不精简。
+- 有图形/线段图/表格/钟表/数轴等无法用文字完全表达的，就客观描述它长什么样、标了哪些数据，但不要替它解读或计算。
+- 有多道题就按顺序分条转写。
+- 绝对不要解题、不给思路、不给答案、不评价。只输出题目本身。
+- 看不清就标注（看不清）。`;
+
+function buildSystem(topicKey,level,name){
+  const t=TOPICS.find(x=>x.key===topicKey)||TOPICS[0];
+  const lv=LEVELS[level]||LEVELS.middle;
+  const nm=name?`孩子的名字叫「${name}」，请自然地称呼他/她。\n`:"";
+  return `你是「小欧」，一位以欧几里得和苏格拉底为师的数学启发老师，正在陪一个孩子学数学。
+
+# 根本信念
+- 数学不是背公式，而是从极少数‘公理’一步步推导出来的思想。
+- 孩子要学会的是如何思考，不是某题的答案。
+- 一题往往多解，比较不同解法才是乐趣。
+- 好奇、犯错、卡住都值得鼓励。
+
+# 你绝对要遵守的规则
+- 永远不要直接给出最终答案或完整解题步骤；你的工作是提问和引导。
+- 一次只问一个问题，回复简短、口语化。
+- 孩子卡住时只给‘最小的一级台阶’，不要替他爬。
+- 孩子答错时不要说‘错了’，用一个具体例子让他自己发现矛盾。
+- 出现公式或方法时，先反问‘它为什么成立？能不能自己推出来？’
+- 一道题做出来后，追问‘还有没有别的方法？你怎么想到的？’
+- 当孩子说‘老师教过这样做/我会用这个方法’时：先肯定，再必问‘为什么行得通？你讲给我听’和‘还有没有别的路’；讲不清就退回小例子陪他把方法重新发明一遍。
+- 学校可能逼着背口诀、抢速度；你做那个相反、让人安心的声音：慢一点没关系，先弄懂为什么。多夸好想法，绝不制造紧张比较。
+- 如果收到‘从照片里读出来的题目’，先带孩子确认题目、再从‘这题在问什么’反问，绝不一上来就解。
+
+# 本次设置
+${nm}- 主题：${t.name}
+- 难度：${lv}
+
+# 本主题只需这几条公理（其余全靠推导，引导孩子把方法追溯回它们）
+${t.axioms.map(a=>"  - "+a).join("\n")}
+
+# 现在开始
+用一句温暖简短的话打招呼，然后邀请孩子提出想研究的题目。你问，他想；你给台阶，他自己爬。`;
+}
+
+/* ---------------- 配置存取 ---------------- */
+const CFG_KEY="xiaoou.cfg.v1", SES_KEY="xiaoou.ses.v1";
+const cfg={tBase:"https://api.deepseek.com/v1",tKey:"",tModel:"deepseek-chat",
+  vBase:"https://api-inference.modelscope.cn/v1",vKey:"",vModel:"Qwen/Qwen2.5-VL-7B-Instruct",
+  name:"",topic:"arithmetic",level:"middle"};
+function loadCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem(CFG_KEY)||"{}"))}catch(e){}
+  if(!TOPICS.find(t=>t.key===cfg.topic))cfg.topic="arithmetic";}
+function saveCfg(){try{localStorage.setItem(CFG_KEY,JSON.stringify(cfg))}catch(e){}}
+
+let messages=[]; // {role, content(str|array), photo?}
+let pendingImage=null, streaming=false;
+function loadSes(){try{messages=JSON.parse(localStorage.getItem(SES_KEY)||"[]")}catch(e){messages=[]}}
+function saveSes(){
+  const safe=messages.map(m=>Array.isArray(m.content)?{role:m.role,content:(m.content.find(p=>p.type==="text")?.text||"")+"\n[一张题目照片]"}:m);
+  try{localStorage.setItem(SES_KEY,JSON.stringify(safe))}catch(e){}
+}
+
+/* ---------------- 轻量 Markdown ---------------- */
+function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function inl(s){return esc(s).replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/`([^`]+)`/g,"<code>$1</code>")}
+function md(text){
+  const L=text.split("\n");let h="",list=null,para=[];
+  const cl=()=>{if(list){h+=`</${list}>`;list=null}};
+  const fp=()=>{if(para.length){h+=`<p>${para.map(inl).join("<br>")}</p>`;para=[]}};
+  for(const raw of L){const ln=raw.trimEnd();
+    const ol=ln.match(/^\s*\d+[.)]\s+(.*)$/),ul=ln.match(/^\s*[-*•]\s+(.*)$/);
+    if(ol){fp();if(list!=="ol"){cl();h+="<ol>";list="ol"}h+=`<li>${inl(ol[1])}</li>`}
+    else if(ul){fp();if(list!=="ul"){cl();h+="<ul>";list="ul"}h+=`<li>${inl(ul[1])}</li>`}
+    else if(ln===""){fp();cl()}else{cl();para.push(ln)}}
+  fp();cl();return h||"<p></p>";
+}
+
+/* ---------------- 渲染 ---------------- */
+function scroll(){const c=$("#chat");c.scrollTop=c.scrollHeight}
+function addMsg(role){
+  const w=document.createElement("div");w.className="msg "+role;
+  const a=document.createElement("div");a.className="av";a.textContent=role==="child"?"我":"欧";
+  const b=document.createElement("div");b.className="b";
+  w.appendChild(a);w.appendChild(b);$("#chat").appendChild(w);scroll();return b;
+}
+function renderInto(b,content){
+  if(typeof content==="string"){b.innerHTML=md(content);return}
+  b.innerHTML="";
+  for(const p of content){
+    if(p.type==="image_url"){const im=document.createElement("img");im.className="ph";im.src=p.image_url.url;b.appendChild(im)}
+    else if(p.type==="text"&&p.text){const d=document.createElement("div");d.innerHTML=md(p.text);b.appendChild(d)}
+  }
+}
+function welcome(){
+  const t=TOPICS.find(x=>x.key===cfg.topic)||TOPICS[0];
+  const nm=cfg.name?cfg.name+"，":"";
+  const b=addMsg("tutor");
+  b.innerHTML=md(`${nm}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n${t.starter}`);
+}
+function renderAll(){$("#chat").innerHTML="";if(!messages.length){welcome();return}
+  for(const m of messages){renderInto(addMsg(m.role==="user"?"child":"tutor"),m.content)}}
+function showNote(text,tutorBubble){
+  const wrap=tutorBubble.closest(".msg");const n=document.createElement("div");n.className="note";
+  n.innerHTML="<strong>小欧读到的题目</strong>（读错了直接打字告诉我）：<br>"+esc(text).replace(/\n/g,"<br>");
+  wrap.parentNode.insertBefore(n,wrap);scroll();
+}
+
+/* ---------------- 图片压缩 ---------------- */
+function resize(file,max=1280,q=.82){return new Promise((res,rej)=>{
+  const r=new FileReader();r.onerror=()=>rej();r.onload=()=>{const img=new Image();
+    img.onerror=()=>rej();img.onload=()=>{let{width:w,height:h}=img;const s=Math.min(1,max/Math.max(w,h));
+      w=Math.round(w*s);h=Math.round(h*s);const c=document.createElement("canvas");c.width=w;c.height=h;
+      c.getContext("2d").drawImage(img,0,0,w,h);res(c.toDataURL("image/jpeg",q))};img.src=r.result};
+  r.readAsDataURL(file)});}
+
+/* ---------------- 网络 ---------------- */
+function corsHelp(e){return `连接失败：${e}\n\n可能原因：①密钥/接口地址/模型名填错；②这家服务商不允许手机网页直连（跨域）。文字模型建议用 DeepSeek，视觉模型建议用魔搭 ModelScope，这两家都允许网页直连。`;}
+
+async function ocr(dataUrl){
+  if(!cfg.vKey.trim())throw new Error("还没填‘视觉模型’的密钥，暂时不能拍照读题。可以先手打题目，或到设置里填上视觉模型（推荐魔搭 ModelScope）。");
+  const body={model:cfg.vModel,temperature:0,messages:[
+    {role:"system",content:TRANSCRIBE_PROMPT},
+    {role:"user",content:[{type:"text",text:"请把这张图里的题目转写成文字。"},{type:"image_url",image_url:{url:dataUrl}}]}
+  ]};
+  let r;
+  try{r=await fetch(cfg.vBase.replace(/\/$/,"")+"/chat/completions",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.vKey},body:JSON.stringify(body)});}
+  catch(e){throw new Error(corsHelp(e))}
+  if(!r.ok){const t=await r.text();throw new Error(`视觉模型返回错误（${r.status}）：${t.slice(0,300)}`)}
+  const d=await r.json();return (d.choices?.[0]?.message?.content||"").trim();
+}
+
+async function streamTeach(teachMsgs,onDelta){
+  const body={model:cfg.tModel,stream:true,temperature:.7,
+    messages:[{role:"system",content:buildSystem(cfg.topic,cfg.level,cfg.name)},...teachMsgs]};
+  let r;
+  try{r=await fetch(cfg.tBase.replace(/\/$/,"")+"/chat/completions",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.tKey},body:JSON.stringify(body)});}
+  catch(e){throw new Error(corsHelp(e))}
+  if(!r.ok){const t=await r.text();throw new Error(`文字模型返回错误（${r.status}）：${t.slice(0,300)}`)}
+  const rd=r.body.getReader(),dec=new TextDecoder();let buf="";
+  while(true){const{value,done}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});
+    const parts=buf.split("\n\n");buf=parts.pop();
+    for(const part of parts){const ln=part.trim();if(!ln.startsWith("data:"))continue;
+      const data=ln.slice(5).trim();if(data==="[DONE]")return;
+      try{const j=JSON.parse(data);const pc=j.choices?.[0]?.delta?.content;if(pc)onDelta(pc)}catch(e){}}}
+}
+
+/* ---------------- 发送 ---------------- */
+async function send(text){
+  if(streaming)return;
+  if(!cfg.tKey.trim()){openDrawer();alert("请先在设置里填入‘文字模型’的密钥（推荐 DeepSeek）。");return}
+  const typed=(text||$("#input").value).trim();
+  const image=pendingImage;
+  if(!typed&&!image)return;
+
+  let content;
+  if(image){const cap=typed||"这是我作业本上的题目，你先帮我看看。";
+    content=[{type:"text",text:cap},{type:"image_url",image_url:{url:image}}];}
+  else content=typed;
+
+  messages.push({role:"user",content});
+  renderInto(addMsg("child"),content);
+  $("#input").value="";autoGrow();clearImg();saveSes();
+
+  setStreaming(true);
+  const tb=addMsg("tutor");tb.classList.add("blink");let acc="";
+  try{
+    // 组装教学用消息：把带图的消息先 OCR 成文字
+    const teach=[];
+    for(const m of messages){
+      if(Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url")){
+        const dataUrl=m.content.find(p=>p.type==="image_url").image_url.url;
+        const typedPart=(m.content.find(p=>p.type==="text")?.text||"").trim();
+        const transcript=await ocr(dataUrl);
+        showNote(transcript,tb);
+        let combined="（这是从我作业照片里读出来的题目）\n"+transcript;
+        if(typedPart)combined=typedPart+"\n\n"+combined;
+        // 把历史里的图片替换成文字，后续更省
+        m.content=combined;
+        teach.push({role:m.role,content:combined});
+      }else teach.push({role:m.role,content:m.content});
+    }
+    saveSes();
+    await streamTeach(teach,pc=>{acc+=pc;tb.innerHTML=md(acc);scroll()});
+  }catch(e){acc+=(acc?"\n\n":"")+(e.message||e);tb.innerHTML=md(acc)}
+  tb.classList.remove("blink");
+  if(acc.trim()){messages.push({role:"assistant",content:acc});saveSes()}
+  setStreaming(false);
+}
+function setStreaming(on){streaming=on;$("#send").disabled=on;$("#camBtn").disabled=on;
+  document.querySelectorAll(".quick button").forEach(b=>b.disabled=on)}
+
+/* ---------------- 图片选择 ---------------- */
+async function onFile(e){const f=e.target.files&&e.target.files[0];e.target.value="";if(!f)return;
+  try{pendingImage=await resize(f);$("#prevImg").src=pendingImage;$("#prev").classList.remove("hidden");$("#input").focus()}
+  catch(err){alert("这张图片没读进来，换一张试试？")}}
+function clearImg(){pendingImage=null;$("#prevImg").removeAttribute("src");$("#prev").classList.add("hidden")}
+
+/* ---------------- 输入框自适应 ---------------- */
+function autoGrow(){const el=$("#input");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,130)+"px"}
+
+/* ---------------- 设置抽屉 ---------------- */
+function fillTopicSelect(){
+  const ts=$("#cTopic");ts.innerHTML="";TOPICS.forEach(t=>{const o=document.createElement("option");o.value=t.key;o.textContent=t.name;ts.appendChild(o)});ts.value=cfg.topic;
+  const ls=$("#cLevel");ls.innerHTML="";Object.keys(LEVELS).forEach(k=>{const o=document.createElement("option");o.value=k;o.textContent=LEVEL_NAMES[k];ls.appendChild(o)});ls.value=cfg.level;
+  fillAxioms();
+}
+function fillAxioms(){const t=TOPICS.find(x=>x.key===$("#cTopic").value)||TOPICS[0];
+  $("#axList").innerHTML=t.axioms.map(a=>`<li>${esc(a)}</li>`).join("")}
+function openDrawer(){
+  $("#cName").value=cfg.name;$("#tBase").value=cfg.tBase;$("#tKey").value=cfg.tKey;$("#tModel").value=cfg.tModel;
+  $("#vBase").value=cfg.vBase;$("#vKey").value=cfg.vKey;$("#vModel").value=cfg.vModel;
+  fillTopicSelect();$("#drawer").classList.add("open");
+}
+function closeDrawer(){$("#drawer").classList.remove("open")}
+function applySettings(){
+  cfg.name=$("#cName").value.trim();cfg.topic=$("#cTopic").value;cfg.level=$("#cLevel").value;
+  cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();cfg.tModel=$("#tModel").value.trim()||"deepseek-chat";
+  cfg.vBase=$("#vBase").value.trim()||"https://api-inference.modelscope.cn/v1";cfg.vKey=$("#vKey").value.trim();cfg.vModel=$("#vModel").value.trim()||"Qwen/Qwen2.5-VL-7B-Instruct";
+  saveCfg();closeDrawer();
+  if(!messages.length)renderAll();
+  updateTip();
+}
+function updateTip(){$("#tip").textContent=cfg.tKey?"小欧不会直接给你答案，它会陪你一步步想出来。":"点右上角齿轮，先填入你的模型密钥。"}
+
+/* ---------------- 快捷按钮 ---------------- */
+function fillQuick(){const q=$("#quick");q.innerHTML="";QUICK.forEach(a=>{const b=document.createElement("button");b.textContent=a.label;b.onclick=()=>send(a.msg);q.appendChild(b)})}
+
+/* ---------------- 绑定 ---------------- */
+function bind(){
+  const inp=$("#input");
+  inp.addEventListener("input",autoGrow);
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
+  $("#send").onclick=()=>send();
+  $("#camBtn").onclick=()=>$("#file").click();
+  $("#file").addEventListener("change",onFile);
+  $("#prevX").onclick=clearImg;
+  $("#gearBtn").onclick=openDrawer;
+  $("#drawer").addEventListener("click",e=>{if(e.target.id==="drawer")closeDrawer()});
+  $("#cTopic").addEventListener("change",fillAxioms);
+  $("#saveBtn").onclick=applySettings;
+  $("#clearBtn").onclick=()=>{if(messages.length&&!confirm("清空当前对话？"))return;messages=[];clearImg();saveSes();renderAll();closeDrawer()};
+}
+
+/* ---------------- 启动 ---------------- */
+(function init(){
+  loadCfg();loadSes();bind();fillQuick();renderAll();updateTip();
+  if(!cfg.tKey)openDrawer(); // 第一次进来直接引导填密钥
+})();
+</script>
+</body>
+</html>

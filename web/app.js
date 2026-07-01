@@ -292,6 +292,14 @@ async function sendMessage(text) {
           acc += payload.delta;
           tutorBubble.innerHTML = renderMarkdown(acc);
           scrollToBottom();
+        } else if (payload.transcript) {
+          showTranscript(payload.transcript, tutorBubble);
+          // 把刚发出的图片消息换成文字，后续更省流量、也能存下来
+          const lastUser = state.messages[state.messages.length - 1];
+          if (lastUser && Array.isArray(lastUser.content)) {
+            lastUser.content = "（这是从我作业照片里读出来的题目）\n" + payload.transcript;
+          }
+          saveSession();
         } else if (payload.error) {
           acc += (acc ? "\n\n" : "") + payload.error;
           tutorBubble.innerHTML = renderMarkdown(acc);
@@ -363,6 +371,18 @@ function clearPendingImage() {
   state.pendingImage = null;
   $("#imgPreviewThumb").removeAttribute("src");
   $("#imgPreview").classList.add("hidden");
+}
+
+// 展示"小欧从照片里读到的题目"，方便家长核对、纠错
+function showTranscript(text, tutorBubble) {
+  const wrap = tutorBubble.closest(".msg");
+  const note = document.createElement("div");
+  note.className = "transcript-note";
+  note.innerHTML =
+    "<strong>小欧读到的题目</strong>（如果哪里读错了，直接打字告诉我）：<br>" +
+    escapeHtml(text).replace(/\n/g, "<br>");
+  wrap.parentNode.insertBefore(note, wrap);
+  scrollToBottom();
 }
 
 // ---------------- 输入框行为 ----------------

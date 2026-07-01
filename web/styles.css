@@ -157,6 +157,18 @@ html, body {
 .msg.child .bubble { background: var(--child-bubble); color: #fff; box-shadow: 0 8px 22px rgba(79,107,237,.25); }
 .msg.child .bubble code { background: rgba(255,255,255,.2); color: #fff; }
 
+.transcript-note {
+  align-self: center;
+  max-width: 90%;
+  background: #eef4ff;
+  border: 1px dashed #b8caf6;
+  color: #3a4a7a;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
 .cursor-blink::after {
   content: "▍"; color: var(--primary);
   animation: blink 1s steps(2, start) infinite;

@@ -17,6 +17,23 @@
 
 ---
 
+## 手机上最快体验（无需搭服务器）
+
+`docs/index.html` 是一个**单文件网页版**，整页都在你手机浏览器里运行，密钥由你自己填、只存在你手机本地、不经过任何中间服务器。
+
+体验步骤：
+
+1. 把本仓库的这个改动合并到 `main` 后，在 GitHub 仓库页打开 **Settings → Pages**，Source 选择 **Deploy from a branch**，分支选 `main`、目录选 **`/docs`**，保存。
+2. 稍等一两分钟，GitHub 会给出一个网址（形如 `https://<你的用户名>.github.io/math_study_ai/`）。用**手机浏览器**打开它。
+3. 点右上角**齿轮**填入密钥：
+   - **文字模型（必填，负责教学）**：推荐 **DeepSeek**（中文好、便宜、允许手机网页直连）。接口 `https://api.deepseek.com/v1`，模型 `deepseek-chat`，密钥去 [platform.deepseek.com](https://platform.deepseek.com) 申请。
+   - **视觉模型（选填，拍照读题用）**：推荐 **魔搭 ModelScope** 的 Qwen-VL（同样允许手机网页直连）。接口 `https://api-inference.modelscope.cn/v1`，模型 `Qwen/Qwen2.5-VL-7B-Instruct`，Token 去 [modelscope.cn](https://modelscope.cn) 注册后在"访问令牌"里拿。不填就先用文字功能。
+4. 保存，就能在手机上和小欧对话、拍作业本了。
+
+> **为什么挑这两家？** 浏览器有跨域（CORS）限制，不是每家模型都允许网页直接连。实测 **DeepSeek** 和 **魔搭 ModelScope** 允许网页直连；而通义百炼、Kimi、智谱**默认不允许**网页直连（它们只能用下面的"本地服务器版"）。
+
+---
+
 ## 它长什么样
 
 - 左边：孩子的名字、今天研究的**主题**、**难度档位**，以及本主题的几条**公理板**。
@@ -66,16 +83,33 @@ cp .env.example .env
 
 `.env` 里只需要把这三项对应填好：`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。
 
-**想用"拍作业本"功能？** 拍照读题需要一个**能看懂图片的视觉模型**，在 `.env` 里再填一项 `LLM_VISION_MODEL`（留空则沿用 `LLM_MODEL`）：
+**想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**（三项均可独立于文字模型，留空则分别沿用文字模型的对应项）。
 
-| 服务商 | 视觉模型 `LLM_VISION_MODEL` |
-| --- | --- |
-| OpenAI | `gpt-4o` 或 `gpt-4o-mini` |
-| 通义千问 | `qwen-vl-plus` 或 `qwen-vl-max` |
-| 月之暗面 Kimi | `moonshot-v1-8k-vision-preview` |
-| 智谱 | `glm-4v` |
+> **推荐 Mac 本地组合：** 文字用 DeepSeek，OCR 用通义——两家接口、密钥完全分开填，互不影响：
 
-> 注意：DeepSeek 的 `deepseek-chat` **不支持看图**。如果你主力用 DeepSeek 做文字对话，想用拍照功能就得换一个支持视觉的服务（把 `LLM_BASE_URL` / 密钥 / `LLM_VISION_MODEL` 指向它）。不填 `LLM_VISION_MODEL` 也完全没关系，其他所有文字功能照常使用。
+```bash
+# 文字教学
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_API_KEY=你的DeepSeek密钥
+LLM_MODEL=deepseek-chat
+
+# 拍照 OCR（只读题，不解题）
+LLM_VISION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_VISION_API_KEY=你的通义密钥
+LLM_VISION_MODEL=qwen-vl-plus
+```
+
+本地服务器不受浏览器跨域限制，OCR 还可以换 Kimi、智谱 `glm-4v`、OpenAI `gpt-4o` 等任意支持视觉的模型：
+
+| 服务商 | OCR 接口 `LLM_VISION_BASE_URL` | 模型 `LLM_VISION_MODEL` |
+| --- | --- | --- |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-vl-plus` / `qwen-vl-max` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o` / `gpt-4o-mini` |
+| 月之暗面 Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k-vision-preview` |
+| 智谱 | `https://open.bigmodel.cn/api/paas/v4` | `glm-4v` |
+| 魔搭 ModelScope | `https://api-inference.modelscope.cn/v1` | `Qwen/Qwen2.5-VL-7B-Instruct` |
+
+读到的题目会显示在对话里（"小欧读到的题目：…"），读错了直接打字纠正即可。
 
 ### 3. 启动
 

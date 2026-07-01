@@ -47,8 +47,8 @@ def get_config() -> dict:
         "default_topic": tutor.DEFAULT_TOPIC_KEY,
         "default_level": tutor.DEFAULT_LEVEL,
         "quick_actions": tutor.QUICK_ACTIONS,
-        # 是否允许拍照/上传题目（已配置密钥即开放；能否真正读图取决于所选模型是否支持视觉）。
-        "vision_enabled": settings.is_configured,
+        # 文字模型已配置且视觉模型可用时，才开放拍照按钮。
+        "vision_enabled": settings.is_configured and settings.is_vision_configured,
     }
 
 
@@ -65,6 +65,27 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+async def _transcribe(client: httpx.AsyncClient, content: list) -> str:
+    """用视觉模型把一条含图片的消息"读"成纯文字（OCR 环节，绝不解题）。"""
+    payload = {
+        "model": settings.vision_model,
+        "stream": False,
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": tutor.TRANSCRIBE_PROMPT},
+            {"role": "user", "content": content},
+        ],
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.vision_api_key}",
+        "Content-Type": "application/json",
+    }
+    resp = await client.post(settings.vision_chat_endpoint, json=payload, headers=headers)
+    resp.raise_for_status()
+    data = resp.json()
+    return (data["choices"][0]["message"]["content"] or "").strip()
+
+
 async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
     if not settings.is_configured:
         yield _sse(
@@ -79,24 +100,71 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         return
 
     system_prompt = tutor.build_system_prompt(req.topic, req.level, req.child_name)
-    # 消息里带图片时改用视觉模型（默认与文字模型相同）。
-    model = settings.vision_model if _messages_have_image(req.messages) else settings.model
-    payload = {
-        "model": model,
-        "stream": True,
-        "temperature": 0.7,
-        "messages": [{"role": "system", "content": system_prompt}]
-        + [m.model_dump() for m in req.messages],
-    }
-    headers = {
+    text_headers = {
         "Authorization": f"Bearer {settings.api_key}",
         "Content-Type": "application/json",
     }
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+            # 第一步（OCR）：把带图片的消息先用视觉模型转写成文字，
+            # 之后的"教学"环节永远交给文字模型，风格才一致、也不丢信息给弱模型去解。
+            teaching_messages: list[dict] = []
+            latest_transcript: str | None = None
+            for m in req.messages:
+                if isinstance(m.content, list) and any(
+                    isinstance(p, dict) and p.get("type") == "image_url" for p in m.content
+                ):
+                    if not settings.is_vision_configured:
+                        yield _sse(
+                            {
+                                "error": (
+                                    "还没有配置视觉模型，暂时不能拍照读题。"
+                                    "请在 .env 里填写 LLM_VISION_BASE_URL、LLM_VISION_API_KEY、LLM_VISION_MODEL"
+                                    "（可以和文字模型用不同服务商，例如文字用 DeepSeek、OCR 用通义 qwen-vl-plus）。"
+                                )
+                            }
+                        )
+                        yield _sse({"done": True})
+                        return
+                    try:
+                        transcript = await _transcribe(client, m.content)
+                    except httpx.HTTPError as exc:
+                        yield _sse(
+                            {
+                                "error": (
+                                    f"读取照片时出错（视觉模型 {settings.vision_model} @ {settings.vision_base_url}）：{exc}。"
+                                    "请检查 LLM_VISION_BASE_URL / LLM_VISION_API_KEY / LLM_VISION_MODEL 是否正确。"
+                                )
+                            }
+                        )
+                        yield _sse({"done": True})
+                        return
+                    latest_transcript = transcript
+                    # 保留孩子原本可能打的文字说明
+                    typed = " ".join(
+                        p.get("text", "") for p in m.content if isinstance(p, dict) and p.get("type") == "text"
+                    ).strip()
+                    combined = "（这是从我作业照片里读出来的题目）\n" + transcript
+                    if typed:
+                        combined = typed + "\n\n" + combined
+                    teaching_messages.append({"role": m.role, "content": combined})
+                else:
+                    teaching_messages.append(m.model_dump())
+
+            # 把"读到的题目"回传给前端，方便家长核对；OCR 读错时可以直接打字纠正。
+            if latest_transcript:
+                yield _sse({"transcript": latest_transcript})
+
+            # 第二步（教学）：文字模型登场，做全部的苏格拉底式引导。
+            payload = {
+                "model": settings.model,
+                "stream": True,
+                "temperature": 0.7,
+                "messages": [{"role": "system", "content": system_prompt}] + teaching_messages,
+            }
             async with client.stream(
-                "POST", settings.chat_endpoint, json=payload, headers=headers
+                "POST", settings.chat_endpoint, json=payload, headers=text_headers
             ) as resp:
                 if resp.status_code != 200:
                     detail = (await resp.aread()).decode("utf-8", "ignore")
