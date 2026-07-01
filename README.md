@@ -17,6 +17,23 @@
 
 ---
 
+## 手机上最快体验（无需搭服务器）
+
+`docs/index.html` 是一个**单文件网页版**，整页都在你手机浏览器里运行，密钥由你自己填、只存在你手机本地、不经过任何中间服务器。
+
+体验步骤：
+
+1. 把本仓库的这个改动合并到 `main` 后，在 GitHub 仓库页打开 **Settings → Pages**，Source 选择 **Deploy from a branch**，分支选 `main`、目录选 **`/docs`**，保存。
+2. 稍等一两分钟，GitHub 会给出一个网址（形如 `https://<你的用户名>.github.io/math_study_ai/`）。用**手机浏览器**打开它。
+3. 点右上角**齿轮**填入密钥：
+   - **文字模型（必填，负责教学）**：推荐 **DeepSeek**（中文好、便宜、允许手机网页直连）。接口 `https://api.deepseek.com/v1`，模型 `deepseek-chat`，密钥去 [platform.deepseek.com](https://platform.deepseek.com) 申请。
+   - **视觉模型（选填，拍照读题用）**：推荐 **魔搭 ModelScope** 的 Qwen-VL（同样允许手机网页直连）。接口 `https://api-inference.modelscope.cn/v1`，模型 `Qwen/Qwen2.5-VL-7B-Instruct`，Token 去 [modelscope.cn](https://modelscope.cn) 注册后在"访问令牌"里拿。不填就先用文字功能。
+4. 保存，就能在手机上和小欧对话、拍作业本了。
+
+> **为什么挑这两家？** 浏览器有跨域（CORS）限制，不是每家模型都允许网页直接连。实测 **DeepSeek** 和 **魔搭 ModelScope** 允许网页直连；而通义百炼、Kimi、智谱**默认不允许**网页直连（它们只能用下面的"本地服务器版"）。
+
+---
+
 ## 它长什么样
 
 - 左边：孩子的名字、今天研究的**主题**、**难度档位**，以及本主题的几条**公理板**。
@@ -66,7 +83,9 @@ cp .env.example .env
 
 `.env` 里只需要把这三项对应填好：`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。
 
-**想用"拍作业本"功能？** 拍照读题需要一个**能看懂图片的视觉模型**，在 `.env` 里再填一项 `LLM_VISION_MODEL`（留空则沿用 `LLM_MODEL`）：
+**想用"拍作业本"功能？** 拍照读题需要一个**能看懂图片的视觉模型**，在 `.env` 里再填一项 `LLM_VISION_MODEL`（留空则沿用 `LLM_MODEL`）。
+
+> **视觉模型只当"眼睛"（OCR）。** 拍照后，视觉模型只负责把题目**读成文字**，绝不解题；随后所有的苏格拉底式引导仍然由你选的**文字模型**完成。这样教学风格始终一致、也不会把思考交给较弱的模型。读到的题目会显示出来，读错了直接打字纠正即可。本地服务器版不受浏览器跨域限制，视觉模型可以用通义 `qwen-vl-plus`、Kimi、智谱 `glm-4v` 等任意一家：
 
 | 服务商 | 视觉模型 `LLM_VISION_MODEL` |
 | --- | --- |
