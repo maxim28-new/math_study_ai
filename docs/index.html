@@ -151,8 +151,18 @@
       </div>
 
       <div class="grp">
-        <h3>文字模型（负责教学 · 必填）</h3>
-        <p class="hint">推荐 DeepSeek：中文好、便宜、且允许手机网页直接连。去 platform.deepseek.com 申请密钥。</p>
+        <h3>处理模式</h3>
+        <label>题目怎么处理</label>
+        <select id="cPipeline">
+          <option value="split">OCR + 文字（如 DeepSeek 教学 + 通义 OCR）</option>
+          <option value="unified">多模态一体（如 qwen3.7-plus 直接看图）</option>
+        </select>
+        <p class="hint" id="pipelineHint">split：先 OCR 读题再教学，教学风格最稳。unified：一个模型包办，图形题更完整。</p>
+      </div>
+
+      <div class="grp">
+        <h3>主模型（文字 · unified 时也负责看图）</h3>
+        <p class="hint" id="textHint">split 模式填文字教学模型；unified 模式填多模态模型（如 qwen3.7-plus）。</p>
         <label>接口地址</label>
         <input id="tBase" placeholder="https://api.deepseek.com/v1" />
         <label>密钥 API Key</label>
@@ -172,9 +182,9 @@
         <label class="chk"><input type="checkbox" id="cShowReasoning" /> 灰色展示思考过程（给孩子看建议不勾）</label>
       </div>
 
-      <div class="grp">
-        <h3>视觉模型（拍照读题 · 选填）</h3>
-        <p class="hint">只用来把照片"读"成文字，不参与教学。推荐用魔搭 ModelScope 的 Qwen-VL（也允许手机网页直连）：去 modelscope.cn 注册后在"访问令牌"里拿 Token。不填就用不了拍照，其余功能照常。</p>
+      <div class="grp" id="visionGrp">
+        <h3>视觉模型（仅 split 模式 · OCR 读题）</h3>
+        <p class="hint">unified 模式下不需要。split 模式推荐魔搭 ModelScope Qwen-VL（手机网页可直连）。</p>
         <label>接口地址</label>
         <input id="vBase" placeholder="https://api-inference.modelscope.cn/v1" />
         <label>密钥 Token</label>
@@ -264,7 +274,7 @@ ${t.axioms.map(a=>"  - "+a).join("\n")}
 /* ---------------- 配置存取 ---------------- */
 const CFG_KEY="xiaoou.cfg.v1", SES_KEY="xiaoou.ses.v1";
 const cfg={tBase:"https://api.deepseek.com/v1",tKey:"",tModel:"deepseek-v4-flash",
-  thinking:false,reasoningEffort:"high",showReasoning:false,
+  pipeline:"split",thinking:false,reasoningEffort:"high",showReasoning:false,
   vBase:"https://api-inference.modelscope.cn/v1",vKey:"",vModel:"Qwen/Qwen2.5-VL-7B-Instruct",
   name:"",topic:"arithmetic",level:"middle"};
 function loadCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem(CFG_KEY)||"{}"))}catch(e){}
@@ -404,20 +414,22 @@ async function send(text){
   setStreaming(true);
   const tb=addMsg("tutor");tb.classList.add("blink");let acc="", reasoningAcc="";
   try{
-    // 组装教学用消息：把带图的消息先 OCR 成文字
     const teach=[];
-    for(const m of messages){
-      if(Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url")){
-        const dataUrl=m.content.find(p=>p.type==="image_url").image_url.url;
-        const typedPart=(m.content.find(p=>p.type==="text")?.text||"").trim();
-        const transcript=await ocr(dataUrl);
-        showNote(transcript,tb);
-        let combined="（这是从我作业照片里读出来的题目）\n"+transcript;
-        if(typedPart)combined=typedPart+"\n\n"+combined;
-        // 把历史里的图片替换成文字，后续更省
-        m.content=combined;
-        teach.push({role:m.role,content:combined});
-      }else teach.push({role:m.role,content:m.content});
+    if(cfg.pipeline==="unified"){
+      for(const m of messages)teach.push({role:m.role,content:m.content});
+    }else{
+      for(const m of messages){
+        if(Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url")){
+          const dataUrl=m.content.find(p=>p.type==="image_url").image_url.url;
+          const typedPart=(m.content.find(p=>p.type==="text")?.text||"").trim();
+          const transcript=await ocr(dataUrl);
+          showNote(transcript,tb);
+          let combined="（这是从我作业照片里读出来的题目）\n"+transcript;
+          if(typedPart)combined=typedPart+"\n\n"+combined;
+          m.content=combined;
+          teach.push({role:m.role,content:combined});
+        }else teach.push({role:m.role,content:m.content});
+      }
     }
     saveSes();
     await streamTeach(teach,
@@ -449,6 +461,15 @@ function fillTopicSelect(){
 }
 function fillAxioms(){const t=TOPICS.find(x=>x.key===$("#cTopic").value)||TOPICS[0];
   $("#axList").innerHTML=t.axioms.map(a=>`<li>${esc(a)}</li>`).join("")}
+function syncPipelineUi(){
+  const unified=cfg.pipeline==="unified";
+  $("#cPipeline").value=cfg.pipeline||"split";
+  $("#visionGrp").style.display=unified?"none":"";
+  const prevHint=document.querySelector("#prev span");
+  if(prevHint)prevHint.textContent=unified
+    ?"多模态模式：小欧会直接看图，再反问你，不会直接给答案。"
+    :"这张题目会先被读成文字，小欧再陪你想——不会直接给答案。";
+}
 function syncThinkingUi(){
   const on=cfg.thinking;
   $("#cThinking").value=on?"enabled":"disabled";
@@ -460,12 +481,14 @@ function syncThinkingUi(){
 function openDrawer(){
   $("#cName").value=cfg.name;$("#tBase").value=cfg.tBase;$("#tKey").value=cfg.tKey;$("#tModel").value=cfg.tModel;
   $("#vBase").value=cfg.vBase;$("#vKey").value=cfg.vKey;$("#vModel").value=cfg.vModel;
-  syncThinkingUi();fillTopicSelect();$("#drawer").classList.add("open");
+  syncPipelineUi();syncThinkingUi();fillTopicSelect();$("#drawer").classList.add("open");
 }
 function closeDrawer(){$("#drawer").classList.remove("open")}
 function applySettings(){
   cfg.name=$("#cName").value.trim();cfg.topic=$("#cTopic").value;cfg.level=$("#cLevel").value;
-  cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();cfg.tModel=$("#tModel").value.trim()||"deepseek-v4-flash";
+  cfg.pipeline=$("#cPipeline").value;
+  cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();
+  cfg.tModel=$("#tModel").value.trim()||(cfg.pipeline==="unified"?"qwen3.7-plus":"deepseek-v4-flash");
   cfg.thinking=$("#cThinking").value==="enabled";cfg.reasoningEffort=$("#cEffort").value;cfg.showReasoning=$("#cShowReasoning").checked;
   cfg.vBase=$("#vBase").value.trim()||"https://api-inference.modelscope.cn/v1";cfg.vKey=$("#vKey").value.trim();cfg.vModel=$("#vModel").value.trim()||"Qwen/Qwen2.5-VL-7B-Instruct";
   saveCfg();closeDrawer();
@@ -495,6 +518,14 @@ function bind(){
     const on=$("#cThinking").value==="enabled";
     $("#effortLbl").style.display=on?"":"none";
     $("#cEffort").style.display=on?"":"none";
+  });
+  $("#cPipeline").addEventListener("change",()=>{
+    cfg.pipeline=$("#cPipeline").value;
+    if(cfg.pipeline==="unified"){
+      if($("#tBase").value.includes("deepseek.com"))$("#tBase").value="https://dashscope.aliyuncs.com/compatible-mode/v1";
+      if(!$("#tModel").value.trim()||$("#tModel").value.includes("deepseek"))$("#tModel").value="qwen3.7-plus";
+    }
+    syncPipelineUi();
   });
 }
 

@@ -17,7 +17,9 @@ load_dotenv(ROOT_DIR / ".env")
 
 @dataclass(frozen=True)
 class Settings:
-    # 文字模型（负责全部教学对话）
+    # 处理流水线：split=OCR+文字模型；unified=一个多模态模型包办
+    pipeline: str
+    # 文字模型（split 模式下负责教学；unified 模式下包办文字+图片）
     base_url: str
     api_key: str
     model: str
@@ -51,6 +53,19 @@ class Settings:
         )
 
     @property
+    def is_unified(self) -> bool:
+        return self.pipeline == "unified"
+
+    @property
+    def photo_enabled(self) -> bool:
+        """是否允许拍照/上传题目。"""
+        if not self.is_configured:
+            return False
+        if self.is_unified:
+            return True
+        return self.is_vision_configured
+
+    @property
     def chat_endpoint(self) -> str:
         return self.base_url.rstrip("/") + "/chat/completions"
 
@@ -71,6 +86,9 @@ def load_settings() -> Settings:
     vision_api_key = os.getenv("LLM_VISION_API_KEY", "").strip() or api_key
     vision_model = os.getenv("LLM_VISION_MODEL", "").strip() or model
 
+    pipeline_raw = os.getenv("LLM_PIPELINE", "split").strip().lower()
+    pipeline = "unified" if pipeline_raw in ("unified", "multimodal", "single") else "split"
+
     thinking_raw = os.getenv("LLM_THINKING", "disabled").strip().lower()
     thinking_enabled = thinking_raw in ("1", "true", "yes", "enabled", "on")
     reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "high").strip().lower()
@@ -80,6 +98,7 @@ def load_settings() -> Settings:
     show_reasoning = show_reasoning_raw in ("1", "true", "yes", "on")
 
     return Settings(
+        pipeline=pipeline,
         base_url=base_url,
         api_key=api_key,
         model=model,

@@ -218,6 +218,7 @@ async function loadConfig() {
   // 模型标签 / 未配置提示
   if (cfg.configured) {
     let tag = "已连接模型：" + cfg.model;
+    tag += cfg.pipeline === "unified" ? " · 多模态一体" : " · OCR+文字";
     if (cfg.thinking_enabled) {
       tag += cfg.show_reasoning ? " · Thinking 开（显示思考）" : " · Thinking 开（隐藏思考）";
     }
@@ -232,7 +233,16 @@ async function loadConfig() {
   }
 
   updateAxioms();
+  updatePhotoHint(cfg);
   renderHistory();
+}
+
+function updatePhotoHint(cfg) {
+  const hint = document.querySelector(".img-hint");
+  if (!hint) return;
+  hint.textContent = cfg.pipeline === "unified"
+    ? "多模态模式：小欧会直接看图，再反问你，不会直接给答案。"
+    : "这张题目会先被读成文字，小欧再陪你想——不会直接给答案。";
 }
 
 function updateAxioms() {

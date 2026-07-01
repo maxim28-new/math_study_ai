@@ -147,7 +147,26 @@ LLM_SHOW_REASONING=false
 LLM_SHOW_REASONING=true
 ```
 
-**想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**（三项均可独立于文字模型，留空则分别沿用文字模型的对应项）。
+## 两种处理模式（`LLM_PIPELINE`）
+
+小欧支持两种架构，在 `.env` 里用 **`LLM_PIPELINE`** 切换：
+
+| | `split`（默认） | `unified`（多模态一体） |
+|---|---|---|
+| 原理 | 视觉模型 **OCR 读题** → 文字模型 **教学** | **一个多模态模型**直接看图+对话 |
+| 适合 | 文字用 DeepSeek（强推理、便宜），OCR 用通义 | 配置简单，图形题信息更完整 |
+| 拍照 | 需填 `LLM_VISION_*` | 只需填 `LLM_*`，不用 `LLM_VISION_*` |
+| 教学风格 | 始终由你选的文字模型负责，最稳 | 同一个模型，风格统一 |
+
+### 模式 A：`split` — OCR + 文字（默认）
+
+复制默认模板：
+
+```bash
+cp .env.example .env
+```
+
+**想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**。
 
 > **推荐 Mac 本地组合：** 文字用 DeepSeek，OCR 用通义——两家接口、密钥完全分开填，互不影响：
 
@@ -174,6 +193,32 @@ LLM_VISION_MODEL=qwen-vl-plus
 | 魔搭 ModelScope | `https://api-inference.modelscope.cn/v1` | `Qwen/Qwen2.5-VL-7B-Instruct` |
 
 读到的题目会显示在对话里（"小欧读到的题目：…"），读错了直接打字纠正即可。
+
+### 模式 B：`unified` — 一个多模态模型包办（如 qwen3.7-plus）
+
+复制多模态模板，填一个密钥即可：
+
+```bash
+cp .env.unified.example .env
+```
+
+示例配置（通义千问 **qwen3.7-plus**，支持文字+图片，OpenAI 兼容接口）：
+
+```bash
+LLM_PIPELINE=unified
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_API_KEY=你的通义密钥
+LLM_MODEL=qwen3.7-plus
+
+# 以下留空，不需要
+LLM_VISION_BASE_URL=
+LLM_VISION_API_KEY=
+LLM_VISION_MODEL=
+```
+
+> **qwen3.7-plus 的优势**：既能对话又能直接看图，图形题、线段图不会像 OCR 那样丢信息。密钥在 [阿里云百炼/千问控制台](https://dashscope.aliyuncs.com/) 申请。模型名以控制台为准。
+
+其他可用的多模态模型：`gpt-4o`、`qwen-vl-max` 等，同样设 `LLM_PIPELINE=unified` 即可。
 
 > 还没填密钥也能先打开看看界面，只是暂时不能对话。
 
