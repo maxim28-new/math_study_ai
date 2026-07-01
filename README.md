@@ -122,7 +122,30 @@ python3 run.py
 
 `.env` 里只需要把这三项对应填好：`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。
 
-> **DeepSeek 模型名更新（2026）**：官方 V4 模型为 `deepseek-v4-flash` 和 `deepseek-v4-pro`；旧名 `deepseek-chat` / `deepseek-reasoner` 将于 **2026-07-24** 退役。接口地址 `https://api.deepseek.com/v1` 不变，只改模型名即可。小欧在调用 DeepSeek 时会自动关闭 V4 默认的 thinking 模式，保证短问短答、响应更快。
+> **DeepSeek 模型名更新（2026）**：官方 V4 模型为 `deepseek-v4-flash` 和 `deepseek-v4-pro`；旧名 `deepseek-chat` / `deepseek-reasoner` 将于 **2026-07-24** 退役。接口地址 `https://api.deepseek.com/v1` 不变，只改模型名即可。
+
+**DeepSeek V4 Thinking 模式（可配置）**：
+
+| 变量 | 值 | 说明 |
+| --- | --- | --- |
+| `LLM_THINKING` | `disabled`（默认） | 关闭 thinking，短问短答、快、省，适合日常陪练 |
+| | `enabled` | 开启 thinking，先深度推理再回复，适合奥数/难题 |
+| `LLM_REASONING_EFFORT` | `high` / `max` | thinking 开启时的推理深度（默认 `high`） |
+| `LLM_SHOW_REASONING` | `false`（默认） | thinking 开启时**不展示**思考过程，界面只看到最终回复 |
+| | `true` | thinking 开启时**灰色展示**思考过程（给孩子看时建议保持 false） |
+
+```bash
+# 日常陪练（默认）
+LLM_THINKING=disabled
+
+# 难题模式：开启 thinking，但不给孩子看思考过程
+LLM_THINKING=enabled
+LLM_REASONING_EFFORT=high
+LLM_SHOW_REASONING=false
+
+# 家长调试：开启 thinking 且灰色展示思考过程
+LLM_SHOW_REASONING=true
+```
 
 **想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**（三项均可独立于文字模型，留空则分别沿用文字模型的对应项）。
 

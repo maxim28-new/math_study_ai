@@ -10,6 +10,11 @@ if __name__ == "__main__":
     if settings.is_configured:
         print(f"  文字教学：{settings.model}")
         print(f"            {settings.base_url}")
+        if settings.thinking_enabled:
+            show = "灰色展示" if settings.show_reasoning else "不展示（仅最终回复）"
+            print(f"  Thinking ：已开启（{settings.reasoning_effort}，思考过程{show}）")
+        else:
+            print("  Thinking ：关闭（短问短答，推荐陪练）")
     else:
         print("  文字教学：未配置（请先填写 .env 里的 LLM_API_KEY）")
     if settings.is_vision_configured:

@@ -103,6 +103,19 @@ function scrollToBottom() {
   m.scrollTop = m.scrollHeight;
 }
 
+function getReasoningEl(tutorBubble) {
+  if (!state.config || !state.config.show_reasoning) return null;
+  const msg = tutorBubble.closest(".msg");
+  let el = msg.querySelector(".reasoning");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "reasoning";
+    el.setAttribute("aria-label", "小欧的思考过程");
+    msg.insertBefore(el, tutorBubble);
+  }
+  return el;
+}
+
 // content 可能是纯文字，也可能是含图片的数组。这里统一渲染进气泡。
 function renderContentInto(bubble, content) {
   if (typeof content === "string") {
@@ -204,7 +217,11 @@ async function loadConfig() {
 
   // 模型标签 / 未配置提示
   if (cfg.configured) {
-    $("#modelTag").textContent = "已连接模型：" + cfg.model;
+    let tag = "已连接模型：" + cfg.model;
+    if (cfg.thinking_enabled) {
+      tag += cfg.show_reasoning ? " · Thinking 开（显示思考）" : " · Thinking 开（隐藏思考）";
+    }
+    $("#modelTag").textContent = tag;
     $("#banner").classList.add("hidden");
   } else {
     $("#modelTag").textContent = "尚未连接大模型";
@@ -262,6 +279,7 @@ async function sendMessage(text) {
   const tutorBubble = addMessageEl("tutor");
   tutorBubble.classList.add("cursor-blink");
   let acc = "";
+  let reasoningAcc = "";
 
   try {
     const res = await fetch("/api/chat", {
@@ -292,6 +310,13 @@ async function sendMessage(text) {
           acc += payload.delta;
           tutorBubble.innerHTML = renderMarkdown(acc);
           scrollToBottom();
+        } else if (payload.reasoning_delta) {
+          reasoningAcc += payload.reasoning_delta;
+          const rel = getReasoningEl(tutorBubble);
+          if (rel) {
+            rel.textContent = reasoningAcc;
+            scrollToBottom();
+          }
         } else if (payload.transcript) {
           showTranscript(payload.transcript, tutorBubble);
           // 把刚发出的图片消息换成文字，后续更省流量、也能存下来

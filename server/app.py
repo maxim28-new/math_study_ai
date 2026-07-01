@@ -49,6 +49,8 @@ def get_config() -> dict:
         "quick_actions": tutor.QUICK_ACTIONS,
         # 文字模型已配置且视觉模型可用时，才开放拍照按钮。
         "vision_enabled": settings.is_configured and settings.is_vision_configured,
+        "thinking_enabled": settings.thinking_enabled,
+        "show_reasoning": settings.show_reasoning,
     }
 
 
@@ -162,7 +164,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                 "stream": True,
                 "temperature": 0.7,
                 "messages": [{"role": "system", "content": system_prompt}] + teaching_messages,
-                **teaching_request_extras(settings.base_url, settings.model),
+                **teaching_request_extras(settings),
             }
             async with client.stream(
                 "POST", settings.chat_endpoint, json=payload, headers=text_headers
@@ -191,6 +193,9 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     if not choices:
                         continue
                     delta = choices[0].get("delta") or {}
+                    reasoning_piece = delta.get("reasoning_content")
+                    if reasoning_piece and settings.thinking_enabled and settings.show_reasoning:
+                        yield _sse({"reasoning_delta": reasoning_piece})
                     piece = delta.get("content")
                     if piece:
                         yield _sse({"delta": piece})

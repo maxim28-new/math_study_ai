@@ -25,6 +25,10 @@ class Settings:
     vision_base_url: str
     vision_api_key: str
     vision_model: str
+    # DeepSeek V4 thinking 模式（仅 DeepSeek 生效）
+    thinking_enabled: bool
+    reasoning_effort: str  # "high" | "max"
+    show_reasoning: bool   # 开启 thinking 时，是否在界面灰色展示思考过程
     host: str
     port: int
 
@@ -67,6 +71,14 @@ def load_settings() -> Settings:
     vision_api_key = os.getenv("LLM_VISION_API_KEY", "").strip() or api_key
     vision_model = os.getenv("LLM_VISION_MODEL", "").strip() or model
 
+    thinking_raw = os.getenv("LLM_THINKING", "disabled").strip().lower()
+    thinking_enabled = thinking_raw in ("1", "true", "yes", "enabled", "on")
+    reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "high").strip().lower()
+    if reasoning_effort not in ("high", "max"):
+        reasoning_effort = "high"
+    show_reasoning_raw = os.getenv("LLM_SHOW_REASONING", "false").strip().lower()
+    show_reasoning = show_reasoning_raw in ("1", "true", "yes", "on")
+
     return Settings(
         base_url=base_url,
         api_key=api_key,
@@ -74,6 +86,9 @@ def load_settings() -> Settings:
         vision_base_url=vision_base_url,
         vision_api_key=vision_api_key,
         vision_model=vision_model,
+        thinking_enabled=thinking_enabled,
+        reasoning_effort=reasoning_effort,
+        show_reasoning=show_reasoning,
         host=os.getenv("HOST", "127.0.0.1").strip(),
         port=int(os.getenv("PORT", "8000")),
     )
@@ -82,13 +97,19 @@ def load_settings() -> Settings:
 settings = load_settings()
 
 
-def teaching_request_extras(base_url: str, model: str) -> dict:
-    """DeepSeek V4 默认开启 thinking 模式；小欧需要短问短答，教学时关闭。
+def teaching_request_extras(settings: Settings) -> dict:
+    """DeepSeek V4 专用参数：thinking 模式与推理深度。
 
     见 https://api-docs.deepseek.com/guides/thinking_mode
+    非 DeepSeek 服务商忽略这些字段（由对方 API 自行处理或忽略）。
     """
-    u = base_url.lower()
-    m = model.lower()
-    if "deepseek.com" in u or m.startswith("deepseek-"):
-        return {"thinking": {"type": "disabled"}}
-    return {}
+    u = settings.base_url.lower()
+    m = settings.model.lower()
+    if "deepseek.com" not in u and not m.startswith("deepseek-"):
+        return {}
+    if settings.thinking_enabled:
+        return {
+            "thinking": {"type": "enabled"},
+            "reasoning_effort": settings.reasoning_effort,
+        }
+    return {"thinking": {"type": "disabled"}}

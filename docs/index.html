@@ -41,6 +41,10 @@
   .tutor{align-self:flex-start}
   .tutor .av{background:linear-gradient(135deg,var(--primary),#6f86ff)}
   .tutor .b{background:#fff;border:1px solid var(--line)}
+  .tutor .reasoning{padding:7px 12px;background:#f3f3f3;color:#8a8a96;font-size:12.5px;line-height:1.5;
+    border:1px solid var(--line);border-bottom:none;border-radius:14px 14px 0 0;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+  .tutor .reasoning:empty{display:none}
+  .tutor .reasoning+.b{border-top-left-radius:0;border-top-right-radius:0}
   .child{align-self:flex-end;flex-direction:row-reverse}
   .child .av{background:linear-gradient(135deg,var(--accent),#f0b95e)}
   .child .b{background:var(--primary);color:#fff}
@@ -80,6 +84,8 @@
   .grp{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
   .grp h3{font-size:13.5px;margin:0 0 4px;color:var(--primary)}
   .grp .hint{font-size:11.5px;color:var(--soft);margin:0 0 10px;line-height:1.5}
+  label.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:10px}
+  label.chk input{width:auto;margin:0}
   label{display:block;font-size:12px;color:var(--soft);margin:9px 0 4px}
   input,select{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;font-size:15px;outline:none;background:#fff;color:var(--ink)}
   input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
@@ -153,6 +159,17 @@
         <input id="tKey" type="password" placeholder="sk-..." />
         <label>模型名</label>
         <input id="tModel" placeholder="deepseek-v4-flash" />
+        <label>Thinking 模式（仅 DeepSeek）</label>
+        <select id="cThinking">
+          <option value="disabled">关闭 · 短问短答（推荐日常）</option>
+          <option value="enabled">开启 · 深度推理（难题/奥数）</option>
+        </select>
+        <label id="effortLbl">推理深度</label>
+        <select id="cEffort">
+          <option value="high">high</option>
+          <option value="max">max（更深，更慢）</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="cShowReasoning" /> 灰色展示思考过程（给孩子看建议不勾）</label>
       </div>
 
       <div class="grp">
@@ -247,6 +264,7 @@ ${t.axioms.map(a=>"  - "+a).join("\n")}
 /* ---------------- 配置存取 ---------------- */
 const CFG_KEY="xiaoou.cfg.v1", SES_KEY="xiaoou.ses.v1";
 const cfg={tBase:"https://api.deepseek.com/v1",tKey:"",tModel:"deepseek-v4-flash",
+  thinking:false,reasoningEffort:"high",showReasoning:false,
   vBase:"https://api-inference.modelscope.cn/v1",vKey:"",vModel:"Qwen/Qwen2.5-VL-7B-Instruct",
   name:"",topic:"arithmetic",level:"middle"};
 function loadCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem(CFG_KEY)||"{}"))}catch(e){}
@@ -278,6 +296,12 @@ function md(text){
 
 /* ---------------- 渲染 ---------------- */
 function scroll(){const c=$("#chat");c.scrollTop=c.scrollHeight}
+function getReasoningEl(bubble){
+  if(!cfg.showReasoning)return null;
+  const msg=bubble.closest(".msg");let el=msg.querySelector(".reasoning");
+  if(!el){el=document.createElement("div");el.className="reasoning";msg.insertBefore(el,bubble)}
+  return el;
+}
 function addMsg(role){
   const w=document.createElement("div");w.className="msg "+role;
   const a=document.createElement("div");a.className="av";a.textContent=role==="child"?"我":"欧";
@@ -334,14 +358,14 @@ async function ocr(dataUrl){
 function deepseekExtras(base, model) {
   const b = (base || "").toLowerCase();
   const m = (model || "").toLowerCase();
-  // DeepSeek V4 默认 thinking；小欧要短问短答，教学时关闭
-  if (b.includes("deepseek.com") || m.startsWith("deepseek-")) {
-    return { thinking: { type: "disabled" } };
+  if (!b.includes("deepseek.com") && !m.startsWith("deepseek-")) return {};
+  if (cfg.thinking) {
+    return { thinking: { type: "enabled" }, reasoning_effort: cfg.reasoningEffort || "high" };
   }
-  return {};
+  return { thinking: { type: "disabled" } };
 }
 
-async function streamTeach(teachMsgs,onDelta){
+async function streamTeach(teachMsgs, onDelta, onReasoning) {
   const body={model:cfg.tModel,stream:true,temperature:.7,
     messages:[{role:"system",content:buildSystem(cfg.topic,cfg.level,cfg.name)},...teachMsgs],
     ...deepseekExtras(cfg.tBase, cfg.tModel)};
@@ -355,7 +379,9 @@ async function streamTeach(teachMsgs,onDelta){
     const parts=buf.split("\n\n");buf=parts.pop();
     for(const part of parts){const ln=part.trim();if(!ln.startsWith("data:"))continue;
       const data=ln.slice(5).trim();if(data==="[DONE]")return;
-      try{const j=JSON.parse(data);const pc=j.choices?.[0]?.delta?.content;if(pc)onDelta(pc)}catch(e){}}}
+      try{const j=JSON.parse(data);const d=j.choices?.[0]?.delta||{};
+        if(d.reasoning_content&&onReasoning)onReasoning(d.reasoning_content);
+        if(d.content)onDelta(d.content)}catch(e){}}}
 }
 
 /* ---------------- 发送 ---------------- */
@@ -376,7 +402,7 @@ async function send(text){
   $("#input").value="";autoGrow();clearImg();saveSes();
 
   setStreaming(true);
-  const tb=addMsg("tutor");tb.classList.add("blink");let acc="";
+  const tb=addMsg("tutor");tb.classList.add("blink");let acc="", reasoningAcc="";
   try{
     // 组装教学用消息：把带图的消息先 OCR 成文字
     const teach=[];
@@ -394,7 +420,10 @@ async function send(text){
       }else teach.push({role:m.role,content:m.content});
     }
     saveSes();
-    await streamTeach(teach,pc=>{acc+=pc;tb.innerHTML=md(acc);scroll()});
+    await streamTeach(teach,
+      pc=>{acc+=pc;tb.innerHTML=md(acc);scroll()},
+      rc=>{if(!cfg.showReasoning)return;reasoningAcc+=rc;const el=getReasoningEl(tb);if(el){el.textContent=reasoningAcc;scroll()}}
+    );
   }catch(e){acc+=(acc?"\n\n":"")+(e.message||e);tb.innerHTML=md(acc)}
   tb.classList.remove("blink");
   if(acc.trim()){messages.push({role:"assistant",content:acc});saveSes()}
@@ -420,15 +449,24 @@ function fillTopicSelect(){
 }
 function fillAxioms(){const t=TOPICS.find(x=>x.key===$("#cTopic").value)||TOPICS[0];
   $("#axList").innerHTML=t.axioms.map(a=>`<li>${esc(a)}</li>`).join("")}
+function syncThinkingUi(){
+  const on=cfg.thinking;
+  $("#cThinking").value=on?"enabled":"disabled";
+  $("#cEffort").value=cfg.reasoningEffort||"high";
+  $("#cShowReasoning").checked=!!cfg.showReasoning;
+  $("#effortLbl").style.display=on?"":"none";
+  $("#cEffort").style.display=on?"":"none";
+}
 function openDrawer(){
   $("#cName").value=cfg.name;$("#tBase").value=cfg.tBase;$("#tKey").value=cfg.tKey;$("#tModel").value=cfg.tModel;
   $("#vBase").value=cfg.vBase;$("#vKey").value=cfg.vKey;$("#vModel").value=cfg.vModel;
-  fillTopicSelect();$("#drawer").classList.add("open");
+  syncThinkingUi();fillTopicSelect();$("#drawer").classList.add("open");
 }
 function closeDrawer(){$("#drawer").classList.remove("open")}
 function applySettings(){
   cfg.name=$("#cName").value.trim();cfg.topic=$("#cTopic").value;cfg.level=$("#cLevel").value;
   cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();cfg.tModel=$("#tModel").value.trim()||"deepseek-v4-flash";
+  cfg.thinking=$("#cThinking").value==="enabled";cfg.reasoningEffort=$("#cEffort").value;cfg.showReasoning=$("#cShowReasoning").checked;
   cfg.vBase=$("#vBase").value.trim()||"https://api-inference.modelscope.cn/v1";cfg.vKey=$("#vKey").value.trim();cfg.vModel=$("#vModel").value.trim()||"Qwen/Qwen2.5-VL-7B-Instruct";
   saveCfg();closeDrawer();
   if(!messages.length)renderAll();
@@ -453,6 +491,11 @@ function bind(){
   $("#cTopic").addEventListener("change",fillAxioms);
   $("#saveBtn").onclick=applySettings;
   $("#clearBtn").onclick=()=>{if(messages.length&&!confirm("清空当前对话？"))return;messages=[];clearImg();saveSes();renderAll();closeDrawer()};
+  $("#cThinking").addEventListener("change",()=>{
+    const on=$("#cThinking").value==="enabled";
+    $("#effortLbl").style.display=on?"":"none";
+    $("#cEffort").style.display=on?"":"none";
+  });
 }
 
 /* ---------------- 启动 ---------------- */
