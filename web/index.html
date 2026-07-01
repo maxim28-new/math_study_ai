@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>小欧 · 启发式数学老师</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边栏：设置 + 公理板 -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="24" cy="14" r="6"></circle>
+            <path d="M18 20 L10 40"></path>
+            <path d="M30 20 L38 40"></path>
+            <path d="M10 40 L38 40"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>小欧</h1>
+          <p>陪你一起想数学</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <label class="field">
+          <span>孩子的名字（可留空）</span>
+          <input id="childName" type="text" placeholder="例如：朵朵" maxlength="12" />
+        </label>
+
+        <label class="field">
+          <span>今天想研究什么</span>
+          <select id="topicSelect"></select>
+        </label>
+
+        <label class="field">
+          <span>难度档位</span>
+          <select id="levelSelect"></select>
+        </label>
+      </div>
+
+      <div class="axioms">
+        <div class="axioms-head">
+          <span>本主题的几条公理</span>
+          <small>其余一切都靠推导</small>
+        </div>
+        <ul id="axiomList"></ul>
+      </div>
+
+      <button id="resetBtn" class="ghost-btn">开启新的探究</button>
+
+      <footer class="sidebar-foot">
+        <span id="modelTag" class="model-tag"></span>
+      </footer>
+    </aside>
+
+    <!-- 主区：对话 -->
+    <main class="chat">
+      <div id="banner" class="banner hidden"></div>
+
+      <div id="messages" class="messages" aria-live="polite"></div>
+
+      <div class="composer">
+        <div id="quickActions" class="quick-actions"></div>
+        <div class="input-row">
+          <textarea id="input" rows="1" placeholder="把你想一起研究的题目或问题告诉小欧……（回车发送，Shift+回车换行）"></textarea>
+          <button id="sendBtn" class="send-btn" aria-label="发送">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 2 11 13"></path>
+              <path d="M22 2 15 22 11 13 2 9 22 2z"></path>
+            </svg>
+          </button>
+        </div>
+        <p class="tip">小欧不会直接给你答案，它会陪你一步步想出来。</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
