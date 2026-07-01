@@ -137,7 +137,7 @@ async function loadConfig() {
 
   // 难度下拉
   const levelSel = $("#levelSelect");
-  const levelNames = { lower: "启蒙（6-8 岁）", middle: "进阶（9-11 岁）", upper: "挑战（12-14 岁）" };
+  const levelNames = { lower: "一二年级 · 启蒙（约 6-8 岁）", middle: "三四年级 · 进阶（约 8-10 岁）", upper: "五六年级 · 挑战（约 11 岁+）" };
   levelSel.innerHTML = "";
   cfg.levels.forEach((l) => {
     const o = document.createElement("option");
