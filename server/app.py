@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .config import WEB_DIR, settings
+from .config import WEB_DIR, settings, teaching_request_extras
 from . import tutor
 
 app = FastAPI(title="小欧 · 启发式数学老师")
@@ -162,6 +162,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                 "stream": True,
                 "temperature": 0.7,
                 "messages": [{"role": "system", "content": system_prompt}] + teaching_messages,
+                **teaching_request_extras(settings.base_url, settings.model),
             }
             async with client.stream(
                 "POST", settings.chat_endpoint, json=payload, headers=text_headers

@@ -152,7 +152,7 @@
         <label>密钥 API Key</label>
         <input id="tKey" type="password" placeholder="sk-..." />
         <label>模型名</label>
-        <input id="tModel" placeholder="deepseek-chat" />
+        <input id="tModel" placeholder="deepseek-v4-flash" />
       </div>
 
       <div class="grp">
@@ -246,7 +246,7 @@ ${t.axioms.map(a=>"  - "+a).join("\n")}
 
 /* ---------------- 配置存取 ---------------- */
 const CFG_KEY="xiaoou.cfg.v1", SES_KEY="xiaoou.ses.v1";
-const cfg={tBase:"https://api.deepseek.com/v1",tKey:"",tModel:"deepseek-chat",
+const cfg={tBase:"https://api.deepseek.com/v1",tKey:"",tModel:"deepseek-v4-flash",
   vBase:"https://api-inference.modelscope.cn/v1",vKey:"",vModel:"Qwen/Qwen2.5-VL-7B-Instruct",
   name:"",topic:"arithmetic",level:"middle"};
 function loadCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem(CFG_KEY)||"{}"))}catch(e){}
@@ -331,9 +331,20 @@ async function ocr(dataUrl){
   const d=await r.json();return (d.choices?.[0]?.message?.content||"").trim();
 }
 
+function deepseekExtras(base, model) {
+  const b = (base || "").toLowerCase();
+  const m = (model || "").toLowerCase();
+  // DeepSeek V4 默认 thinking；小欧要短问短答，教学时关闭
+  if (b.includes("deepseek.com") || m.startsWith("deepseek-")) {
+    return { thinking: { type: "disabled" } };
+  }
+  return {};
+}
+
 async function streamTeach(teachMsgs,onDelta){
   const body={model:cfg.tModel,stream:true,temperature:.7,
-    messages:[{role:"system",content:buildSystem(cfg.topic,cfg.level,cfg.name)},...teachMsgs]};
+    messages:[{role:"system",content:buildSystem(cfg.topic,cfg.level,cfg.name)},...teachMsgs],
+    ...deepseekExtras(cfg.tBase, cfg.tModel)};
   let r;
   try{r=await fetch(cfg.tBase.replace(/\/$/,"")+"/chat/completions",{method:"POST",
     headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.tKey},body:JSON.stringify(body)});}
@@ -417,7 +428,7 @@ function openDrawer(){
 function closeDrawer(){$("#drawer").classList.remove("open")}
 function applySettings(){
   cfg.name=$("#cName").value.trim();cfg.topic=$("#cTopic").value;cfg.level=$("#cLevel").value;
-  cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();cfg.tModel=$("#tModel").value.trim()||"deepseek-chat";
+  cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();cfg.tModel=$("#tModel").value.trim()||"deepseek-v4-flash";
   cfg.vBase=$("#vBase").value.trim()||"https://api-inference.modelscope.cn/v1";cfg.vKey=$("#vKey").value.trim();cfg.vModel=$("#vModel").value.trim()||"Qwen/Qwen2.5-VL-7B-Instruct";
   saveCfg();closeDrawer();
   if(!messages.length)renderAll();

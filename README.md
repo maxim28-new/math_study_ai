@@ -26,7 +26,7 @@
 1. 把本仓库的这个改动合并到 `main` 后，在 GitHub 仓库页打开 **Settings → Pages**，Source 选择 **Deploy from a branch**，分支选 `main`、目录选 **`/docs`**，保存。
 2. 稍等一两分钟，GitHub 会给出一个网址（形如 `https://<你的用户名>.github.io/math_study_ai/`）。用**手机浏览器**打开它。
 3. 点右上角**齿轮**填入密钥：
-   - **文字模型（必填，负责教学）**：推荐 **DeepSeek**（中文好、便宜、允许手机网页直连）。接口 `https://api.deepseek.com/v1`，模型 `deepseek-chat`，密钥去 [platform.deepseek.com](https://platform.deepseek.com) 申请。
+   - **文字模型（必填，负责教学）**：推荐 **DeepSeek**（中文好、便宜、允许手机网页直连）。接口 `https://api.deepseek.com/v1`，模型 `deepseek-v4-flash`（或 `deepseek-v4-pro`），密钥去 [platform.deepseek.com](https://platform.deepseek.com) 申请。
    - **视觉模型（选填，拍照读题用）**：推荐 **魔搭 ModelScope** 的 Qwen-VL（同样允许手机网页直连）。接口 `https://api-inference.modelscope.cn/v1`，模型 `Qwen/Qwen2.5-VL-7B-Instruct`，Token 去 [modelscope.cn](https://modelscope.cn) 注册后在"访问令牌"里拿。不填就先用文字功能。
 4. 保存，就能在手机上和小欧对话、拍作业本了。
 
@@ -114,13 +114,15 @@ python3 run.py
 
 | 服务商 | 接口地址 `LLM_BASE_URL` | 模型名 `LLM_MODEL` |
 | --- | --- | --- |
-| DeepSeek（推荐，便宜） | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| DeepSeek（推荐，便宜） | `https://api.deepseek.com/v1` | `deepseek-v4-flash`（日常） / `deepseek-v4-pro`（更强） |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` 或 `gpt-4o` |
 | 月之暗面 Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
 | 本地 Ollama（免费离线） | `http://localhost:11434/v1` | 如 `qwen2.5` |
 
 `.env` 里只需要把这三项对应填好：`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。
+
+> **DeepSeek 模型名更新（2026）**：官方 V4 模型为 `deepseek-v4-flash` 和 `deepseek-v4-pro`；旧名 `deepseek-chat` / `deepseek-reasoner` 将于 **2026-07-24** 退役。接口地址 `https://api.deepseek.com/v1` 不变，只改模型名即可。小欧在调用 DeepSeek 时会自动关闭 V4 默认的 thinking 模式，保证短问短答、响应更快。
 
 **想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**（三项均可独立于文字模型，留空则分别沿用文字模型的对应项）。
 
@@ -130,7 +132,7 @@ python3 run.py
 # 文字教学
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=你的DeepSeek密钥
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-v4-flash
 
 # 拍照 OCR（只读题，不解题）
 LLM_VISION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1

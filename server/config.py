@@ -58,7 +58,9 @@ class Settings:
 def load_settings() -> Settings:
     base_url = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").strip()
     api_key = os.getenv("LLM_API_KEY", "").strip()
-    model = os.getenv("LLM_MODEL", "deepseek-chat").strip()
+    # DeepSeek V4：官方推荐 deepseek-v4-flash（快/省）或 deepseek-v4-pro（更强）。
+    # 旧名 deepseek-chat 将于 2026-07-24 退役，仍可用但建议迁移。
+    model = os.getenv("LLM_MODEL", "deepseek-v4-flash").strip()
 
     # 视觉模型三项均可独立配置；留空则分别沿用文字模型的对应项。
     vision_base_url = os.getenv("LLM_VISION_BASE_URL", "").strip() or base_url
@@ -78,3 +80,15 @@ def load_settings() -> Settings:
 
 
 settings = load_settings()
+
+
+def teaching_request_extras(base_url: str, model: str) -> dict:
+    """DeepSeek V4 默认开启 thinking 模式；小欧需要短问短答，教学时关闭。
+
+    见 https://api-docs.deepseek.com/guides/thinking_mode
+    """
+    u = base_url.lower()
+    m = model.lower()
+    if "deepseek.com" in u or m.startswith("deepseek-"):
+        return {"thinking": {"type": "disabled"}}
+    return {}
