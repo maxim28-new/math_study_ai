@@ -17,7 +17,9 @@ load_dotenv(ROOT_DIR / ".env")
 
 @dataclass(frozen=True)
 class Settings:
-    # 文字模型（负责全部教学对话）
+    # 处理流水线：split=OCR+文字模型；unified=一个多模态模型包办
+    pipeline: str
+    # 文字模型（split 模式下负责教学；unified 模式下包办文字+图片）
     base_url: str
     api_key: str
     model: str
@@ -25,6 +27,10 @@ class Settings:
     vision_base_url: str
     vision_api_key: str
     vision_model: str
+    # DeepSeek V4 thinking 模式（仅 DeepSeek 生效）
+    thinking_enabled: bool
+    reasoning_effort: str  # "high" | "max"
+    show_reasoning: bool   # 开启 thinking 时，是否在界面灰色展示思考过程
     host: str
     port: int
 
@@ -47,6 +53,19 @@ class Settings:
         )
 
     @property
+    def is_unified(self) -> bool:
+        return self.pipeline == "unified"
+
+    @property
+    def photo_enabled(self) -> bool:
+        """是否允许拍照/上传题目。"""
+        if not self.is_configured:
+            return False
+        if self.is_unified:
+            return True
+        return self.is_vision_configured
+
+    @property
     def chat_endpoint(self) -> str:
         return self.base_url.rstrip("/") + "/chat/completions"
 
@@ -58,23 +77,58 @@ class Settings:
 def load_settings() -> Settings:
     base_url = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").strip()
     api_key = os.getenv("LLM_API_KEY", "").strip()
-    model = os.getenv("LLM_MODEL", "deepseek-chat").strip()
+    # DeepSeek V4：官方推荐 deepseek-v4-flash（快/省）或 deepseek-v4-pro（更强）。
+    # 旧名 deepseek-chat 将于 2026-07-24 退役，仍可用但建议迁移。
+    model = os.getenv("LLM_MODEL", "deepseek-v4-flash").strip()
 
     # 视觉模型三项均可独立配置；留空则分别沿用文字模型的对应项。
     vision_base_url = os.getenv("LLM_VISION_BASE_URL", "").strip() or base_url
     vision_api_key = os.getenv("LLM_VISION_API_KEY", "").strip() or api_key
     vision_model = os.getenv("LLM_VISION_MODEL", "").strip() or model
 
+    pipeline_raw = os.getenv("LLM_PIPELINE", "split").strip().lower()
+    pipeline = "unified" if pipeline_raw in ("unified", "multimodal", "single") else "split"
+
+    thinking_raw = os.getenv("LLM_THINKING", "disabled").strip().lower()
+    thinking_enabled = thinking_raw in ("1", "true", "yes", "enabled", "on")
+    reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "high").strip().lower()
+    if reasoning_effort not in ("high", "max"):
+        reasoning_effort = "high"
+    show_reasoning_raw = os.getenv("LLM_SHOW_REASONING", "false").strip().lower()
+    show_reasoning = show_reasoning_raw in ("1", "true", "yes", "on")
+
     return Settings(
+        pipeline=pipeline,
         base_url=base_url,
         api_key=api_key,
         model=model,
         vision_base_url=vision_base_url,
         vision_api_key=vision_api_key,
         vision_model=vision_model,
+        thinking_enabled=thinking_enabled,
+        reasoning_effort=reasoning_effort,
+        show_reasoning=show_reasoning,
         host=os.getenv("HOST", "127.0.0.1").strip(),
         port=int(os.getenv("PORT", "8000")),
     )
 
 
 settings = load_settings()
+
+
+def teaching_request_extras(settings: Settings) -> dict:
+    """DeepSeek V4 专用参数：thinking 模式与推理深度。
+
+    见 https://api-docs.deepseek.com/guides/thinking_mode
+    非 DeepSeek 服务商忽略这些字段（由对方 API 自行处理或忽略）。
+    """
+    u = settings.base_url.lower()
+    m = settings.model.lower()
+    if "deepseek.com" not in u and not m.startswith("deepseek-"):
+        return {}
+    if settings.thinking_enabled:
+        return {
+            "thinking": {"type": "enabled"},
+            "reasoning_effort": settings.reasoning_effort,
+        }
+    return {"thinking": {"type": "disabled"}}

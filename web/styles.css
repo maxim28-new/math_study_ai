@@ -151,6 +151,22 @@ html, body {
 .msg.tutor { align-self: flex-start; }
 .msg.tutor .avatar { background: linear-gradient(135deg, var(--primary), #6f86ff); }
 .msg.tutor .bubble { background: var(--tutor-bubble); border: 1px solid var(--line); }
+.msg.tutor .reasoning {
+  padding: 8px 14px;
+  background: #f3f3f3;
+  color: #8a8a96;
+  font-size: 13px;
+  line-height: 1.55;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  max-height: 140px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.tutor .reasoning:empty { display: none; }
+.msg.tutor .reasoning + .bubble { border-top-left-radius: 0; border-top-right-radius: 0; }
 
 .msg.child { align-self: flex-end; flex-direction: row-reverse; }
 .msg.child .avatar { background: linear-gradient(135deg, var(--accent), #f0b95e); }

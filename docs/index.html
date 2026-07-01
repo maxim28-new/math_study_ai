@@ -41,6 +41,10 @@
   .tutor{align-self:flex-start}
   .tutor .av{background:linear-gradient(135deg,var(--primary),#6f86ff)}
   .tutor .b{background:#fff;border:1px solid var(--line)}
+  .tutor .reasoning{padding:7px 12px;background:#f3f3f3;color:#8a8a96;font-size:12.5px;line-height:1.5;
+    border:1px solid var(--line);border-bottom:none;border-radius:14px 14px 0 0;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+  .tutor .reasoning:empty{display:none}
+  .tutor .reasoning+.b{border-top-left-radius:0;border-top-right-radius:0}
   .child{align-self:flex-end;flex-direction:row-reverse}
   .child .av{background:linear-gradient(135deg,var(--accent),#f0b95e)}
   .child .b{background:var(--primary);color:#fff}
@@ -80,6 +84,8 @@
   .grp{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
   .grp h3{font-size:13.5px;margin:0 0 4px;color:var(--primary)}
   .grp .hint{font-size:11.5px;color:var(--soft);margin:0 0 10px;line-height:1.5}
+  label.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:10px}
+  label.chk input{width:auto;margin:0}
   label{display:block;font-size:12px;color:var(--soft);margin:9px 0 4px}
   input,select{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;font-size:15px;outline:none;background:#fff;color:var(--ink)}
   input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
@@ -145,19 +151,40 @@
       </div>
 
       <div class="grp">
-        <h3>文字模型（负责教学 · 必填）</h3>
-        <p class="hint">推荐 DeepSeek：中文好、便宜、且允许手机网页直接连。去 platform.deepseek.com 申请密钥。</p>
+        <h3>处理模式</h3>
+        <label>题目怎么处理</label>
+        <select id="cPipeline">
+          <option value="split">OCR + 文字（如 DeepSeek 教学 + 通义 OCR）</option>
+          <option value="unified">多模态一体（如 qwen3.7-plus 直接看图）</option>
+        </select>
+        <p class="hint" id="pipelineHint">split：先 OCR 读题再教学，教学风格最稳。unified：一个模型包办，图形题更完整。</p>
+      </div>
+
+      <div class="grp">
+        <h3>主模型（文字 · unified 时也负责看图）</h3>
+        <p class="hint" id="textHint">split 模式填文字教学模型；unified 模式填多模态模型（如 qwen3.7-plus）。</p>
         <label>接口地址</label>
         <input id="tBase" placeholder="https://api.deepseek.com/v1" />
         <label>密钥 API Key</label>
         <input id="tKey" type="password" placeholder="sk-..." />
         <label>模型名</label>
-        <input id="tModel" placeholder="deepseek-chat" />
+        <input id="tModel" placeholder="deepseek-v4-flash" />
+        <label>Thinking 模式（仅 DeepSeek）</label>
+        <select id="cThinking">
+          <option value="disabled">关闭 · 短问短答（推荐日常）</option>
+          <option value="enabled">开启 · 深度推理（难题/奥数）</option>
+        </select>
+        <label id="effortLbl">推理深度</label>
+        <select id="cEffort">
+          <option value="high">high</option>
+          <option value="max">max（更深，更慢）</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="cShowReasoning" /> 灰色展示思考过程（给孩子看建议不勾）</label>
       </div>
 
-      <div class="grp">
-        <h3>视觉模型（拍照读题 · 选填）</h3>
-        <p class="hint">只用来把照片"读"成文字，不参与教学。推荐用魔搭 ModelScope 的 Qwen-VL（也允许手机网页直连）：去 modelscope.cn 注册后在"访问令牌"里拿 Token。不填就用不了拍照，其余功能照常。</p>
+      <div class="grp" id="visionGrp">
+        <h3>视觉模型（仅 split 模式 · OCR 读题）</h3>
+        <p class="hint">unified 模式下不需要。split 模式推荐魔搭 ModelScope Qwen-VL（手机网页可直连）。</p>
         <label>接口地址</label>
         <input id="vBase" placeholder="https://api-inference.modelscope.cn/v1" />
         <label>密钥 Token</label>
@@ -246,7 +273,8 @@ ${t.axioms.map(a=>"  - "+a).join("\n")}
 
 /* ---------------- 配置存取 ---------------- */
 const CFG_KEY="xiaoou.cfg.v1", SES_KEY="xiaoou.ses.v1";
-const cfg={tBase:"https://api.deepseek.com/v1",tKey:"",tModel:"deepseek-chat",
+const cfg={tBase:"https://api.deepseek.com/v1",tKey:"",tModel:"deepseek-v4-flash",
+  pipeline:"split",thinking:false,reasoningEffort:"high",showReasoning:false,
   vBase:"https://api-inference.modelscope.cn/v1",vKey:"",vModel:"Qwen/Qwen2.5-VL-7B-Instruct",
   name:"",topic:"arithmetic",level:"middle"};
 function loadCfg(){try{Object.assign(cfg,JSON.parse(localStorage.getItem(CFG_KEY)||"{}"))}catch(e){}
@@ -278,6 +306,12 @@ function md(text){
 
 /* ---------------- 渲染 ---------------- */
 function scroll(){const c=$("#chat");c.scrollTop=c.scrollHeight}
+function getReasoningEl(bubble){
+  if(!cfg.showReasoning)return null;
+  const msg=bubble.closest(".msg");let el=msg.querySelector(".reasoning");
+  if(!el){el=document.createElement("div");el.className="reasoning";msg.insertBefore(el,bubble)}
+  return el;
+}
 function addMsg(role){
   const w=document.createElement("div");w.className="msg "+role;
   const a=document.createElement("div");a.className="av";a.textContent=role==="child"?"我":"欧";
@@ -331,9 +365,20 @@ async function ocr(dataUrl){
   const d=await r.json();return (d.choices?.[0]?.message?.content||"").trim();
 }
 
-async function streamTeach(teachMsgs,onDelta){
+function deepseekExtras(base, model) {
+  const b = (base || "").toLowerCase();
+  const m = (model || "").toLowerCase();
+  if (!b.includes("deepseek.com") && !m.startsWith("deepseek-")) return {};
+  if (cfg.thinking) {
+    return { thinking: { type: "enabled" }, reasoning_effort: cfg.reasoningEffort || "high" };
+  }
+  return { thinking: { type: "disabled" } };
+}
+
+async function streamTeach(teachMsgs, onDelta, onReasoning) {
   const body={model:cfg.tModel,stream:true,temperature:.7,
-    messages:[{role:"system",content:buildSystem(cfg.topic,cfg.level,cfg.name)},...teachMsgs]};
+    messages:[{role:"system",content:buildSystem(cfg.topic,cfg.level,cfg.name)},...teachMsgs],
+    ...deepseekExtras(cfg.tBase, cfg.tModel)};
   let r;
   try{r=await fetch(cfg.tBase.replace(/\/$/,"")+"/chat/completions",{method:"POST",
     headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.tKey},body:JSON.stringify(body)});}
@@ -344,7 +389,9 @@ async function streamTeach(teachMsgs,onDelta){
     const parts=buf.split("\n\n");buf=parts.pop();
     for(const part of parts){const ln=part.trim();if(!ln.startsWith("data:"))continue;
       const data=ln.slice(5).trim();if(data==="[DONE]")return;
-      try{const j=JSON.parse(data);const pc=j.choices?.[0]?.delta?.content;if(pc)onDelta(pc)}catch(e){}}}
+      try{const j=JSON.parse(data);const d=j.choices?.[0]?.delta||{};
+        if(d.reasoning_content&&onReasoning)onReasoning(d.reasoning_content);
+        if(d.content)onDelta(d.content)}catch(e){}}}
 }
 
 /* ---------------- 发送 ---------------- */
@@ -365,25 +412,30 @@ async function send(text){
   $("#input").value="";autoGrow();clearImg();saveSes();
 
   setStreaming(true);
-  const tb=addMsg("tutor");tb.classList.add("blink");let acc="";
+  const tb=addMsg("tutor");tb.classList.add("blink");let acc="", reasoningAcc="";
   try{
-    // 组装教学用消息：把带图的消息先 OCR 成文字
     const teach=[];
-    for(const m of messages){
-      if(Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url")){
-        const dataUrl=m.content.find(p=>p.type==="image_url").image_url.url;
-        const typedPart=(m.content.find(p=>p.type==="text")?.text||"").trim();
-        const transcript=await ocr(dataUrl);
-        showNote(transcript,tb);
-        let combined="（这是从我作业照片里读出来的题目）\n"+transcript;
-        if(typedPart)combined=typedPart+"\n\n"+combined;
-        // 把历史里的图片替换成文字，后续更省
-        m.content=combined;
-        teach.push({role:m.role,content:combined});
-      }else teach.push({role:m.role,content:m.content});
+    if(cfg.pipeline==="unified"){
+      for(const m of messages)teach.push({role:m.role,content:m.content});
+    }else{
+      for(const m of messages){
+        if(Array.isArray(m.content)&&m.content.some(p=>p.type==="image_url")){
+          const dataUrl=m.content.find(p=>p.type==="image_url").image_url.url;
+          const typedPart=(m.content.find(p=>p.type==="text")?.text||"").trim();
+          const transcript=await ocr(dataUrl);
+          showNote(transcript,tb);
+          let combined="（这是从我作业照片里读出来的题目）\n"+transcript;
+          if(typedPart)combined=typedPart+"\n\n"+combined;
+          m.content=combined;
+          teach.push({role:m.role,content:combined});
+        }else teach.push({role:m.role,content:m.content});
+      }
     }
     saveSes();
-    await streamTeach(teach,pc=>{acc+=pc;tb.innerHTML=md(acc);scroll()});
+    await streamTeach(teach,
+      pc=>{acc+=pc;tb.innerHTML=md(acc);scroll()},
+      rc=>{if(!cfg.showReasoning)return;reasoningAcc+=rc;const el=getReasoningEl(tb);if(el){el.textContent=reasoningAcc;scroll()}}
+    );
   }catch(e){acc+=(acc?"\n\n":"")+(e.message||e);tb.innerHTML=md(acc)}
   tb.classList.remove("blink");
   if(acc.trim()){messages.push({role:"assistant",content:acc});saveSes()}
@@ -409,15 +461,35 @@ function fillTopicSelect(){
 }
 function fillAxioms(){const t=TOPICS.find(x=>x.key===$("#cTopic").value)||TOPICS[0];
   $("#axList").innerHTML=t.axioms.map(a=>`<li>${esc(a)}</li>`).join("")}
+function syncPipelineUi(){
+  const unified=cfg.pipeline==="unified";
+  $("#cPipeline").value=cfg.pipeline||"split";
+  $("#visionGrp").style.display=unified?"none":"";
+  const prevHint=document.querySelector("#prev span");
+  if(prevHint)prevHint.textContent=unified
+    ?"多模态模式：小欧会直接看图，再反问你，不会直接给答案。"
+    :"这张题目会先被读成文字，小欧再陪你想——不会直接给答案。";
+}
+function syncThinkingUi(){
+  const on=cfg.thinking;
+  $("#cThinking").value=on?"enabled":"disabled";
+  $("#cEffort").value=cfg.reasoningEffort||"high";
+  $("#cShowReasoning").checked=!!cfg.showReasoning;
+  $("#effortLbl").style.display=on?"":"none";
+  $("#cEffort").style.display=on?"":"none";
+}
 function openDrawer(){
   $("#cName").value=cfg.name;$("#tBase").value=cfg.tBase;$("#tKey").value=cfg.tKey;$("#tModel").value=cfg.tModel;
   $("#vBase").value=cfg.vBase;$("#vKey").value=cfg.vKey;$("#vModel").value=cfg.vModel;
-  fillTopicSelect();$("#drawer").classList.add("open");
+  syncPipelineUi();syncThinkingUi();fillTopicSelect();$("#drawer").classList.add("open");
 }
 function closeDrawer(){$("#drawer").classList.remove("open")}
 function applySettings(){
   cfg.name=$("#cName").value.trim();cfg.topic=$("#cTopic").value;cfg.level=$("#cLevel").value;
-  cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();cfg.tModel=$("#tModel").value.trim()||"deepseek-chat";
+  cfg.pipeline=$("#cPipeline").value;
+  cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();
+  cfg.tModel=$("#tModel").value.trim()||(cfg.pipeline==="unified"?"qwen3.7-plus":"deepseek-v4-flash");
+  cfg.thinking=$("#cThinking").value==="enabled";cfg.reasoningEffort=$("#cEffort").value;cfg.showReasoning=$("#cShowReasoning").checked;
   cfg.vBase=$("#vBase").value.trim()||"https://api-inference.modelscope.cn/v1";cfg.vKey=$("#vKey").value.trim();cfg.vModel=$("#vModel").value.trim()||"Qwen/Qwen2.5-VL-7B-Instruct";
   saveCfg();closeDrawer();
   if(!messages.length)renderAll();
@@ -442,6 +514,19 @@ function bind(){
   $("#cTopic").addEventListener("change",fillAxioms);
   $("#saveBtn").onclick=applySettings;
   $("#clearBtn").onclick=()=>{if(messages.length&&!confirm("清空当前对话？"))return;messages=[];clearImg();saveSes();renderAll();closeDrawer()};
+  $("#cThinking").addEventListener("change",()=>{
+    const on=$("#cThinking").value==="enabled";
+    $("#effortLbl").style.display=on?"":"none";
+    $("#cEffort").style.display=on?"":"none";
+  });
+  $("#cPipeline").addEventListener("change",()=>{
+    cfg.pipeline=$("#cPipeline").value;
+    if(cfg.pipeline==="unified"){
+      if($("#tBase").value.includes("deepseek.com"))$("#tBase").value="https://dashscope.aliyuncs.com/compatible-mode/v1";
+      if(!$("#tModel").value.trim()||$("#tModel").value.includes("deepseek"))$("#tModel").value="qwen3.7-plus";
+    }
+    syncPipelineUi();
+  });
 }
 
 /* ---------------- 启动 ---------------- */

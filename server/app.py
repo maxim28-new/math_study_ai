@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .config import WEB_DIR, settings
+from .config import WEB_DIR, settings, teaching_request_extras
 from . import tutor
 
 app = FastAPI(title="小欧 · 启发式数学老师")
@@ -47,8 +47,10 @@ def get_config() -> dict:
         "default_topic": tutor.DEFAULT_TOPIC_KEY,
         "default_level": tutor.DEFAULT_LEVEL,
         "quick_actions": tutor.QUICK_ACTIONS,
-        # 文字模型已配置且视觉模型可用时，才开放拍照按钮。
-        "vision_enabled": settings.is_configured and settings.is_vision_configured,
+        "pipeline": settings.pipeline,
+        "vision_enabled": settings.photo_enabled,
+        "thinking_enabled": settings.thinking_enabled,
+        "show_reasoning": settings.show_reasoning,
     }
 
 
@@ -86,6 +88,67 @@ async def _transcribe(client: httpx.AsyncClient, content: list) -> str:
     return (data["choices"][0]["message"]["content"] or "").strip()
 
 
+async def _yield_stream_chunks(resp) -> AsyncGenerator[str, None]:
+    """把 OpenAI 兼容流式响应解析成 SSE 事件。"""
+    async for line in resp.aiter_lines():
+        if not line or not line.startswith("data:"):
+            continue
+        data = line[len("data:"):].strip()
+        if data == "[DONE]":
+            break
+        try:
+            chunk = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        choices = chunk.get("choices") or []
+        if not choices:
+            continue
+        delta = choices[0].get("delta") or {}
+        reasoning_piece = delta.get("reasoning_content")
+        if reasoning_piece and settings.thinking_enabled and settings.show_reasoning:
+            yield _sse({"reasoning_delta": reasoning_piece})
+        piece = delta.get("content")
+        if piece:
+            yield _sse({"delta": piece})
+
+
+async def _prepare_split_messages(
+    client: httpx.AsyncClient, messages: list[Message]
+) -> tuple[list[dict], str | None]:
+    """split 模式：OCR 转写图片为文字，返回教学消息列表与最新转写文本。"""
+    teaching_messages: list[dict] = []
+    latest_transcript: str | None = None
+    for m in messages:
+        if isinstance(m.content, list) and any(
+            isinstance(p, dict) and p.get("type") == "image_url" for p in m.content
+        ):
+            if not settings.is_vision_configured:
+                raise ValueError(
+                    "还没有配置视觉模型，暂时不能拍照读题。"
+                    "请在 .env 里填写 LLM_VISION_BASE_URL、LLM_VISION_API_KEY、LLM_VISION_MODEL"
+                    "（可以和文字模型用不同服务商，例如文字用 DeepSeek、OCR 用通义 qwen-vl-plus）。"
+                    "或者改用 LLM_PIPELINE=unified，用一个多模态模型（如 qwen3.7-plus）包办全部。"
+                )
+            try:
+                transcript = await _transcribe(client, m.content)
+            except httpx.HTTPError as exc:
+                raise ValueError(
+                    f"读取照片时出错（视觉模型 {settings.vision_model} @ {settings.vision_base_url}）：{exc}。"
+                    "请检查 LLM_VISION_BASE_URL / LLM_VISION_API_KEY / LLM_VISION_MODEL 是否正确。"
+                ) from exc
+            latest_transcript = transcript
+            typed = " ".join(
+                p.get("text", "") for p in m.content if isinstance(p, dict) and p.get("type") == "text"
+            ).strip()
+            combined = "（这是从我作业照片里读出来的题目）\n" + transcript
+            if typed:
+                combined = typed + "\n\n" + combined
+            teaching_messages.append({"role": m.role, "content": combined})
+        else:
+            teaching_messages.append(m.model_dump())
+    return teaching_messages, latest_transcript
+
+
 async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
     if not settings.is_configured:
         yield _sse(
@@ -107,61 +170,28 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-            # 第一步（OCR）：把带图片的消息先用视觉模型转写成文字，
-            # 之后的"教学"环节永远交给文字模型，风格才一致、也不丢信息给弱模型去解。
-            teaching_messages: list[dict] = []
-            latest_transcript: str | None = None
-            for m in req.messages:
-                if isinstance(m.content, list) and any(
-                    isinstance(p, dict) and p.get("type") == "image_url" for p in m.content
-                ):
-                    if not settings.is_vision_configured:
-                        yield _sse(
-                            {
-                                "error": (
-                                    "还没有配置视觉模型，暂时不能拍照读题。"
-                                    "请在 .env 里填写 LLM_VISION_BASE_URL、LLM_VISION_API_KEY、LLM_VISION_MODEL"
-                                    "（可以和文字模型用不同服务商，例如文字用 DeepSeek、OCR 用通义 qwen-vl-plus）。"
-                                )
-                            }
-                        )
-                        yield _sse({"done": True})
-                        return
-                    try:
-                        transcript = await _transcribe(client, m.content)
-                    except httpx.HTTPError as exc:
-                        yield _sse(
-                            {
-                                "error": (
-                                    f"读取照片时出错（视觉模型 {settings.vision_model} @ {settings.vision_base_url}）：{exc}。"
-                                    "请检查 LLM_VISION_BASE_URL / LLM_VISION_API_KEY / LLM_VISION_MODEL 是否正确。"
-                                )
-                            }
-                        )
-                        yield _sse({"done": True})
-                        return
-                    latest_transcript = transcript
-                    # 保留孩子原本可能打的文字说明
-                    typed = " ".join(
-                        p.get("text", "") for p in m.content if isinstance(p, dict) and p.get("type") == "text"
-                    ).strip()
-                    combined = "（这是从我作业照片里读出来的题目）\n" + transcript
-                    if typed:
-                        combined = typed + "\n\n" + combined
-                    teaching_messages.append({"role": m.role, "content": combined})
-                else:
-                    teaching_messages.append(m.model_dump())
+            if settings.is_unified:
+                # unified 模式：多模态模型直接看图+教学，不经过 OCR。
+                teaching_messages = [m.model_dump() for m in req.messages]
+            else:
+                # split 模式：视觉模型 OCR → 文字模型教学。
+                try:
+                    teaching_messages, latest_transcript = await _prepare_split_messages(
+                        client, req.messages
+                    )
+                except ValueError as exc:
+                    yield _sse({"error": str(exc)})
+                    yield _sse({"done": True})
+                    return
+                if latest_transcript:
+                    yield _sse({"transcript": latest_transcript})
 
-            # 把"读到的题目"回传给前端，方便家长核对；OCR 读错时可以直接打字纠正。
-            if latest_transcript:
-                yield _sse({"transcript": latest_transcript})
-
-            # 第二步（教学）：文字模型登场，做全部的苏格拉底式引导。
             payload = {
                 "model": settings.model,
                 "stream": True,
                 "temperature": 0.7,
                 "messages": [{"role": "system", "content": system_prompt}] + teaching_messages,
+                **teaching_request_extras(settings),
             }
             async with client.stream(
                 "POST", settings.chat_endpoint, json=payload, headers=text_headers
@@ -176,23 +206,8 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     yield _sse({"done": True})
                     return
 
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    data = line[len("data:"):].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-                    choices = chunk.get("choices") or []
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta") or {}
-                    piece = delta.get("content")
-                    if piece:
-                        yield _sse({"delta": piece})
+                async for chunk in _yield_stream_chunks(resp):
+                    yield chunk
     except httpx.HTTPError as exc:
         yield _sse({"error": f"连接大模型时出错：{exc}"})
 

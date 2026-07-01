@@ -26,7 +26,7 @@
 1. 把本仓库的这个改动合并到 `main` 后，在 GitHub 仓库页打开 **Settings → Pages**，Source 选择 **Deploy from a branch**，分支选 `main`、目录选 **`/docs`**，保存。
 2. 稍等一两分钟，GitHub 会给出一个网址（形如 `https://<你的用户名>.github.io/math_study_ai/`）。用**手机浏览器**打开它。
 3. 点右上角**齿轮**填入密钥：
-   - **文字模型（必填，负责教学）**：推荐 **DeepSeek**（中文好、便宜、允许手机网页直连）。接口 `https://api.deepseek.com/v1`，模型 `deepseek-chat`，密钥去 [platform.deepseek.com](https://platform.deepseek.com) 申请。
+   - **文字模型（必填，负责教学）**：推荐 **DeepSeek**（中文好、便宜、允许手机网页直连）。接口 `https://api.deepseek.com/v1`，模型 `deepseek-v4-flash`（或 `deepseek-v4-pro`），密钥去 [platform.deepseek.com](https://platform.deepseek.com) 申请。
    - **视觉模型（选填，拍照读题用）**：推荐 **魔搭 ModelScope** 的 Qwen-VL（同样允许手机网页直连）。接口 `https://api-inference.modelscope.cn/v1`，模型 `Qwen/Qwen2.5-VL-7B-Instruct`，Token 去 [modelscope.cn](https://modelscope.cn) 注册后在"访问令牌"里拿。不填就先用文字功能。
 4. 保存，就能在手机上和小欧对话、拍作业本了。
 
@@ -53,29 +53,68 @@
 
 ---
 
-## 快速开始（三步）
+## 快速开始（Mac 本地 · 用虚拟环境，不污染系统 Python）
 
-前提：电脑上装了 **Python 3.10 或更高版本**。
+前提：Mac 上已装 **Python 3.10+**（终端里 `python3 --version` 能看到版本号即可）。
 
-### 1. 安装依赖
+### 1. 进入项目，创建并激活 `.venv`
+
+```bash
+cd math_study_ai
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+激活成功后，命令行前面会出现 `(.venv)`，之后所有 `pip` / `python` 都只在这个环境里生效。
+
+> 以后每次新开终端要跑小欧，先 `cd` 到项目目录，再执行 `source .venv/bin/activate` 即可。  
+> 用完可以 `deactivate` 退出虚拟环境。
+
+### 2. 在虚拟环境里安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 填写你的大模型密钥
+是的，就是这一条——但**一定要在 `.venv` 激活之后**再跑，这样包装进 `.venv` 里，不会弄乱本机全局 Python。
 
-复制配置模板，然后用文本编辑器打开 `.env`，把 `LLM_API_KEY` 填上：
+### 3. 填写模型密钥
 
 ```bash
 cp .env.example .env
 ```
 
+用任意编辑器打开 `.env`，至少填好 `LLM_API_KEY`；想用拍照 OCR 再填 `LLM_VISION_*` 三项（见下文）。
+
+### 4. 启动
+
+```bash
+python run.py
+```
+
+浏览器打开 `http://127.0.0.1:8000`。Mac 上如果提示 `python: command not found`，把上面命令换成 `python3 run.py`（虚拟环境里一般 `python` 和 `python3` 都行）。
+
+---
+
+## 快速开始（不用虚拟环境 · 不推荐）
+
+如果你明确想装到全局环境（可能和别的项目冲突），也可以：
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env
+python3 run.py
+```
+
+---
+
+## 填写模型密钥（`.env` 说明）
+
 小欧兼容所有"OpenAI 格式"的大模型接口，你可以任选一家（下面几家都支持中文、注册即用）：
 
 | 服务商 | 接口地址 `LLM_BASE_URL` | 模型名 `LLM_MODEL` |
 | --- | --- | --- |
-| DeepSeek（推荐，便宜） | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| DeepSeek（推荐，便宜） | `https://api.deepseek.com/v1` | `deepseek-v4-flash`（日常） / `deepseek-v4-pro`（更强） |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` 或 `gpt-4o` |
 | 月之暗面 Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
@@ -83,7 +122,51 @@ cp .env.example .env
 
 `.env` 里只需要把这三项对应填好：`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。
 
-**想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**（三项均可独立于文字模型，留空则分别沿用文字模型的对应项）。
+> **DeepSeek 模型名更新（2026）**：官方 V4 模型为 `deepseek-v4-flash` 和 `deepseek-v4-pro`；旧名 `deepseek-chat` / `deepseek-reasoner` 将于 **2026-07-24** 退役。接口地址 `https://api.deepseek.com/v1` 不变，只改模型名即可。
+
+**DeepSeek V4 Thinking 模式（可配置）**：
+
+| 变量 | 值 | 说明 |
+| --- | --- | --- |
+| `LLM_THINKING` | `disabled`（默认） | 关闭 thinking，短问短答、快、省，适合日常陪练 |
+| | `enabled` | 开启 thinking，先深度推理再回复，适合奥数/难题 |
+| `LLM_REASONING_EFFORT` | `high` / `max` | thinking 开启时的推理深度（默认 `high`） |
+| `LLM_SHOW_REASONING` | `false`（默认） | thinking 开启时**不展示**思考过程，界面只看到最终回复 |
+| | `true` | thinking 开启时**灰色展示**思考过程（给孩子看时建议保持 false） |
+
+```bash
+# 日常陪练（默认）
+LLM_THINKING=disabled
+
+# 难题模式：开启 thinking，但不给孩子看思考过程
+LLM_THINKING=enabled
+LLM_REASONING_EFFORT=high
+LLM_SHOW_REASONING=false
+
+# 家长调试：开启 thinking 且灰色展示思考过程
+LLM_SHOW_REASONING=true
+```
+
+## 两种处理模式（`LLM_PIPELINE`）
+
+小欧支持两种架构，在 `.env` 里用 **`LLM_PIPELINE`** 切换：
+
+| | `split`（默认） | `unified`（多模态一体） |
+|---|---|---|
+| 原理 | 视觉模型 **OCR 读题** → 文字模型 **教学** | **一个多模态模型**直接看图+对话 |
+| 适合 | 文字用 DeepSeek（强推理、便宜），OCR 用通义 | 配置简单，图形题信息更完整 |
+| 拍照 | 需填 `LLM_VISION_*` | 只需填 `LLM_*`，不用 `LLM_VISION_*` |
+| 教学风格 | 始终由你选的文字模型负责，最稳 | 同一个模型，风格统一 |
+
+### 模式 A：`split` — OCR + 文字（默认）
+
+复制默认模板：
+
+```bash
+cp .env.example .env
+```
+
+**想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**。
 
 > **推荐 Mac 本地组合：** 文字用 DeepSeek，OCR 用通义——两家接口、密钥完全分开填，互不影响：
 
@@ -91,7 +174,7 @@ cp .env.example .env
 # 文字教学
 LLM_BASE_URL=https://api.deepseek.com/v1
 LLM_API_KEY=你的DeepSeek密钥
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-v4-flash
 
 # 拍照 OCR（只读题，不解题）
 LLM_VISION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
@@ -111,15 +194,31 @@ LLM_VISION_MODEL=qwen-vl-plus
 
 读到的题目会显示在对话里（"小欧读到的题目：…"），读错了直接打字纠正即可。
 
-### 3. 启动
+### 模式 B：`unified` — 一个多模态模型包办（如 qwen3.7-plus）
+
+复制多模态模板，填一个密钥即可：
 
 ```bash
-python run.py
+cp .env.unified.example .env
 ```
 
-> 如果提示 `python: command not found`，把命令换成 `python3 run.py` 即可（macOS / Linux 上通常是 `python3`）。
+示例配置（通义千问 **qwen3.7-plus**，支持文字+图片，OpenAI 兼容接口）：
 
-然后用浏览器打开终端里显示的地址（默认 <http://127.0.0.1:8000>）即可。
+```bash
+LLM_PIPELINE=unified
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_API_KEY=你的通义密钥
+LLM_MODEL=qwen3.7-plus
+
+# 以下留空，不需要
+LLM_VISION_BASE_URL=
+LLM_VISION_API_KEY=
+LLM_VISION_MODEL=
+```
+
+> **qwen3.7-plus 的优势**：既能对话又能直接看图，图形题、线段图不会像 OCR 那样丢信息。密钥在 [阿里云百炼/千问控制台](https://dashscope.aliyuncs.com/) 申请。模型名以控制台为准。
+
+其他可用的多模态模型：`gpt-4o`、`qwen-vl-max` 等，同样设 `LLM_PIPELINE=unified` 即可。
 
 > 还没填密钥也能先打开看看界面，只是暂时不能对话。
 
