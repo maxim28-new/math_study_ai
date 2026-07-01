@@ -8,19 +8,29 @@ const state = {
   topicKey: null,
   level: null,
   childName: "",
-  messages: [], // 发给模型的历史：{role:'user'|'assistant', content}
+  messages: [], // 发给模型的历史：{role:'user'|'assistant', content}（content 可能是字符串或多模态数组）
+  pendingImage: null, // 待发送的题目照片（dataURL）
   streaming: false,
 };
 
 const STORE_KEY = "xiaoou.session.v1";
 
 // ---------------- 本地存储 ----------------
+// 图片是很大的 base64，存进 localStorage 会撑爆配额，所以持久化时把图片换成占位文字。
+function sanitizeForStore(messages) {
+  return messages.map((m) => {
+    if (!Array.isArray(m.content)) return m;
+    const textPart = m.content.find((p) => p.type === "text");
+    const text = textPart ? textPart.text : "";
+    return { role: m.role, content: (text ? text + "\n" : "") + "[一张题目照片]" };
+  });
+}
 function saveSession() {
   const data = {
     topicKey: state.topicKey,
     level: state.level,
     childName: state.childName,
-    messages: state.messages,
+    messages: sanitizeForStore(state.messages),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch (e) {}
 }
@@ -93,6 +103,28 @@ function scrollToBottom() {
   m.scrollTop = m.scrollHeight;
 }
 
+// content 可能是纯文字，也可能是含图片的数组。这里统一渲染进气泡。
+function renderContentInto(bubble, content) {
+  if (typeof content === "string") {
+    bubble.innerHTML = renderMarkdown(content);
+    return;
+  }
+  bubble.innerHTML = "";
+  for (const part of content) {
+    if (part.type === "image_url" && part.image_url && part.image_url.url) {
+      const img = document.createElement("img");
+      img.className = "msg-img";
+      img.src = part.image_url.url;
+      img.addEventListener("click", () => window.open(img.src, "_blank"));
+      bubble.appendChild(img);
+    } else if (part.type === "text" && part.text) {
+      const div = document.createElement("div");
+      div.innerHTML = renderMarkdown(part.text);
+      bubble.appendChild(div);
+    }
+  }
+}
+
 function renderWelcome() {
   const topic = state.topics.find((t) => t.key === state.topicKey);
   const name = state.childName ? `${state.childName}，` : "";
@@ -108,7 +140,7 @@ function renderHistory() {
   if (state.messages.length === 0) { renderWelcome(); return; }
   for (const m of state.messages) {
     const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
-    bubble.innerHTML = renderMarkdown(m.content);
+    renderContentInto(bubble, m.content);
   }
 }
 
@@ -160,6 +192,16 @@ async function loadConfig() {
     qa.appendChild(b);
   });
 
+  // 拍照按钮：未连接模型时禁用并提示
+  const attach = $("#attachBtn");
+  if (cfg.vision_enabled) {
+    attach.disabled = false;
+    attach.title = "拍照或上传作业本上的题目";
+  } else {
+    attach.disabled = true;
+    attach.title = "连接大模型后即可拍照上传题目";
+  }
+
   // 模型标签 / 未配置提示
   if (cfg.configured) {
     $("#modelTag").textContent = "已连接模型：" + cfg.model;
@@ -190,18 +232,29 @@ function updateAxioms() {
 
 // ---------------- 发送 / 流式接收 ----------------
 async function sendMessage(text) {
-  const content = (text || $("#input").value).trim();
-  if (!content || state.streaming) return;
-  if (!state.config.configured) {
-    // 未配置也允许把消息显示出来，但提示需要配置
-    $("#input").value = "";
+  if (state.streaming) return;
+  const typed = (text || $("#input").value).trim();
+  const image = state.pendingImage;
+  if (!typed && !image) return;
+
+  // 组装本条消息：有图片时用多模态数组，否则用纯文字。
+  let content;
+  if (image) {
+    const caption = typed || "这是我作业本上的题目，你先帮我看看。";
+    content = [
+      { type: "text", text: caption },
+      { type: "image_url", image_url: { url: image } },
+    ];
+  } else {
+    content = typed;
   }
 
   // 显示孩子的消息
   state.messages.push({ role: "user", content });
   const childBubble = addMessageEl("child");
-  childBubble.innerHTML = renderMarkdown(content);
+  renderContentInto(childBubble, content);
   $("#input").value = "";
+  clearPendingImage();
   autoGrow($("#input"));
   saveSession();
 
@@ -261,7 +314,55 @@ async function sendMessage(text) {
 function setStreaming(on) {
   state.streaming = on;
   $("#sendBtn").disabled = on;
+  const attach = $("#attachBtn");
+  if (attach && state.config && state.config.vision_enabled) attach.disabled = on;
   document.querySelectorAll(".quick-actions button").forEach((b) => (b.disabled = on));
+}
+
+// ---------------- 拍照 / 上传题目 ----------------
+// 把照片缩小到合适尺寸（长边最多 1280px），既省流量又够清晰。
+function resizeImage(file, maxDim = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("读取图片失败"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("图片解析失败"));
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, maxDim / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onFileChosen(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ""; // 允许再次选同一张
+  if (!file) return;
+  try {
+    state.pendingImage = await resizeImage(file);
+    $("#imgPreviewThumb").src = state.pendingImage;
+    $("#imgPreview").classList.remove("hidden");
+    $("#input").focus();
+  } catch (err) {
+    alert("这张图片没能读进来，换一张试试看？");
+  }
+}
+
+function clearPendingImage() {
+  state.pendingImage = null;
+  $("#imgPreviewThumb").removeAttribute("src");
+  $("#imgPreview").classList.add("hidden");
 }
 
 // ---------------- 输入框行为 ----------------
@@ -281,6 +382,10 @@ function bindEvents() {
   });
   $("#sendBtn").addEventListener("click", () => sendMessage());
 
+  $("#attachBtn").addEventListener("click", () => $("#fileInput").click());
+  $("#fileInput").addEventListener("change", onFileChosen);
+  $("#imgRemoveBtn").addEventListener("click", clearPendingImage);
+
   $("#topicSelect").addEventListener("change", (e) => {
     state.topicKey = e.target.value;
     updateAxioms();
@@ -298,6 +403,7 @@ function bindEvents() {
   $("#resetBtn").addEventListener("click", () => {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
     state.messages = [];
+    clearPendingImage();
     saveSession();
     renderHistory();
   });

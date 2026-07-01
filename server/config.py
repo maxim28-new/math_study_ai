@@ -20,6 +20,7 @@ class Settings:
     base_url: str
     api_key: str
     model: str
+    vision_model: str
     host: str
     port: int
 
@@ -34,10 +35,14 @@ class Settings:
 
 
 def load_settings() -> Settings:
+    model = os.getenv("LLM_MODEL", "deepseek-chat").strip()
+    # 视觉模型可选：不填就沿用文字模型（很多多模态模型本身就能看图）。
+    vision_model = os.getenv("LLM_VISION_MODEL", "").strip() or model
     return Settings(
         base_url=os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").strip(),
         api_key=os.getenv("LLM_API_KEY", "").strip(),
-        model=os.getenv("LLM_MODEL", "deepseek-chat").strip(),
+        model=model,
+        vision_model=vision_model,
         host=os.getenv("HOST", "127.0.0.1").strip(),
         port=int(os.getenv("PORT", "8000")),
     )
