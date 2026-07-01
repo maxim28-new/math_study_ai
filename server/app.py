@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator, Union
 
 import httpx
 from fastapi import FastAPI
@@ -23,7 +23,8 @@ app = FastAPI(title="小欧 · 启发式数学老师")
 
 class Message(BaseModel):
     role: str
-    content: str
+    # content 既可能是纯文字，也可能是多模态数组（含图片）——兼容 OpenAI 多模态格式。
+    content: Union[str, list[dict[str, Any]]]
 
 
 class ChatRequest(BaseModel):
@@ -46,7 +47,18 @@ def get_config() -> dict:
         "default_topic": tutor.DEFAULT_TOPIC_KEY,
         "default_level": tutor.DEFAULT_LEVEL,
         "quick_actions": tutor.QUICK_ACTIONS,
+        # 是否允许拍照/上传题目（已配置密钥即开放；能否真正读图取决于所选模型是否支持视觉）。
+        "vision_enabled": settings.is_configured,
     }
+
+
+def _messages_have_image(messages: list[Message]) -> bool:
+    for m in messages:
+        if isinstance(m.content, list):
+            for part in m.content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    return True
+    return False
 
 
 def _sse(payload: dict) -> str:
@@ -67,8 +79,10 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         return
 
     system_prompt = tutor.build_system_prompt(req.topic, req.level, req.child_name)
+    # 消息里带图片时改用视觉模型（默认与文字模型相同）。
+    model = settings.vision_model if _messages_have_image(req.messages) else settings.model
     payload = {
-        "model": settings.model,
+        "model": model,
         "stream": True,
         "temperature": 0.7,
         "messages": [{"role": "system", "content": system_prompt}]
