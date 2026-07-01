@@ -53,23 +53,62 @@
 
 ---
 
-## 快速开始（三步）
+## 快速开始（Mac 本地 · 用虚拟环境，不污染系统 Python）
 
-前提：电脑上装了 **Python 3.10 或更高版本**。
+前提：Mac 上已装 **Python 3.10+**（终端里 `python3 --version` 能看到版本号即可）。
 
-### 1. 安装依赖
+### 1. 进入项目，创建并激活 `.venv`
+
+```bash
+cd math_study_ai
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+激活成功后，命令行前面会出现 `(.venv)`，之后所有 `pip` / `python` 都只在这个环境里生效。
+
+> 以后每次新开终端要跑小欧，先 `cd` 到项目目录，再执行 `source .venv/bin/activate` 即可。  
+> 用完可以 `deactivate` 退出虚拟环境。
+
+### 2. 在虚拟环境里安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 填写你的大模型密钥
+是的，就是这一条——但**一定要在 `.venv` 激活之后**再跑，这样包装进 `.venv` 里，不会弄乱本机全局 Python。
 
-复制配置模板，然后用文本编辑器打开 `.env`，把 `LLM_API_KEY` 填上：
+### 3. 填写模型密钥
 
 ```bash
 cp .env.example .env
 ```
+
+用任意编辑器打开 `.env`，至少填好 `LLM_API_KEY`；想用拍照 OCR 再填 `LLM_VISION_*` 三项（见下文）。
+
+### 4. 启动
+
+```bash
+python run.py
+```
+
+浏览器打开 `http://127.0.0.1:8000`。Mac 上如果提示 `python: command not found`，把上面命令换成 `python3 run.py`（虚拟环境里一般 `python` 和 `python3` 都行）。
+
+---
+
+## 快速开始（不用虚拟环境 · 不推荐）
+
+如果你明确想装到全局环境（可能和别的项目冲突），也可以：
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env
+python3 run.py
+```
+
+---
+
+## 填写模型密钥（`.env` 说明）
 
 小欧兼容所有"OpenAI 格式"的大模型接口，你可以任选一家（下面几家都支持中文、注册即用）：
 
@@ -110,16 +149,6 @@ LLM_VISION_MODEL=qwen-vl-plus
 | 魔搭 ModelScope | `https://api-inference.modelscope.cn/v1` | `Qwen/Qwen2.5-VL-7B-Instruct` |
 
 读到的题目会显示在对话里（"小欧读到的题目：…"），读错了直接打字纠正即可。
-
-### 3. 启动
-
-```bash
-python run.py
-```
-
-> 如果提示 `python: command not found`，把命令换成 `python3 run.py` 即可（macOS / Linux 上通常是 `python3`）。
-
-然后用浏览器打开终端里显示的地址（默认 <http://127.0.0.1:8000>）即可。
 
 > 还没填密钥也能先打开看看界面，只是暂时不能对话。
 
