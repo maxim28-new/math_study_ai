@@ -83,18 +83,33 @@ cp .env.example .env
 
 `.env` 里只需要把这三项对应填好：`LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。
 
-**想用"拍作业本"功能？** 拍照读题需要一个**能看懂图片的视觉模型**，在 `.env` 里再填一项 `LLM_VISION_MODEL`（留空则沿用 `LLM_MODEL`）。
+**想用"拍作业本"功能？** 视觉模型只当"眼睛"（OCR），教学仍由文字模型完成。在 `.env` 里单独填 **`LLM_VISION_BASE_URL` / `LLM_VISION_API_KEY` / `LLM_VISION_MODEL`**（三项均可独立于文字模型，留空则分别沿用文字模型的对应项）。
 
-> **视觉模型只当"眼睛"（OCR）。** 拍照后，视觉模型只负责把题目**读成文字**，绝不解题；随后所有的苏格拉底式引导仍然由你选的**文字模型**完成。这样教学风格始终一致、也不会把思考交给较弱的模型。读到的题目会显示出来，读错了直接打字纠正即可。本地服务器版不受浏览器跨域限制，视觉模型可以用通义 `qwen-vl-plus`、Kimi、智谱 `glm-4v` 等任意一家：
+> **推荐 Mac 本地组合：** 文字用 DeepSeek，OCR 用通义——两家接口、密钥完全分开填，互不影响：
 
-| 服务商 | 视觉模型 `LLM_VISION_MODEL` |
-| --- | --- |
-| OpenAI | `gpt-4o` 或 `gpt-4o-mini` |
-| 通义千问 | `qwen-vl-plus` 或 `qwen-vl-max` |
-| 月之暗面 Kimi | `moonshot-v1-8k-vision-preview` |
-| 智谱 | `glm-4v` |
+```bash
+# 文字教学
+LLM_BASE_URL=https://api.deepseek.com/v1
+LLM_API_KEY=你的DeepSeek密钥
+LLM_MODEL=deepseek-chat
 
-> 注意：DeepSeek 的 `deepseek-chat` **不支持看图**。如果你主力用 DeepSeek 做文字对话，想用拍照功能就得换一个支持视觉的服务（把 `LLM_BASE_URL` / 密钥 / `LLM_VISION_MODEL` 指向它）。不填 `LLM_VISION_MODEL` 也完全没关系，其他所有文字功能照常使用。
+# 拍照 OCR（只读题，不解题）
+LLM_VISION_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_VISION_API_KEY=你的通义密钥
+LLM_VISION_MODEL=qwen-vl-plus
+```
+
+本地服务器不受浏览器跨域限制，OCR 还可以换 Kimi、智谱 `glm-4v`、OpenAI `gpt-4o` 等任意支持视觉的模型：
+
+| 服务商 | OCR 接口 `LLM_VISION_BASE_URL` | 模型 `LLM_VISION_MODEL` |
+| --- | --- | --- |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-vl-plus` / `qwen-vl-max` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o` / `gpt-4o-mini` |
+| 月之暗面 Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k-vision-preview` |
+| 智谱 | `https://open.bigmodel.cn/api/paas/v4` | `glm-4v` |
+| 魔搭 ModelScope | `https://api-inference.modelscope.cn/v1` | `Qwen/Qwen2.5-VL-7B-Instruct` |
+
+读到的题目会显示在对话里（"小欧读到的题目：…"），读错了直接打字纠正即可。
 
 ### 3. 启动
 

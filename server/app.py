@@ -47,8 +47,8 @@ def get_config() -> dict:
         "default_topic": tutor.DEFAULT_TOPIC_KEY,
         "default_level": tutor.DEFAULT_LEVEL,
         "quick_actions": tutor.QUICK_ACTIONS,
-        # 是否允许拍照/上传题目（已配置密钥即开放；能否真正读图取决于所选模型是否支持视觉）。
-        "vision_enabled": settings.is_configured,
+        # 文字模型已配置且视觉模型可用时，才开放拍照按钮。
+        "vision_enabled": settings.is_configured and settings.is_vision_configured,
     }
 
 
@@ -65,7 +65,7 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-async def _transcribe(client: httpx.AsyncClient, content: list, headers: dict) -> str:
+async def _transcribe(client: httpx.AsyncClient, content: list) -> str:
     """用视觉模型把一条含图片的消息"读"成纯文字（OCR 环节，绝不解题）。"""
     payload = {
         "model": settings.vision_model,
@@ -76,7 +76,11 @@ async def _transcribe(client: httpx.AsyncClient, content: list, headers: dict) -
             {"role": "user", "content": content},
         ],
     }
-    resp = await client.post(settings.chat_endpoint, json=payload, headers=headers)
+    headers = {
+        "Authorization": f"Bearer {settings.vision_api_key}",
+        "Content-Type": "application/json",
+    }
+    resp = await client.post(settings.vision_chat_endpoint, json=payload, headers=headers)
     resp.raise_for_status()
     data = resp.json()
     return (data["choices"][0]["message"]["content"] or "").strip()
@@ -96,7 +100,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         return
 
     system_prompt = tutor.build_system_prompt(req.topic, req.level, req.child_name)
-    headers = {
+    text_headers = {
         "Authorization": f"Bearer {settings.api_key}",
         "Content-Type": "application/json",
     }
@@ -111,12 +115,27 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                 if isinstance(m.content, list) and any(
                     isinstance(p, dict) and p.get("type") == "image_url" for p in m.content
                 ):
+                    if not settings.is_vision_configured:
+                        yield _sse(
+                            {
+                                "error": (
+                                    "还没有配置视觉模型，暂时不能拍照读题。"
+                                    "请在 .env 里填写 LLM_VISION_BASE_URL、LLM_VISION_API_KEY、LLM_VISION_MODEL"
+                                    "（可以和文字模型用不同服务商，例如文字用 DeepSeek、OCR 用通义 qwen-vl-plus）。"
+                                )
+                            }
+                        )
+                        yield _sse({"done": True})
+                        return
                     try:
-                        transcript = await _transcribe(client, m.content, headers)
+                        transcript = await _transcribe(client, m.content)
                     except httpx.HTTPError as exc:
                         yield _sse(
                             {
-                                "error": f"读取照片时出错（视觉模型 {settings.vision_model}）：{exc}。请确认视觉模型支持看图、且接口地址/密钥正确。"
+                                "error": (
+                                    f"读取照片时出错（视觉模型 {settings.vision_model} @ {settings.vision_base_url}）：{exc}。"
+                                    "请检查 LLM_VISION_BASE_URL / LLM_VISION_API_KEY / LLM_VISION_MODEL 是否正确。"
+                                )
                             }
                         )
                         yield _sse({"done": True})
@@ -145,7 +164,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                 "messages": [{"role": "system", "content": system_prompt}] + teaching_messages,
             }
             async with client.stream(
-                "POST", settings.chat_endpoint, json=payload, headers=headers
+                "POST", settings.chat_endpoint, json=payload, headers=text_headers
             ) as resp:
                 if resp.status_code != 200:
                     detail = (await resp.aread()).decode("utf-8", "ignore")

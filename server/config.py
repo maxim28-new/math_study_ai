@@ -17,31 +17,60 @@ load_dotenv(ROOT_DIR / ".env")
 
 @dataclass(frozen=True)
 class Settings:
+    # 文字模型（负责全部教学对话）
     base_url: str
     api_key: str
     model: str
+    # 视觉模型（只负责拍照 OCR，不参与教学）
+    vision_base_url: str
+    vision_api_key: str
     vision_model: str
     host: str
     port: int
 
     @property
     def is_configured(self) -> bool:
-        """是否已经填好密钥。未配置时前端会进入"未连接"提示状态。"""
+        """文字模型是否已配置（教学功能的前提）。"""
         return bool(self.api_key.strip())
+
+    @property
+    def is_vision_configured(self) -> bool:
+        """视觉模型是否可用（拍照 OCR 的前提）。"""
+        return bool(self.vision_api_key.strip()) and bool(self.vision_model.strip())
+
+    @property
+    def vision_uses_separate_credentials(self) -> bool:
+        """OCR 是否使用了与文字模型不同的接口或密钥。"""
+        return (
+            self.vision_base_url.rstrip("/") != self.base_url.rstrip("/")
+            or self.vision_api_key != self.api_key
+        )
 
     @property
     def chat_endpoint(self) -> str:
         return self.base_url.rstrip("/") + "/chat/completions"
 
+    @property
+    def vision_chat_endpoint(self) -> str:
+        return self.vision_base_url.rstrip("/") + "/chat/completions"
+
 
 def load_settings() -> Settings:
+    base_url = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").strip()
+    api_key = os.getenv("LLM_API_KEY", "").strip()
     model = os.getenv("LLM_MODEL", "deepseek-chat").strip()
-    # 视觉模型可选：不填就沿用文字模型（很多多模态模型本身就能看图）。
+
+    # 视觉模型三项均可独立配置；留空则分别沿用文字模型的对应项。
+    vision_base_url = os.getenv("LLM_VISION_BASE_URL", "").strip() or base_url
+    vision_api_key = os.getenv("LLM_VISION_API_KEY", "").strip() or api_key
     vision_model = os.getenv("LLM_VISION_MODEL", "").strip() or model
+
     return Settings(
-        base_url=os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").strip(),
-        api_key=os.getenv("LLM_API_KEY", "").strip(),
+        base_url=base_url,
+        api_key=api_key,
         model=model,
+        vision_base_url=vision_base_url,
+        vision_api_key=vision_api_key,
         vision_model=vision_model,
         host=os.getenv("HOST", "127.0.0.1").strip(),
         port=int(os.getenv("PORT", "8000")),
