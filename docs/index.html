@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#4f6bed" />
 <title>小欧 · 启发式数学老师（手机体验版）</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 <style>
   :root{
@@ -89,6 +90,8 @@
   .b .diagram svg{max-width:100%;height:auto}
   .b .diagram figcaption{margin-top:5px;font-size:12px;color:var(--soft)}
   .b pre.code{background:#2b2a33;color:#f4f1ea;padding:9px 11px;border-radius:9px;overflow-x:auto;font-size:12.5px;margin:6px 0}
+  .b .katex{font-size:1.05em}
+  .b .katex-display{margin:.45em 0;overflow-x:auto;overflow-y:hidden}
 
   /* 画板 */
   .draw-modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.4);display:grid;place-items:center}
@@ -249,6 +252,7 @@
     </div>
   </div>
 
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
@@ -344,12 +348,11 @@ ${t.inspirations.map(s=>"  - "+s).join("\n")}
 - 学校可能逼着背口诀、抢速度；你做那个相反、让人安心的声音：慢一点没关系，先弄懂为什么。多夸好想法，绝不制造紧张比较。
 - 如果收到‘从照片里读出来的题目’，先带孩子确认题目、再从‘这题在问什么’反问，绝不一上来就解。
 
-# 文字与符号格式（孩子能在屏幕上直接读懂）
-- **不要用 LaTeX**：不要写 $...$、\\\\times、\\\\frac 等——界面不会渲染，孩子会看到乱码。
-- 乘法用 **×**（或口语「乘」），除法用 **÷**（或「除以」）；分数写 **1/2** 或「二分之一」。
-- 比较符号直接用 Unicode：≤ ≥ ≠ ≈；或写口语「不大于」「至少」。
-- 平方写 **3²** 或「3 的平方」，不要用 ^2 或 $3^2$。
-- 代数里的未知数可以写 **x**；但**数字相乘**一定写 **×**，不要写 2x3 或 $2 \\\\times 3$。
+# 文字与符号格式
+- 数学公式可以用 **LaTeX**，界面会用 KaTeX 渲染成漂亮的公式。
+- 行内公式写 **$...$**，单独一行的大公式写 **$$...$$**。例如：$1 \\\\times 1$、$2 \\\\times 3$、$\\\\frac{1}{2}$、$3^2$。
+- 常用：乘法 \\\\times，除法 \\\\div，分数 \\\\frac{a}{b}，比较 \\\\leq \\\\geq \\\\neq。
+- 简单口算也可以直接写 Unicode（× ÷ ²），两种都行；但**数字相乘**不要写 2x3 这种容易看错的格式。
 
 # 本次设置
 ${nm}- 主题：${t.name}
@@ -388,26 +391,19 @@ function saveSes(){
   try{localStorage.setItem(SES_KEY,JSON.stringify(safe))}catch(e){}
 }
 
-/* ---------------- 轻量 Markdown ---------------- */
+/* ---------------- 轻量 Markdown（含 KaTeX） ---------------- */
 function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-const MSUP={0:"⁰",1:"¹",2:"²",3:"³",4:"⁴",5:"⁵",6:"⁶",7:"⁷",8:"⁸",9:"⁹",n:"ⁿ","+":"⁺","-":"⁻","(":"⁽",")":"⁾"};
-const MSUB={0:"₀",1:"₁",2:"₂",3:"₃",4:"₄",5:"₅",6:"₆",7:"₇",8:"₈",9:"₉",n:"ₙ","+":"₊","-":"₋","(":"₍",")":"₎"};
-const LTX=[["\\times","×"],["\\div","÷"],["\\cdot","·"],["\\pm","±"],["\\mp","∓"],["\\leq","≤"],["\\le","≤"],["\\geq","≥"],["\\ge","≥"],["\\neq","≠"],["\\ne","≠"],["\\approx","≈"],["\\equiv","≡"],["\\infty","∞"],["\\pi","π"],["\\degree","°"],["\\circ","°"],["\\ldots","…"],["\\cdots","⋯"],["\\to","→"],["\\rightarrow","→"],["\\leftarrow","←"],["\\Rightarrow","⇒"],["\\leftrightarrow","↔"],["\\sqrt","√"],["\\left",""],["\\right",""],["\\,"," "],["\\;"," "],["\\!",""],["\\quad"," "],["\\qquad","  "]];
-function mSup(s){return[...String(s)].map(c=>MSUP[c]??c).join("")}
-function mSub(s){return[...String(s)].map(c=>MSUB[c]??c).join("")}
-function mInner(s){s=String(s);
-  s=s.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g,(_,a,b)=>`${mInner(a)}/${mInner(b)}`);
-  s=s.replace(/\\(?:text|mathrm|mathbf|mathit)\{([^{}]*)\}/g,"$1");
-  for(const [k,v] of LTX)s=s.split(k).join(v);
-  s=s.replace(/\^\{([^{}]+)\}/g,(_,e)=>mSup(e)).replace(/\^([0-9n+\-=()]+)/g,(_,e)=>mSup(e));
-  s=s.replace(/_\{([^{}]+)\}/g,(_,e)=>mSub(e)).replace(/_([0-9n+\-=()]+)/g,(_,e)=>mSub(e));
-  s=s.replace(/\\[a-zA-Z]+(\{[^{}]*\})?/g,"");return s.replace(/\s+/g," ").trim()}
-function mNorm(s){s=String(s);
-  s=s.replace(/\$\$([\s\S]+?)\$\$/g,(_,i)=>mInner(i)).replace(/\$([^\$\n]+?)\$/g,(_,i)=>mInner(i));
-  s=s.replace(/\\\(([^\)]*?)\\\)/g,(_,i)=>mInner(i)).replace(/\\\[([\s\S]*?)\\\]/g,(_,i)=>mInner(i));
-  s=mInner(s).replace(/(\d)\s*\*\s*(\d)/g,"$1 × $2").replace(/(\d+)\s*[xX]\s*(\d+)/g,"$1 × $2").replace(/(\d+)[xX](\d+)/g,"$1 × $2");
-  return s}
-function inl(s){return esc(mNorm(s)).replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/`([^`]+)`/g,"<code>$1</code>")}
+const MRE=/\$\$([\s\S]+?)\$\$|\$([^\$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g;
+function rTex(t,d){t=String(t).trim();if(!t)return "";
+  if(typeof katex==="undefined")return `<code>${esc(t)}</code>`;
+  try{return katex.renderToString(t,{displayMode:d,throwOnError:false,strict:"ignore"})}catch(e){return `<code>${esc(t)}</code>`}}
+function fmtPlain(s){return esc(s).replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/`([^`]+)`/g,"<code>$1</code>")}
+function withMath(s){MRE.lastIndex=0;let o="",l=0,m;while((m=MRE.exec(s))!==null){
+  if(m.index>l)o+=fmtPlain(s.slice(l,m.index));
+  if(m[1]!=null)o+=rTex(m[1],true);else if(m[2]!=null)o+=rTex(m[2],false);
+  else if(m[3]!=null)o+=rTex(m[3],false);else if(m[4]!=null)o+=rTex(m[4],true);
+  l=MRE.lastIndex}if(l<s.length)o+=fmtPlain(s.slice(l));return o}
+function inl(s){return withMath(String(s))}
 function md(text){
   const L=text.split("\n");let h="",list=null,para=[],fence=null;
   const cl=()=>{if(list){h+=`</${list}>`;list=null}};

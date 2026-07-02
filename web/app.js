@@ -42,54 +42,44 @@ function loadSession() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (e) { return null; }
 }
 
-// ---------------- 安全的轻量 Markdown 渲染 ----------------
+// ---------------- 安全的轻量 Markdown 渲染（含 KaTeX 公式） ----------------
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
-const MATH_SUPER = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹", n: "ⁿ", "+": "⁺", "-": "⁻", "(": "⁽", ")": "⁾" };
-const MATH_SUB = { 0: "₀", 1: "₁", 2: "₂", 3: "₃", 4: "₄", 5: "₅", 6: "₆", 7: "₇", 8: "₈", 9: "₉", n: "ₙ", "+": "₊", "-": "₋", "(": "₍", ")": "₎" };
-const LATEX_SYMBOLS = [
-  ["\\times", "×"], ["\\div", "÷"], ["\\cdot", "·"], ["\\pm", "±"], ["\\mp", "∓"],
-  ["\\leq", "≤"], ["\\le", "≤"], ["\\geq", "≥"], ["\\ge", "≥"],
-  ["\\neq", "≠"], ["\\ne", "≠"], ["\\approx", "≈"], ["\\equiv", "≡"],
-  ["\\infty", "∞"], ["\\pi", "π"], ["\\degree", "°"], ["\\circ", "°"],
-  ["\\ldots", "…"], ["\\cdots", "⋯"], ["\\to", "→"], ["\\rightarrow", "→"],
-  ["\\leftarrow", "←"], ["\\Rightarrow", "⇒"], ["\\leftrightarrow", "↔"],
-  ["\\sqrt", "√"], ["\\left", ""], ["\\right", ""], ["\\,", " "], ["\\;", " "],
-  ["\\!", ""], ["\\quad", " "], ["\\qquad", "  "],
-];
-function mathSuper(s) { return [...String(s)].map((c) => MATH_SUPER[c] ?? c).join(""); }
-function mathSub(s) { return [...String(s)].map((c) => MATH_SUB[c] ?? c).join(""); }
-function normalizeMathInner(s) {
-  s = String(s);
-  s = s.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, (_, a, b) => `${normalizeMathInner(a)}/${normalizeMathInner(b)}`);
-  s = s.replace(/\\(?:text|mathrm|mathbf|mathit)\{([^{}]*)\}/g, "$1");
-  for (const [cmd, ch] of LATEX_SYMBOLS) s = s.split(cmd).join(ch);
-  s = s.replace(/\^\{([^{}]+)\}/g, (_, exp) => mathSuper(exp));
-  s = s.replace(/\^([0-9n+\-=()]+)/g, (_, exp) => mathSuper(exp));
-  s = s.replace(/_\{([^{}]+)\}/g, (_, sub) => mathSub(sub));
-  s = s.replace(/_([0-9n+\-=()]+)/g, (_, sub) => mathSub(sub));
-  s = s.replace(/\\[a-zA-Z]+(\{[^{}]*\})?/g, "");
-  return s.replace(/\s+/g, " ").trim();
+const MATH_RE = /\$\$([\s\S]+?)\$\$|\$([^\$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g;
+function renderLatex(latex, displayMode) {
+  const src = String(latex).trim();
+  if (!src) return "";
+  if (typeof katex === "undefined") return `<code>${escapeHtml(src)}</code>`;
+  try {
+    return katex.renderToString(src, { displayMode, throwOnError: false, strict: "ignore" });
+  } catch (e) {
+    return `<code>${escapeHtml(src)}</code>`;
+  }
 }
-function normalizeMathText(s) {
-  s = String(s);
-  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_, inner) => normalizeMathInner(inner));
-  s = s.replace(/\$([^\$\n]+?)\$/g, (_, inner) => normalizeMathInner(inner));
-  s = s.replace(/\\\(([^\)]*?)\\\)/g, (_, inner) => normalizeMathInner(inner));
-  s = s.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => normalizeMathInner(inner));
-  s = normalizeMathInner(s);
-  s = s.replace(/(\d)\s*\*\s*(\d)/g, "$1 × $2");
-  s = s.replace(/(\d+)\s*[xX]\s*(\d+)/g, "$1 × $2");
-  s = s.replace(/(\d+)[xX](\d+)/g, "$1 × $2");
-  return s;
-}
-function inlineFmt(s) {
-  return escapeHtml(normalizeMathText(s))
+function formatPlainText(s) {
+  return escapeHtml(s)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function renderTextWithMath(s) {
+  MATH_RE.lastIndex = 0;
+  let out = "", last = 0, m;
+  while ((m = MATH_RE.exec(s)) !== null) {
+    if (m.index > last) out += formatPlainText(s.slice(last, m.index));
+    if (m[1] !== undefined) out += renderLatex(m[1], true);
+    else if (m[2] !== undefined) out += renderLatex(m[2], false);
+    else if (m[3] !== undefined) out += renderLatex(m[3], false);
+    else if (m[4] !== undefined) out += renderLatex(m[4], true);
+    last = MATH_RE.lastIndex;
+  }
+  if (last < s.length) out += formatPlainText(s.slice(last));
+  return out;
+}
+function inlineFmt(s) {
+  return renderTextWithMath(String(s));
 }
 function renderMarkdown(text) {
   const lines = text.split("\n");
