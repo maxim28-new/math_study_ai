@@ -8,6 +8,7 @@ const state = {
   topicKey: null,
   level: null,
   childName: "",
+  mode: "explore", // explore=小欧出题 / bring=孩子带题
   messages: [], // 发给模型的历史：{role:'user'|'assistant', content}（content 可能是字符串或多模态数组）
   pendingImage: null, // 待发送的题目照片（dataURL）
   streaming: false,
@@ -30,6 +31,7 @@ function saveSession() {
     topicKey: state.topicKey,
     level: state.level,
     childName: state.childName,
+    mode: state.mode,
     messages: sanitizeForStore(state.messages),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch (e) {}
@@ -141,11 +143,16 @@ function renderContentInto(bubble, content) {
 function renderWelcome() {
   const topic = state.topics.find((t) => t.key === state.topicKey);
   const name = state.childName ? `${state.childName}，` : "";
-  const starter = topic ? topic.starter : "";
   const bubble = addMessageEl("tutor");
-  bubble.innerHTML = renderMarkdown(
-    `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n${starter}`
-  );
+  let body;
+  if (state.mode === "explore") {
+    const tname = topic ? topic.name : "这个主题";
+    body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「一起探索」模式。选好左边的主题（现在是**${tname}**），点一下 **✨ 出个新题**，我就从那几条公理出发，给你出一个好玩、值得琢磨的问题。`;
+  } else {
+    const starter = topic ? topic.starter : "";
+    body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「带题来问」模式。${starter}`;
+  }
+  bubble.innerHTML = renderMarkdown(body);
 }
 
 function renderHistory() {
@@ -168,6 +175,7 @@ async function loadConfig() {
   state.topicKey = (saved && saved.topicKey) || cfg.default_topic;
   state.level = (saved && saved.level) || cfg.default_level;
   state.childName = (saved && saved.childName) || "";
+  state.mode = (saved && saved.mode) || cfg.default_mode || "explore";
   state.messages = (saved && saved.messages) || [];
 
   // 主题下拉
@@ -234,7 +242,34 @@ async function loadConfig() {
 
   updateAxioms();
   updatePhotoHint(cfg);
+  applyModeUI();
   renderHistory();
+}
+
+// 根据当前模式调整界面：探索模式突出"出个新题"、隐藏相机；带题模式相反。
+function applyModeUI() {
+  const explore = state.mode === "explore";
+  document.querySelectorAll("#modeSwitch .mode-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.mode === state.mode);
+  });
+  const exploreBtn = $("#exploreBtn");
+  exploreBtn.classList.toggle("hidden", !explore);
+  if (state.config && !state.config.configured) exploreBtn.disabled = true;
+
+  const attach = $("#attachBtn");
+  if (attach) attach.style.display = explore ? "none" : "";
+
+  const input = $("#input");
+  input.placeholder = explore
+    ? "把你的想法告诉小欧……（回车发送，Shift+回车换行）"
+    : "把题目告诉小欧，或点相机拍下作业本……（回车发送，Shift+回车换行）";
+
+  const tip = document.querySelector(".composer .tip");
+  if (tip) {
+    tip.textContent = explore
+      ? "点「✨ 出个新题」让小欧出题；它会陪你一步步想，不会直接给答案。"
+      : "把题目拍照或打出来发给小欧；它会陪你一步步想，不会直接给答案。";
+  }
 }
 
 function updatePhotoHint(cfg) {
@@ -285,6 +320,17 @@ async function sendMessage(text) {
   autoGrow($("#input"));
   saveSession();
 
+  await streamAssistant(false);
+}
+
+// 探索模式：点"出个新题"，让小欧出题（不显示孩子气泡）。
+async function startExplore() {
+  if (state.streaming) return;
+  await streamAssistant(true);
+}
+
+// 共用的流式接收逻辑。kickoff=true 时请求小欧出题。
+async function streamAssistant(kickoff) {
   setStreaming(true);
   const tutorBubble = addMessageEl("tutor");
   tutorBubble.classList.add("cursor-blink");
@@ -300,6 +346,8 @@ async function sendMessage(text) {
         topic: state.topicKey,
         level: state.level,
         child_name: state.childName,
+        mode: state.mode,
+        kickoff: !!kickoff,
       }),
     });
 
@@ -359,7 +407,21 @@ function setStreaming(on) {
   $("#sendBtn").disabled = on;
   const attach = $("#attachBtn");
   if (attach && state.config && state.config.vision_enabled) attach.disabled = on;
+  const exploreBtn = $("#exploreBtn");
+  if (exploreBtn && state.config && state.config.configured) exploreBtn.disabled = on;
   document.querySelectorAll(".quick-actions button").forEach((b) => (b.disabled = on));
+}
+
+// 切换探究模式。切换会清空当前对话（因为教学设定不同）。
+function switchMode(mode) {
+  if (mode === state.mode || state.streaming) return;
+  if (state.messages.length && !confirm("切换模式会清空当前对话，确定吗？")) return;
+  state.mode = mode;
+  state.messages = [];
+  clearPendingImage();
+  saveSession();
+  applyModeUI();
+  renderHistory();
 }
 
 // ---------------- 拍照 / 上传题目 ----------------
@@ -440,6 +502,11 @@ function bindEvents() {
   $("#attachBtn").addEventListener("click", () => $("#fileInput").click());
   $("#fileInput").addEventListener("change", onFileChosen);
   $("#imgRemoveBtn").addEventListener("click", clearPendingImage);
+
+  document.querySelectorAll("#modeSwitch .mode-btn").forEach((b) => {
+    b.addEventListener("click", () => switchMode(b.dataset.mode));
+  });
+  $("#exploreBtn").addEventListener("click", () => startExplore());
 
   $("#topicSelect").addEventListener("change", (e) => {
     state.topicKey = e.target.value;

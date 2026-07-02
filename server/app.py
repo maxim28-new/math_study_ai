@@ -32,6 +32,9 @@ class ChatRequest(BaseModel):
     topic: str = tutor.DEFAULT_TOPIC_KEY
     level: str = tutor.DEFAULT_LEVEL
     child_name: str = ""
+    mode: str = tutor.DEFAULT_MODE
+    # 探索模式下点"出个新题"：追加一条出题指令给模型（不进入前端展示的历史）。
+    kickoff: bool = False
 
 
 @app.get("/api/config")
@@ -46,6 +49,8 @@ def get_config() -> dict:
         ],
         "default_topic": tutor.DEFAULT_TOPIC_KEY,
         "default_level": tutor.DEFAULT_LEVEL,
+        "modes": tutor.get_modes_payload(),
+        "default_mode": tutor.DEFAULT_MODE,
         "quick_actions": tutor.QUICK_ACTIONS,
         "pipeline": settings.pipeline,
         "vision_enabled": settings.photo_enabled,
@@ -162,7 +167,9 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         yield _sse({"done": True})
         return
 
-    system_prompt = tutor.build_system_prompt(req.topic, req.level, req.child_name)
+    system_prompt = tutor.build_system_prompt(
+        req.topic, req.level, req.child_name, req.mode
+    )
     text_headers = {
         "Authorization": f"Bearer {settings.api_key}",
         "Content-Type": "application/json",
@@ -185,6 +192,12 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     return
                 if latest_transcript:
                     yield _sse({"transcript": latest_transcript})
+
+            # 探索模式点"出个新题"：临时追加一条出题指令（不进入前端展示的历史）。
+            if req.kickoff and req.mode == "explore":
+                teaching_messages = teaching_messages + [
+                    {"role": "user", "content": tutor.EXPLORE_KICKOFF}
+                ]
 
             payload = {
                 "model": settings.model,
