@@ -42,16 +42,44 @@ function loadSession() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (e) { return null; }
 }
 
-// ---------------- 安全的轻量 Markdown 渲染 ----------------
+// ---------------- 安全的轻量 Markdown 渲染（含 KaTeX 公式） ----------------
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
-function inlineFmt(s) {
+const MATH_RE = /\$\$([\s\S]+?)\$\$|\$([^\$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g;
+function renderLatex(latex, displayMode) {
+  const src = String(latex).trim();
+  if (!src) return "";
+  if (typeof katex === "undefined") return `<code>${escapeHtml(src)}</code>`;
+  try {
+    return katex.renderToString(src, { displayMode, throwOnError: false, strict: "ignore" });
+  } catch (e) {
+    return `<code>${escapeHtml(src)}</code>`;
+  }
+}
+function formatPlainText(s) {
   return escapeHtml(s)
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function renderTextWithMath(s) {
+  MATH_RE.lastIndex = 0;
+  let out = "", last = 0, m;
+  while ((m = MATH_RE.exec(s)) !== null) {
+    if (m.index > last) out += formatPlainText(s.slice(last, m.index));
+    if (m[1] !== undefined) out += renderLatex(m[1], true);
+    else if (m[2] !== undefined) out += renderLatex(m[2], false);
+    else if (m[3] !== undefined) out += renderLatex(m[3], false);
+    else if (m[4] !== undefined) out += renderLatex(m[4], true);
+    last = MATH_RE.lastIndex;
+  }
+  if (last < s.length) out += formatPlainText(s.slice(last));
+  return out;
+}
+function inlineFmt(s) {
+  return renderTextWithMath(String(s));
 }
 function renderMarkdown(text) {
   const lines = text.split("\n");
