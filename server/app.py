@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncGenerator, Union
+from typing import Any, AsyncGenerator, Optional, Union
 
 import httpx
 from fastapi import FastAPI
@@ -37,8 +37,8 @@ class ChatRequest(BaseModel):
     # 探索模式下点"出个新题"：追加一条出题指令给模型（不进入前端展示的历史）。
     kickoff: bool = False
     # 思考模式：前端可按请求覆盖 .env 默认值（None=沿用默认）。
-    thinking: bool | None = None
-    show_reasoning: bool | None = None
+    thinking: Optional[bool] = None
+    show_reasoning: Optional[bool] = None
 
 
 @app.get("/api/config")
@@ -123,10 +123,10 @@ async def _yield_stream_chunks(resp, show_reasoning: bool) -> AsyncGenerator[str
 
 async def _prepare_split_messages(
     client: httpx.AsyncClient, messages: list[Message]
-) -> tuple[list[dict], str | None]:
+) -> tuple[list[dict], Optional[str]]:
     """split 模式：OCR 转写图片为文字，返回教学消息列表与最新转写文本。"""
     teaching_messages: list[dict] = []
-    latest_transcript: str | None = None
+    latest_transcript: Optional[str] = None
     for m in messages:
         if isinstance(m.content, list) and any(
             isinstance(p, dict) and p.get("type") == "image_url" for p in m.content
