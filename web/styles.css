@@ -195,6 +195,21 @@ html, body {
   font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px;
 }
 
+.msg .bubble .diagram {
+  margin: 8px 0;
+  padding: 10px;
+  background: #f8f7f3;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: center;
+}
+.msg .bubble .diagram svg { max-width: 100%; height: auto; }
+.msg .bubble .diagram figcaption { margin-top: 6px; font-size: 12.5px; color: var(--ink-soft); }
+.msg .bubble pre.code {
+  background: #2b2a33; color: #f4f1ea; padding: 10px 12px;
+  border-radius: 10px; overflow-x: auto; font-size: 13px; margin: 6px 0;
+}
+
 .msg.tutor { align-self: flex-start; }
 .msg.tutor .avatar { background: linear-gradient(135deg, var(--primary), #6f86ff); }
 .msg.tutor .bubble { background: var(--tutor-bubble); border: 1px solid var(--line); }
@@ -295,6 +310,39 @@ html, body {
 }
 .attach-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
 .attach-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.icon-btn {
+  flex: 0 0 auto;
+  width: 48px; height: 48px;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: #fbfaf6; color: var(--ink-soft);
+  display: grid; place-items: center; cursor: pointer;
+  transition: all .15s;
+}
+.icon-btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+.icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.icon-btn.recording { border-color: #e05252; color: #e05252; background: #fdecec; animation: pulse 1.1s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+/* 画板 */
+.draw-modal {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0,0,0,.4);
+  display: grid; place-items: center;
+}
+.draw-modal.hidden { display: none; }
+.draw-sheet {
+  background: var(--panel); border-radius: 18px; padding: 16px;
+  width: min(560px, 94vw); box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.draw-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; color: var(--ink-soft); }
+.draw-tools { display: flex; gap: 8px; }
+.draw-tool { border: 1px solid var(--line); background: #fbfaf6; border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+.draw-tool:hover { border-color: var(--primary); color: var(--primary); }
+.draw-canvas { width: 100%; height: 340px; background: #fff; border: 1px solid var(--line); border-radius: 12px; touch-action: none; cursor: crosshair; }
+.draw-actions { display: flex; gap: 10px; }
+.draw-actions .ghost-btn, .draw-actions .primary-btn { flex: 1; }
 
 .input-row { display: flex; gap: 10px; align-items: flex-end; }
 .input-row textarea {

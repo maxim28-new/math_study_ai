@@ -9,6 +9,7 @@ const state = {
   level: null,
   childName: "",
   mode: "explore", // explore=小欧出题 / bring=孩子带题
+  thinking: false, // 思考模式（开启时同时展示思考过程）
   messages: [], // 发给模型的历史：{role:'user'|'assistant', content}（content 可能是字符串或多模态数组）
   pendingImage: null, // 待发送的题目照片（dataURL）
   streaming: false,
@@ -32,6 +33,7 @@ function saveSession() {
     level: state.level,
     childName: state.childName,
     mode: state.mode,
+    thinking: state.thinking,
     messages: sanitizeForStore(state.messages),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch (e) {}
@@ -60,8 +62,30 @@ function renderMarkdown(text) {
   const flushPara = () => {
     if (para.length) { html += `<p>${para.map(inlineFmt).join("<br>")}</p>`; para = []; }
   };
+  let fence = null; // {lang, buf:[]}
   for (const raw of lines) {
     const line = raw.trimEnd();
+    const fenceMatch = line.match(/^```\s*([\w-]*)\s*$/);
+    if (fence) {
+      if (fenceMatch) {
+        // 结束围栏块
+        const code = fence.buf.join("\n");
+        if (fence.lang === "xiaoou-draw") {
+          html += renderDiagram(code);
+        } else if (code.trim()) {
+          html += `<pre class="code">${escapeHtml(code)}</pre>`;
+        }
+        fence = null;
+      } else {
+        fence.buf.push(raw);
+      }
+      continue;
+    }
+    if (fenceMatch) {
+      flushPara(); closeList();
+      fence = { lang: fenceMatch[1], buf: [] };
+      continue;
+    }
     const ol = line.match(/^\s*\d+[.)]\s+(.*)$/);
     const ul = line.match(/^\s*[-*•]\s+(.*)$/);
     if (ol) {
@@ -78,8 +102,85 @@ function renderMarkdown(text) {
       closeList(); para.push(line);
     }
   }
+  // 流式过程中围栏可能还没闭合：把已收到的 xiaoou-draw 尝试渲染，其它按代码显示
+  if (fence) {
+    const code = fence.buf.join("\n");
+    if (fence.lang === "xiaoou-draw") {
+      const svg = renderDiagram(code);
+      if (svg) html += svg;
+    } else if (code.trim()) {
+      html += `<pre class="code">${escapeHtml(code)}</pre>`;
+    }
+  }
   flushPara(); closeList();
   return html || "<p></p>";
+}
+
+// ---------------- 图形渲染（小欧插入的 xiaoou-draw 图，用 SVG 安全生成） ----------------
+function renderDiagram(jsonText) {
+  let s;
+  try { s = JSON.parse(jsonText); } catch (e) { return ""; }
+  let inner = "";
+  if (s.type === "dots") inner = diagramDots(s);
+  else if (s.type === "numberline") inner = diagramNumberline(s);
+  else if (s.type === "bars") inner = diagramBars(s);
+  if (!inner) return "";
+  const cap = s.caption ? `<figcaption>${escapeHtml(String(s.caption))}</figcaption>` : "";
+  return `<figure class="diagram">${inner}${cap}</figure>`;
+}
+const DIAG_BLUE = "#4f6bed", DIAG_GOLD = "#e8a13a";
+function clampInt(v, lo, hi, dflt) {
+  v = parseInt(v, 10);
+  if (isNaN(v)) return dflt;
+  return Math.max(lo, Math.min(hi, v));
+}
+function diagramDots(s) {
+  const rows = clampInt(s.rows, 1, 10, 1), cols = clampInt(s.cols, 1, 10, 1);
+  const cell = 26, r = 9, pad = 8;
+  const w = cols * cell + pad * 2, h = rows * cell + pad * 2;
+  let dots = "";
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
+      const cx = pad + j * cell + cell / 2, cy = pad + i * cell + cell / 2;
+      const isNew = s.newLastRowCol && (i === rows - 1 || j === cols - 1);
+      dots += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isNew ? DIAG_GOLD : DIAG_BLUE}" />`;
+    }
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
+}
+function diagramNumberline(s) {
+  let from = clampInt(s.from, -50, 200, 0), to = clampInt(s.to, -50, 200, 10);
+  if (to <= from) to = from + 1;
+  if (to - from > 30) to = from + 30;
+  const n = to - from, step = 34, pad = 24;
+  const w = n * step + pad * 2, h = 56, y = 26;
+  const marks = Array.isArray(s.marks) ? s.marks : [];
+  let el = `<line x1="${pad}" y1="${y}" x2="${pad + n * step}" y2="${y}" stroke="#9aa" stroke-width="2"/>`;
+  for (let k = 0; k <= n; k++) {
+    const x = pad + k * step, val = from + k;
+    const on = marks.includes(val);
+    el += `<line x1="${x}" y1="${y - 5}" x2="${x}" y2="${y + 5}" stroke="#9aa" stroke-width="2"/>`;
+    if (on) el += `<circle cx="${x}" cy="${y}" r="6" fill="${DIAG_GOLD}"/>`;
+    el += `<text x="${x}" y="${y + 22}" font-size="12" text-anchor="middle" fill="#555">${val}</text>`;
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" width="${Math.min(w, 520)}" height="${h}" role="img">${el}</svg>`;
+}
+function diagramBars(s) {
+  const items = (Array.isArray(s.items) ? s.items : []).slice(0, 8);
+  if (!items.length) return "";
+  const max = Math.max(...items.map((it) => Math.max(0, Number(it.value) || 0)), 1);
+  const rowH = 30, labelW = 70, barMax = 240, pad = 8;
+  const w = labelW + barMax + 46, h = items.length * rowH + pad * 2;
+  let el = "";
+  items.forEach((it, i) => {
+    const v = Math.max(0, Number(it.value) || 0);
+    const bw = Math.round((v / max) * barMax);
+    const y = pad + i * rowH;
+    el += `<text x="0" y="${y + 19}" font-size="13" fill="#333">${escapeHtml(String(it.label ?? ""))}</text>`;
+    el += `<rect x="${labelW}" y="${y + 6}" width="${bw}" height="16" rx="4" fill="${DIAG_BLUE}"/>`;
+    el += `<text x="${labelW + bw + 6}" y="${y + 19}" font-size="12" fill="#555">${v}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" width="${Math.min(w, 420)}" height="${h}" role="img">${el}</svg>`;
 }
 
 // ---------------- 消息渲染 ----------------
@@ -106,7 +207,7 @@ function scrollToBottom() {
 }
 
 function getReasoningEl(tutorBubble) {
-  if (!state.config || !state.config.show_reasoning) return null;
+  if (!state.thinking) return null;
   const msg = tutorBubble.closest(".msg");
   let el = msg.querySelector(".reasoning");
   if (!el) {
@@ -176,6 +277,7 @@ async function loadConfig() {
   state.level = (saved && saved.level) || cfg.default_level;
   state.childName = (saved && saved.childName) || "";
   state.mode = (saved && saved.mode) || cfg.default_mode || "explore";
+  state.thinking = (saved && typeof saved.thinking === "boolean") ? saved.thinking : !!cfg.thinking_enabled;
   state.messages = (saved && saved.messages) || [];
 
   // 主题下拉
@@ -199,6 +301,8 @@ async function loadConfig() {
     levelSel.appendChild(o);
   });
   levelSel.value = state.level;
+
+  $("#thinkingSelect").value = state.thinking ? "on" : "off";
 
   $("#childName").value = state.childName;
 
@@ -348,6 +452,8 @@ async function streamAssistant(kickoff) {
         child_name: state.childName,
         mode: state.mode,
         kickoff: !!kickoff,
+        thinking: state.thinking,
+        show_reasoning: state.thinking,
       }),
     });
 
@@ -470,6 +576,107 @@ function clearPendingImage() {
   $("#imgPreview").classList.add("hidden");
 }
 
+function setPendingImage(dataUrl) {
+  state.pendingImage = dataUrl;
+  $("#imgPreviewThumb").src = dataUrl;
+  $("#imgPreview").classList.remove("hidden");
+}
+
+// ---------------- 语音输入（浏览器 Web Speech API） ----------------
+let recognition = null, recognizing = false;
+function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const micBtn = $("#micBtn");
+  if (!SR) {
+    micBtn.disabled = true;
+    micBtn.title = "这个浏览器不支持语音输入（试试 Chrome/Edge/Safari）";
+    return;
+  }
+  recognition = new SR();
+  recognition.lang = "zh-CN";
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  let baseText = "";
+  recognition.onstart = () => { recognizing = true; micBtn.classList.add("recording"); };
+  recognition.onend = () => { recognizing = false; micBtn.classList.remove("recording"); };
+  recognition.onerror = () => { recognizing = false; micBtn.classList.remove("recording"); };
+  recognition.onresult = (e) => {
+    let txt = "";
+    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
+    const input = $("#input");
+    input.value = (baseText ? baseText + " " : "") + txt;
+    autoGrow(input);
+  };
+  micBtn.addEventListener("click", () => {
+    if (recognizing) { recognition.stop(); return; }
+    baseText = $("#input").value.trim();
+    try { recognition.start(); } catch (e) {}
+  });
+}
+
+// ---------------- 画板输入 ----------------
+function initDraw() {
+  const modal = $("#drawModal"), canvas = $("#drawCanvas");
+  const ctx = canvas.getContext("2d");
+  let strokes = [], cur = null, drawing = false;
+
+  function sizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redraw();
+  }
+  function redraw() {
+    const rect = canvas.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.strokeStyle = "#2b2a33";
+    ctx.lineWidth = 3;
+    ctx.lineJoin = ctx.lineCap = "round";
+    for (const st of strokes) {
+      if (st.length < 1) continue;
+      ctx.beginPath();
+      ctx.moveTo(st[0].x, st[0].y);
+      for (const p of st.slice(1)) ctx.lineTo(p.x, p.y);
+      if (st.length === 1) ctx.lineTo(st[0].x + 0.1, st[0].y + 0.1);
+      ctx.stroke();
+    }
+  }
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+  }
+  const start = (e) => { e.preventDefault(); drawing = true; cur = [pos(e)]; strokes.push(cur); redraw(); };
+  const move = (e) => { if (!drawing) return; e.preventDefault(); cur.push(pos(e)); redraw(); };
+  const end = () => { drawing = false; cur = null; };
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end);
+
+  function open() {
+    modal.classList.remove("hidden");
+    strokes = [];
+    requestAnimationFrame(sizeCanvas);
+  }
+  function close() { modal.classList.add("hidden"); }
+
+  $("#drawBtn").addEventListener("click", open);
+  $("#drawCancel").addEventListener("click", close);
+  $("#drawClear").addEventListener("click", () => { strokes = []; redraw(); });
+  $("#drawUndo").addEventListener("click", () => { strokes.pop(); redraw(); });
+  $("#drawSend").addEventListener("click", () => {
+    if (!strokes.length) { close(); return; }
+    const dataUrl = canvas.toDataURL("image/png");
+    setPendingImage(dataUrl);
+    close();
+    $("#input").focus();
+  });
+}
+
 // 展示"小欧从照片里读到的题目"，方便家长核对、纠错
 function showTranscript(text, tutorBubble) {
   const wrap = tutorBubble.closest(".msg");
@@ -517,6 +724,10 @@ function bindEvents() {
     state.level = e.target.value;
     saveSession();
   });
+  $("#thinkingSelect").addEventListener("change", (e) => {
+    state.thinking = e.target.value === "on";
+    saveSession();
+  });
   $("#childName").addEventListener("input", (e) => {
     state.childName = e.target.value.trim();
     saveSession();
@@ -534,5 +745,7 @@ function bindEvents() {
 // ---------------- 启动 ----------------
 (async function init() {
   bindEvents();
+  initVoice();
+  initDraw();
   await loadConfig();
 })();
