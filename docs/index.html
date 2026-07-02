@@ -81,6 +81,25 @@
   .ic{flex:0 0 auto;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;cursor:pointer;border:1px solid var(--line);background:#fbfaf6;color:var(--soft)}
   .ic.send{border:none;background:var(--primary);color:#fff}
   .ic:disabled{opacity:.45}
+  .ic.recording{border-color:#e05252;color:#e05252;background:#fdecec;animation:pulse 1.1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+  /* 气泡里的图 */
+  .b .diagram{margin:8px 0;padding:8px;background:#f8f7f3;border:1px solid var(--line);border-radius:10px;text-align:center}
+  .b .diagram svg{max-width:100%;height:auto}
+  .b .diagram figcaption{margin-top:5px;font-size:12px;color:var(--soft)}
+  .b pre.code{background:#2b2a33;color:#f4f1ea;padding:9px 11px;border-radius:9px;overflow-x:auto;font-size:12.5px;margin:6px 0}
+
+  /* 画板 */
+  .draw-modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.4);display:grid;place-items:center}
+  .draw-modal.hidden{display:none}
+  .draw-sheet{background:var(--panel);border-radius:16px;padding:14px;width:min(560px,94vw);display:flex;flex-direction:column;gap:10px}
+  .draw-head{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--soft)}
+  .draw-tool{border:1px solid var(--line);background:#fbfaf6;border-radius:8px;padding:5px 11px;margin-left:6px;cursor:pointer;font-size:13px}
+  .draw-canvas{width:100%;height:44vh;background:#fff;border:1px solid var(--line);border-radius:10px;touch-action:none}
+  .draw-actions{display:flex;gap:10px}
+  .draw-cancel{flex:1;padding:11px;border:1px dashed var(--primary);background:transparent;color:var(--primary);border-radius:11px;cursor:pointer;font-size:15px}
+  .draw-send{flex:1;padding:11px;border:none;background:var(--primary);color:#fff;border-radius:11px;cursor:pointer;font-size:15px}
   .tip{margin:8px 2px 0;font-size:11.5px;color:var(--soft);text-align:center}
 
   /* 设置抽屉 */
@@ -141,12 +160,29 @@
       <button class="ic" id="camBtn" aria-label="拍照">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
       </button>
+      <button class="ic" id="drawBtn" aria-label="画板">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3 0z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"></path><circle cx="11" cy="11" r="2"></circle></svg>
+      </button>
+      <button class="ic" id="micBtn" aria-label="语音">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0"></path><path d="M12 17v5"></path></svg>
+      </button>
       <textarea id="input" rows="1" placeholder="把你的想法告诉小欧…"></textarea>
       <button class="ic send" id="send" aria-label="发送">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"></path><path d="M22 2 15 22 11 13 2 9 22 2z"></path></svg>
       </button>
     </div>
     <p class="tip" id="tip">小欧不会直接给你答案，它会陪你一步步想出来。</p>
+  </div>
+
+  <!-- 画板 -->
+  <div id="drawModal" class="draw-modal hidden">
+    <div class="draw-sheet">
+      <div class="draw-head"><span>画板 · 手写或画个图</span>
+        <div><button id="drawUndo" class="draw-tool">撤销</button><button id="drawClear" class="draw-tool">清空</button></div>
+      </div>
+      <canvas id="drawCanvas" class="draw-canvas"></canvas>
+      <div class="draw-actions"><button id="drawCancel" class="draw-cancel">取消</button><button id="drawSend" class="draw-send">发送给小欧</button></div>
+    </div>
   </div>
 
   <!-- 设置抽屉 -->
@@ -185,17 +221,16 @@
         <input id="tKey" type="password" placeholder="sk-..." />
         <label>模型名</label>
         <input id="tModel" placeholder="deepseek-v4-flash" />
-        <label>Thinking 模式（仅 DeepSeek）</label>
+        <label>思考模式（DeepSeek / 通义）</label>
         <select id="cThinking">
-          <option value="disabled">关闭 · 短问短答（推荐日常）</option>
-          <option value="enabled">开启 · 深度推理（难题/奥数）</option>
+          <option value="disabled">关闭 · 回答更快（推荐日常）</option>
+          <option value="enabled">开启 · 显示思考过程（更慢，难题/奥数）</option>
         </select>
-        <label id="effortLbl">推理深度</label>
+        <label id="effortLbl">推理深度（仅 DeepSeek）</label>
         <select id="cEffort">
           <option value="high">high</option>
           <option value="max">max（更深，更慢）</option>
         </select>
-        <label class="chk"><input type="checkbox" id="cShowReasoning" /> 灰色展示思考过程（给孩子看建议不勾）</label>
       </div>
 
       <div class="grp" id="visionGrp">
@@ -259,7 +294,7 @@ const TRANSCRIBE_PROMPT=`你是一台精准的"题目转写机"。用户会发�
 - 绝对不要解题、不给思路、不给答案、不评价。只输出题目本身。
 - 看不清就标注（看不清）。`;
 
-const EXPLORE_KICKOFF="（请你现在出一道新的探索题：结合本主题的公理和出题灵感，出一个贴合孩子年龄、具体好玩的问题，一次只抛一个引导问题，绝不直接给答案。如果前面已经探索过，请换一个新角度或稍微进一阶。）";
+const EXPLORE_KICKOFF="（请你现在出一道新的探索题：结合本主题的公理和出题灵感，出一个贴合孩子年龄、具体好玩的问题，一次只抛一个引导问题，绝不直接给答案。请刻意变换花样：换不同的切入点、场景和数字，不要每次都用同一道经典题；如果前面已经探索过某个点，就换一个新角度或稍微进一阶。）";
 
 function buildSystem(topicKey,level,name,mode){
   const t=TOPICS.find(x=>x.key===topicKey)||TOPICS[0];
@@ -315,6 +350,13 @@ ${nm}- 主题：${t.name}
 # 本主题只需这几条公理（其余全靠推导，引导孩子把方法追溯回它们）
 ${t.axioms.map(a=>"  - "+a).join("\n")}
 
+# 你可以画图（当图形能帮孩子看清楚时）
+需要时可插入一张简单的图：输出 \`\`\`xiaoou-draw 代码块，里面写 JSON（孩子看不到 JSON，只看到图）。支持三种：
+- 点阵（数、乘法、平方数、"包一圈"）：{"type":"dots","rows":3,"cols":3,"newLastRowCol":true,"caption":"简短说明"}
+- 数轴：{"type":"numberline","from":0,"to":10,"marks":[3,7],"caption":"简短说明"}
+- 线段图（比多少）：{"type":"bars","items":[{"label":"小明","value":8},{"label":"小红","value":5}],"caption":"简短说明"}
+规则：图是帮思考的工具，别在图里直接泄露最终答案；一次最多一张；数值小一点（点阵行列各不超过 10）。
+
 ${modeBlock}`;
 }
 
@@ -340,21 +382,63 @@ function saveSes(){
 function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function inl(s){return esc(s).replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>").replace(/`([^`]+)`/g,"<code>$1</code>")}
 function md(text){
-  const L=text.split("\n");let h="",list=null,para=[];
+  const L=text.split("\n");let h="",list=null,para=[],fence=null;
   const cl=()=>{if(list){h+=`</${list}>`;list=null}};
   const fp=()=>{if(para.length){h+=`<p>${para.map(inl).join("<br>")}</p>`;para=[]}};
+  const flushFence=()=>{const code=fence.buf.join("\n");
+    if(fence.lang==="xiaoou-draw"){const s=renderDiagram(code);if(s)h+=s;}
+    else if(code.trim())h+=`<pre class="code">${esc(code)}</pre>`;};
   for(const raw of L){const ln=raw.trimEnd();
+    const fm=ln.match(/^```\s*([\w-]*)\s*$/);
+    if(fence){if(fm){flushFence();fence=null}else fence.buf.push(raw);continue}
+    if(fm){fp();cl();fence={lang:fm[1],buf:[]};continue}
     const ol=ln.match(/^\s*\d+[.)]\s+(.*)$/),ul=ln.match(/^\s*[-*•]\s+(.*)$/);
     if(ol){fp();if(list!=="ol"){cl();h+="<ol>";list="ol"}h+=`<li>${inl(ol[1])}</li>`}
     else if(ul){fp();if(list!=="ul"){cl();h+="<ul>";list="ul"}h+=`<li>${inl(ul[1])}</li>`}
     else if(ln===""){fp();cl()}else{cl();para.push(ln)}}
+  if(fence)flushFence();
   fp();cl();return h||"<p></p>";
 }
+
+/* ---------------- 图形渲染（xiaoou-draw → SVG） ---------------- */
+const DIAG_BLUE="#4f6bed",DIAG_GOLD="#e8a13a";
+function clampInt(v,lo,hi,d){v=parseInt(v,10);return isNaN(v)?d:Math.max(lo,Math.min(hi,v))}
+function renderDiagram(t){let s;try{s=JSON.parse(t)}catch(e){return ""}
+  let inner="";
+  if(s.type==="dots")inner=diagDots(s);
+  else if(s.type==="numberline")inner=diagLine(s);
+  else if(s.type==="bars")inner=diagBars(s);
+  if(!inner)return "";
+  const cap=s.caption?`<figcaption>${esc(String(s.caption))}</figcaption>`:"";
+  return `<figure class="diagram">${inner}${cap}</figure>`;}
+function diagDots(s){const rows=clampInt(s.rows,1,10,1),cols=clampInt(s.cols,1,10,1);
+  const cell=26,r=9,pad=8,w=cols*cell+pad*2,hh=rows*cell+pad*2;let d="";
+  for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){const cx=pad+j*cell+cell/2,cy=pad+i*cell+cell/2;
+    const nw=s.newLastRowCol&&(i===rows-1||j===cols-1);
+    d+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${nw?DIAG_GOLD:DIAG_BLUE}"/>`}
+  return `<svg viewBox="0 0 ${w} ${hh}" width="${w}" height="${hh}">${d}</svg>`}
+function diagLine(s){let from=clampInt(s.from,-50,200,0),to=clampInt(s.to,-50,200,10);
+  if(to<=from)to=from+1;if(to-from>30)to=from+30;const n=to-from,step=34,pad=24,w=n*step+pad*2,hh=56,y=26;
+  const marks=Array.isArray(s.marks)?s.marks:[];
+  let el=`<line x1="${pad}" y1="${y}" x2="${pad+n*step}" y2="${y}" stroke="#9aa" stroke-width="2"/>`;
+  for(let k=0;k<=n;k++){const x=pad+k*step,val=from+k,on=marks.includes(val);
+    el+=`<line x1="${x}" y1="${y-5}" x2="${x}" y2="${y+5}" stroke="#9aa" stroke-width="2"/>`;
+    if(on)el+=`<circle cx="${x}" cy="${y}" r="6" fill="${DIAG_GOLD}"/>`;
+    el+=`<text x="${x}" y="${y+22}" font-size="12" text-anchor="middle" fill="#555">${val}</text>`}
+  return `<svg viewBox="0 0 ${w} ${hh}" width="${Math.min(w,500)}" height="${hh}">${el}</svg>`}
+function diagBars(s){const items=(Array.isArray(s.items)?s.items:[]).slice(0,8);if(!items.length)return "";
+  const max=Math.max(...items.map(it=>Math.max(0,Number(it.value)||0)),1);
+  const rowH=30,labelW=70,barMax=210,pad=8,w=labelW+barMax+46,hh=items.length*rowH+pad*2;let el="";
+  items.forEach((it,i)=>{const v=Math.max(0,Number(it.value)||0),bw=Math.round(v/max*barMax),y=pad+i*rowH;
+    el+=`<text x="0" y="${y+19}" font-size="13" fill="#333">${esc(String(it.label??""))}</text>`;
+    el+=`<rect x="${labelW}" y="${y+6}" width="${bw}" height="16" rx="4" fill="${DIAG_BLUE}"/>`;
+    el+=`<text x="${labelW+bw+6}" y="${y+19}" font-size="12" fill="#555">${v}</text>`})
+  return `<svg viewBox="0 0 ${w} ${hh}" width="${Math.min(w,400)}" height="${hh}">${el}</svg>`}
 
 /* ---------------- 渲染 ---------------- */
 function scroll(){const c=$("#chat");c.scrollTop=c.scrollHeight}
 function getReasoningEl(bubble){
-  if(!cfg.showReasoning)return null;
+  if(!cfg.thinking)return null;
   const msg=bubble.closest(".msg");let el=msg.querySelector(".reasoning");
   if(!el){el=document.createElement("div");el.className="reasoning";msg.insertBefore(el,bubble)}
   return el;
@@ -431,20 +515,22 @@ async function ocr(dataUrl){
   const d=await r.json();return (d.choices?.[0]?.message?.content||"").trim();
 }
 
-function deepseekExtras(base, model) {
+function thinkingExtras(base, model) {
   const b = (base || "").toLowerCase();
   const m = (model || "").toLowerCase();
-  if (!b.includes("deepseek.com") && !m.startsWith("deepseek-")) return {};
-  if (cfg.thinking) {
-    return { thinking: { type: "enabled" }, reasoning_effort: cfg.reasoningEffort || "high" };
-  }
-  return { thinking: { type: "disabled" } };
+  const isDeep = b.includes("deepseek.com") || m.startsWith("deepseek-");
+  const isQwen = b.includes("dashscope") || b.includes("aliyuncs") || m.startsWith("qwen");
+  if (isDeep) return cfg.thinking
+    ? { thinking: { type: "enabled" }, reasoning_effort: cfg.reasoningEffort || "high" }
+    : { thinking: { type: "disabled" } };
+  if (isQwen) return { enable_thinking: !!cfg.thinking };
+  return {};
 }
 
 async function streamTeach(teachMsgs, onDelta, onReasoning) {
   const body={model:cfg.tModel,stream:true,temperature:.7,
     messages:[{role:"system",content:buildSystem(cfg.topic,cfg.level,cfg.name,cfg.mode)},...teachMsgs],
-    ...deepseekExtras(cfg.tBase, cfg.tModel)};
+    ...thinkingExtras(cfg.tBase, cfg.tModel)};
   let r;
   try{r=await fetch(cfg.tBase.replace(/\/$/,"")+"/chat/completions",{method:"POST",
     headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.tKey},body:JSON.stringify(body)});}
@@ -512,7 +598,7 @@ async function runTurn(kickoff){
     saveSes();
     await streamTeach(teach,
       pc=>{acc+=pc;tb.innerHTML=md(acc);scroll()},
-      rc=>{if(!cfg.showReasoning)return;reasoningAcc+=rc;const el=getReasoningEl(tb);if(el){el.textContent=reasoningAcc;scroll()}}
+      rc=>{if(!cfg.thinking)return;reasoningAcc+=rc;const el=getReasoningEl(tb);if(el){el.textContent=reasoningAcc;scroll()}}
     );
   }catch(e){acc+=(acc?"\n\n":"")+(e.message||e);tb.innerHTML=md(acc)}
   tb.classList.remove("blink");
@@ -528,6 +614,46 @@ async function onFile(e){const f=e.target.files&&e.target.files[0];e.target.valu
   try{pendingImage=await resize(f);$("#prevImg").src=pendingImage;$("#prev").classList.remove("hidden");$("#input").focus()}
   catch(err){alert("这张图片没读进来，换一张试试？")}}
 function clearImg(){pendingImage=null;$("#prevImg").removeAttribute("src");$("#prev").classList.add("hidden")}
+function setPendingImage(d){pendingImage=d;$("#prevImg").src=d;$("#prev").classList.remove("hidden")}
+
+/* ---------------- 语音输入 ---------------- */
+let recog=null,recognizing=false;
+function initVoice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;const btn=$("#micBtn");
+  if(!SR){btn.disabled=true;btn.title="这个浏览器不支持语音输入";return}
+  recog=new SR();recog.lang="zh-CN";recog.interimResults=true;recog.continuous=false;
+  let base="";
+  recog.onstart=()=>{recognizing=true;btn.classList.add("recording")};
+  recog.onend=()=>{recognizing=false;btn.classList.remove("recording")};
+  recog.onerror=()=>{recognizing=false;btn.classList.remove("recording")};
+  recog.onresult=e=>{let t="";for(let i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;
+    $("#input").value=(base?base+" ":"")+t;autoGrow()};
+  btn.addEventListener("click",()=>{if(recognizing){recog.stop();return}base=$("#input").value.trim();try{recog.start()}catch(e){}});
+}
+
+/* ---------------- 画板输入 ---------------- */
+function initDraw(){
+  const modal=$("#drawModal"),canvas=$("#drawCanvas"),ctx=canvas.getContext("2d");
+  let strokes=[],cur=null,drawing=false;
+  function sizeCanvas(){const rect=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+    canvas.width=Math.round(rect.width*dpr);canvas.height=Math.round(rect.height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);redraw()}
+  function redraw(){const rect=canvas.getBoundingClientRect();ctx.clearRect(0,0,rect.width,rect.height);
+    ctx.fillStyle="#fff";ctx.fillRect(0,0,rect.width,rect.height);
+    ctx.strokeStyle="#2b2a33";ctx.lineWidth=3;ctx.lineJoin=ctx.lineCap="round";
+    for(const st of strokes){if(!st.length)continue;ctx.beginPath();ctx.moveTo(st[0].x,st[0].y);
+      for(const p of st.slice(1))ctx.lineTo(p.x,p.y);if(st.length===1)ctx.lineTo(st[0].x+.1,st[0].y+.1);ctx.stroke()}}
+  function pos(e){const rect=canvas.getBoundingClientRect(),t=e.touches?e.touches[0]:e;return{x:t.clientX-rect.left,y:t.clientY-rect.top}}
+  canvas.addEventListener("pointerdown",e=>{e.preventDefault();drawing=true;cur=[pos(e)];strokes.push(cur);redraw()});
+  canvas.addEventListener("pointermove",e=>{if(!drawing)return;e.preventDefault();cur.push(pos(e));redraw()});
+  window.addEventListener("pointerup",()=>{drawing=false;cur=null});
+  $("#drawBtn").addEventListener("click",()=>{modal.classList.remove("hidden");strokes=[];requestAnimationFrame(sizeCanvas)});
+  $("#drawCancel").addEventListener("click",()=>modal.classList.add("hidden"));
+  $("#drawClear").addEventListener("click",()=>{strokes=[];redraw()});
+  $("#drawUndo").addEventListener("click",()=>{strokes.pop();redraw()});
+  $("#drawSend").addEventListener("click",()=>{if(!strokes.length){modal.classList.add("hidden");return}
+    setPendingImage(canvas.toDataURL("image/png"));modal.classList.add("hidden");$("#input").focus()});
+}
 
 /* ---------------- 输入框自适应 ---------------- */
 function autoGrow(){const el=$("#input");el.style.height="auto";el.style.height=Math.min(el.scrollHeight,130)+"px"}
@@ -553,7 +679,6 @@ function syncThinkingUi(){
   const on=cfg.thinking;
   $("#cThinking").value=on?"enabled":"disabled";
   $("#cEffort").value=cfg.reasoningEffort||"high";
-  $("#cShowReasoning").checked=!!cfg.showReasoning;
   $("#effortLbl").style.display=on?"":"none";
   $("#cEffort").style.display=on?"":"none";
 }
@@ -568,7 +693,7 @@ function applySettings(){
   cfg.pipeline=$("#cPipeline").value;
   cfg.tBase=$("#tBase").value.trim()||"https://api.deepseek.com/v1";cfg.tKey=$("#tKey").value.trim();
   cfg.tModel=$("#tModel").value.trim()||(cfg.pipeline==="unified"?"qwen3.7-plus":"deepseek-v4-flash");
-  cfg.thinking=$("#cThinking").value==="enabled";cfg.reasoningEffort=$("#cEffort").value;cfg.showReasoning=$("#cShowReasoning").checked;
+  cfg.thinking=$("#cThinking").value==="enabled";cfg.reasoningEffort=$("#cEffort").value;cfg.showReasoning=cfg.thinking;
   cfg.vBase=$("#vBase").value.trim()||"https://api-inference.modelscope.cn/v1";cfg.vKey=$("#vKey").value.trim();cfg.vModel=$("#vModel").value.trim()||"Qwen/Qwen2.5-VL-7B-Instruct";
   saveCfg();closeDrawer();
   if(!messages.length)renderAll();
@@ -612,7 +737,7 @@ function bind(){
 
 /* ---------------- 启动 ---------------- */
 (function init(){
-  loadCfg();loadSes();bind();fillQuick();applyMode();renderAll();updateTip();
+  loadCfg();loadSes();bind();fillQuick();initVoice();initDraw();applyMode();renderAll();updateTip();
   if(!cfg.tKey)openDrawer(); // 第一次进来直接引导填密钥
 })();
 </script>

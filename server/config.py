@@ -94,8 +94,12 @@ def load_settings() -> Settings:
     reasoning_effort = os.getenv("LLM_REASONING_EFFORT", "high").strip().lower()
     if reasoning_effort not in ("high", "max"):
         reasoning_effort = "high"
-    show_reasoning_raw = os.getenv("LLM_SHOW_REASONING", "false").strip().lower()
-    show_reasoning = show_reasoning_raw in ("1", "true", "yes", "on")
+    # 未显式设置时：开启 thinking 就默认展示思考过程（用户："开启的时候干脆展示"）。
+    show_reasoning_raw = os.getenv("LLM_SHOW_REASONING")
+    if show_reasoning_raw is None or show_reasoning_raw.strip() == "":
+        show_reasoning = thinking_enabled
+    else:
+        show_reasoning = show_reasoning_raw.strip().lower() in ("1", "true", "yes", "on")
 
     return Settings(
         pipeline=pipeline,
@@ -116,19 +120,37 @@ def load_settings() -> Settings:
 settings = load_settings()
 
 
-def teaching_request_extras(settings: Settings) -> dict:
-    """DeepSeek V4 专用参数：thinking 模式与推理深度。
+def thinking_request_extras(
+    base_url: str, model: str, thinking_enabled: bool, reasoning_effort: str = "high"
+) -> dict:
+    """各家"思考模式"专用参数。会随模型/接口自动选择正确的字段名。
 
-    见 https://api-docs.deepseek.com/guides/thinking_mode
-    非 DeepSeek 服务商忽略这些字段（由对方 API 自行处理或忽略）。
+    - DeepSeek V4：thinking={type:enabled/disabled} (+ reasoning_effort)
+      见 https://api-docs.deepseek.com/guides/thinking_mode
+    - 通义千问 / 百炼（DashScope 兼容模式）：enable_thinking=true/false
+      见 https://help.aliyun.com/zh/model-studio/deep-thinking
+      注意：Qwen3 系模型默认可能开启思考、且很慢，必须显式关闭。
+    - 其他服务商：不加任何字段。
     """
-    u = settings.base_url.lower()
-    m = settings.model.lower()
-    if "deepseek.com" not in u and not m.startswith("deepseek-"):
-        return {}
-    if settings.thinking_enabled:
-        return {
-            "thinking": {"type": "enabled"},
-            "reasoning_effort": settings.reasoning_effort,
-        }
-    return {"thinking": {"type": "disabled"}}
+    u = (base_url or "").lower()
+    m = (model or "").lower()
+    is_deepseek = "deepseek.com" in u or m.startswith("deepseek-")
+    is_qwen = (
+        "dashscope" in u
+        or "aliyuncs" in u
+        or m.startswith("qwen")
+    )
+    if is_deepseek:
+        if thinking_enabled:
+            return {"thinking": {"type": "enabled"}, "reasoning_effort": reasoning_effort}
+        return {"thinking": {"type": "disabled"}}
+    if is_qwen:
+        # DashScope 兼容模式接受把 enable_thinking 放在请求体顶层。
+        return {"enable_thinking": bool(thinking_enabled)}
+    return {}
+
+
+def teaching_request_extras(settings: Settings) -> dict:
+    return thinking_request_extras(
+        settings.base_url, settings.model, settings.thinking_enabled, settings.reasoning_effort
+    )
