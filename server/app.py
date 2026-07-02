@@ -15,7 +15,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .config import WEB_DIR, settings, teaching_request_extras
+from . import config as teaching_config
+from .config import WEB_DIR, settings
 from . import tutor
 
 app = FastAPI(title="小欧 · 启发式数学老师")
@@ -35,6 +36,9 @@ class ChatRequest(BaseModel):
     mode: str = tutor.DEFAULT_MODE
     # 探索模式下点"出个新题"：追加一条出题指令给模型（不进入前端展示的历史）。
     kickoff: bool = False
+    # 思考模式：前端可按请求覆盖 .env 默认值（None=沿用默认）。
+    thinking: bool | None = None
+    show_reasoning: bool | None = None
 
 
 @app.get("/api/config")
@@ -93,7 +97,7 @@ async def _transcribe(client: httpx.AsyncClient, content: list) -> str:
     return (data["choices"][0]["message"]["content"] or "").strip()
 
 
-async def _yield_stream_chunks(resp) -> AsyncGenerator[str, None]:
+async def _yield_stream_chunks(resp, show_reasoning: bool) -> AsyncGenerator[str, None]:
     """把 OpenAI 兼容流式响应解析成 SSE 事件。"""
     async for line in resp.aiter_lines():
         if not line or not line.startswith("data:"):
@@ -110,7 +114,7 @@ async def _yield_stream_chunks(resp) -> AsyncGenerator[str, None]:
             continue
         delta = choices[0].get("delta") or {}
         reasoning_piece = delta.get("reasoning_content")
-        if reasoning_piece and settings.thinking_enabled and settings.show_reasoning:
+        if reasoning_piece and show_reasoning:
             yield _sse({"reasoning_delta": reasoning_piece})
         piece = delta.get("content")
         if piece:
@@ -175,6 +179,18 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         "Content-Type": "application/json",
     }
 
+    # 思考模式：请求可覆盖 .env 默认；开启时默认展示思考过程。
+    thinking_on = settings.thinking_enabled if req.thinking is None else req.thinking
+    if req.show_reasoning is not None:
+        show_reasoning = req.show_reasoning
+    elif req.thinking is not None:
+        show_reasoning = thinking_on  # 前端明确开了思考 → 默认展示
+    else:
+        show_reasoning = settings.show_reasoning
+    thinking_extras = teaching_config.thinking_request_extras(
+        settings.base_url, settings.model, thinking_on, settings.reasoning_effort
+    )
+
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
             if settings.is_unified:
@@ -204,7 +220,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                 "stream": True,
                 "temperature": 0.7,
                 "messages": [{"role": "system", "content": system_prompt}] + teaching_messages,
-                **teaching_request_extras(settings),
+                **thinking_extras,
             }
             async with client.stream(
                 "POST", settings.chat_endpoint, json=payload, headers=text_headers
@@ -219,7 +235,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     yield _sse({"done": True})
                     return
 
-                async for chunk in _yield_stream_chunks(resp):
+                async for chunk in _yield_stream_chunks(resp, show_reasoning):
                     yield chunk
     except httpx.HTTPError as exc:
         yield _sse({"error": f"连接大模型时出错：{exc}"})
