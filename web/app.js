@@ -48,8 +48,46 @@ function escapeHtml(s) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
+const MATH_SUPER = { 0: "⁰", 1: "¹", 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹", n: "ⁿ", "+": "⁺", "-": "⁻", "(": "⁽", ")": "⁾" };
+const MATH_SUB = { 0: "₀", 1: "₁", 2: "₂", 3: "₃", 4: "₄", 5: "₅", 6: "₆", 7: "₇", 8: "₈", 9: "₉", n: "ₙ", "+": "₊", "-": "₋", "(": "₍", ")": "₎" };
+const LATEX_SYMBOLS = [
+  ["\\times", "×"], ["\\div", "÷"], ["\\cdot", "·"], ["\\pm", "±"], ["\\mp", "∓"],
+  ["\\leq", "≤"], ["\\le", "≤"], ["\\geq", "≥"], ["\\ge", "≥"],
+  ["\\neq", "≠"], ["\\ne", "≠"], ["\\approx", "≈"], ["\\equiv", "≡"],
+  ["\\infty", "∞"], ["\\pi", "π"], ["\\degree", "°"], ["\\circ", "°"],
+  ["\\ldots", "…"], ["\\cdots", "⋯"], ["\\to", "→"], ["\\rightarrow", "→"],
+  ["\\leftarrow", "←"], ["\\Rightarrow", "⇒"], ["\\leftrightarrow", "↔"],
+  ["\\sqrt", "√"], ["\\left", ""], ["\\right", ""], ["\\,", " "], ["\\;", " "],
+  ["\\!", ""], ["\\quad", " "], ["\\qquad", "  "],
+];
+function mathSuper(s) { return [...String(s)].map((c) => MATH_SUPER[c] ?? c).join(""); }
+function mathSub(s) { return [...String(s)].map((c) => MATH_SUB[c] ?? c).join(""); }
+function normalizeMathInner(s) {
+  s = String(s);
+  s = s.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, (_, a, b) => `${normalizeMathInner(a)}/${normalizeMathInner(b)}`);
+  s = s.replace(/\\(?:text|mathrm|mathbf|mathit)\{([^{}]*)\}/g, "$1");
+  for (const [cmd, ch] of LATEX_SYMBOLS) s = s.split(cmd).join(ch);
+  s = s.replace(/\^\{([^{}]+)\}/g, (_, exp) => mathSuper(exp));
+  s = s.replace(/\^([0-9n+\-=()]+)/g, (_, exp) => mathSuper(exp));
+  s = s.replace(/_\{([^{}]+)\}/g, (_, sub) => mathSub(sub));
+  s = s.replace(/_([0-9n+\-=()]+)/g, (_, sub) => mathSub(sub));
+  s = s.replace(/\\[a-zA-Z]+(\{[^{}]*\})?/g, "");
+  return s.replace(/\s+/g, " ").trim();
+}
+function normalizeMathText(s) {
+  s = String(s);
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_, inner) => normalizeMathInner(inner));
+  s = s.replace(/\$([^\$\n]+?)\$/g, (_, inner) => normalizeMathInner(inner));
+  s = s.replace(/\\\(([^\)]*?)\\\)/g, (_, inner) => normalizeMathInner(inner));
+  s = s.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => normalizeMathInner(inner));
+  s = normalizeMathInner(s);
+  s = s.replace(/(\d)\s*\*\s*(\d)/g, "$1 × $2");
+  s = s.replace(/(\d+)\s*[xX]\s*(\d+)/g, "$1 × $2");
+  s = s.replace(/(\d+)[xX](\d+)/g, "$1 × $2");
+  return s;
+}
 function inlineFmt(s) {
-  return escapeHtml(s)
+  return escapeHtml(normalizeMathText(s))
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
