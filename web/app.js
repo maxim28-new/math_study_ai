@@ -152,6 +152,7 @@ function renderDiagram(jsonText) {
   if (s.type === "dots") inner = diagramDots(s);
   else if (s.type === "square_layers") inner = diagramSquareLayers(s);
   else if (s.type === "square_steps") inner = diagramSquareSteps(s);
+  else if (s.type === "square_compare") inner = diagramSquareCompare(s);
   else if (s.type === "numberline") inner = diagramNumberline(s);
   else if (s.type === "bars") inner = diagramBars(s);
   if (!inner) return "";
@@ -178,21 +179,45 @@ function diagramDots(s) {
   }
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
 }
-function diagramSquareLayers(s) {
-  const n = clampInt(s.size, 1, 8, 3);
-  const highlight = clampInt(s.highlight ?? s.highlightLayer, 1, n, n);
-  const cell = 22, r = 7, pad = 12;
-  const w = n * cell + pad * 2, h = n * cell + pad * 2;
+function layerHighlight(raw, n) {
+  if (raw === 0 || raw === "0" || raw === "none" || raw === false) return null;
+  if (raw === undefined || raw === null) return n;
+  return clampInt(raw, 1, n, n);
+}
+function drawSquareDots(n, ox, oy, cell, r, highlightLayer) {
   let dots = "";
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       const layer = n - Math.min(i, j, n - 1 - i, n - 1 - j);
-      const cx = pad + j * cell + cell / 2, cy = pad + i * cell + cell / 2;
-      const isNew = layer === highlight;
-      dots += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isNew ? DIAG_GOLD : DIAG_BLUE}" opacity="${isNew ? 1 : 0.45 + layer * 0.08}"/>`;
+      const cx = ox + j * cell + cell / 2, cy = oy + i * cell + cell / 2;
+      const isHL = highlightLayer !== null && layer === highlightLayer;
+      dots += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isHL ? DIAG_GOLD : DIAG_BLUE}" opacity="${isHL ? 1 : 0.45 + layer * 0.08}"/>`;
     }
   }
+  return dots;
+}
+function diagramSquareLayers(s) {
+  const n = clampInt(s.size, 1, 8, 3);
+  const highlight = layerHighlight(s.highlight ?? s.highlightLayer, n);
+  const cell = 22, r = 7, pad = 12;
+  const w = n * cell + pad * 2, h = n * cell + pad * 2;
+  const dots = drawSquareDots(n, pad, pad, cell, r, highlight);
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
+}
+function diagramSquareCompare(s) {
+  const from = clampInt(s.from, 1, 8, 3);
+  let to = clampInt(s.to, 1, 8, from + 1);
+  if (to <= from) to = from + 1;
+  const cell = 18, r = 6, gap = 22, pad = 10, labelH = 18;
+  const fromW = from * cell, toW = to * cell;
+  let parts = drawSquareDots(from, pad, pad, cell, r, null);
+  parts += `<text x="${pad + fromW / 2}" y="${pad + from * cell + labelH}" font-size="11" text-anchor="middle" fill="#666">${from}×${from}</text>`;
+  const x2 = pad + fromW + gap;
+  parts += drawSquareDots(to, x2, pad, cell, r, to);
+  parts += `<text x="${x2 + toW / 2}" y="${pad + to * cell + labelH}" font-size="11" text-anchor="middle" fill="#666">${to}×${to}</text>`;
+  parts += `<text x="${pad + fromW + gap / 2}" y="${pad + Math.max(from, to) * cell / 2 + 4}" font-size="16" text-anchor="middle" fill="#999">→</text>`;
+  const w = x2 + toW + pad, h = pad + Math.max(from, to) * cell + labelH + 6;
+  return `<svg viewBox="0 0 ${w} ${h}" width="${Math.min(w, 520)}" height="${h}" role="img">${parts}</svg>`;
 }
 function diagramSquareSteps(s) {
   const max = clampInt(s.max ?? s.count, 1, 6, 3);
