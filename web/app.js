@@ -122,6 +122,8 @@ function renderDiagram(jsonText) {
   try { s = JSON.parse(jsonText); } catch (e) { return ""; }
   let inner = "";
   if (s.type === "dots") inner = diagramDots(s);
+  else if (s.type === "square_layers") inner = diagramSquareLayers(s);
+  else if (s.type === "square_steps") inner = diagramSquareSteps(s);
   else if (s.type === "numberline") inner = diagramNumberline(s);
   else if (s.type === "bars") inner = diagramBars(s);
   if (!inner) return "";
@@ -147,6 +149,43 @@ function diagramDots(s) {
     }
   }
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
+}
+function diagramSquareLayers(s) {
+  const n = clampInt(s.size, 1, 8, 3);
+  const highlight = clampInt(s.highlight ?? s.highlightLayer, 1, n, n);
+  const cell = 22, r = 7, pad = 12;
+  const w = n * cell + pad * 2, h = n * cell + pad * 2;
+  let dots = "";
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const layer = n - Math.min(i, j, n - 1 - i, n - 1 - j);
+      const cx = pad + j * cell + cell / 2, cy = pad + i * cell + cell / 2;
+      const isNew = layer === highlight;
+      dots += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isNew ? DIAG_GOLD : DIAG_BLUE}" opacity="${isNew ? 1 : 0.45 + layer * 0.08}"/>`;
+    }
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
+}
+function diagramSquareSteps(s) {
+  const max = clampInt(s.max ?? s.count, 1, 6, 3);
+  const highlight = clampInt(s.highlight, 1, max, max);
+  const cell = 16, r = 6, gap = 14, pad = 10, labelH = 18;
+  let x = pad, parts = "";
+  for (let size = 1; size <= max; size++) {
+    const sqW = size * cell, sqH = size * cell;
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j < size; j++) {
+        const layer = size - Math.min(i, j, size - 1 - i, size - 1 - j);
+        const cx = x + j * cell + cell / 2, cy = pad + i * cell + cell / 2;
+        const isHL = size === highlight && layer === size;
+        parts += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isHL ? DIAG_GOLD : DIAG_BLUE}" opacity="${isHL ? 1 : 0.55 + layer * 0.07}"/>`;
+      }
+    }
+    parts += `<text x="${x + sqW / 2}" y="${pad + sqH + labelH}" font-size="11" text-anchor="middle" fill="#666">${size}×${size}</text>`;
+    x += sqW + gap;
+  }
+  const w = x - gap + pad, h = pad + max * cell + labelH + 6;
+  return `<svg viewBox="0 0 ${w} ${h}" width="${Math.min(w, 520)}" height="${h}" role="img">${parts}</svg>`;
 }
 function diagramNumberline(s) {
   let from = clampInt(s.from, -50, 200, 0), to = clampInt(s.to, -50, 200, 10);
