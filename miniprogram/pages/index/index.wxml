@@ -1,0 +1,44 @@
+<view class="page">
+  <view wx:if="{{showBanner}}" class="banner">
+    请先把后端部署到 HTTPS 域名，在 miniprogram/config.js 填写 baseUrl，并在微信后台配置 request 合法域名。服务器 .env 需填好 API 密钥。
+  </view>
+
+  <view class="modebar">
+    <view class="mode {{mode==='explore'?'active':''}}" data-mode="explore" bindtap="switchMode">一起探索</view>
+    <view class="mode {{mode==='bring'?'active':''}}" data-mode="bring" bindtap="switchMode">带题来问</view>
+    <view class="gear" bindtap="openSettings">⚙</view>
+  </view>
+
+  <scroll-view class="chat" scroll-y scroll-into-view="{{scrollTo}}" scroll-with-animation enhanced show-scrollbar="{{false}}">
+    <block wx:for="{{display}}" wx:key="index">
+      <view class="msg {{item.role}}" id="{{index===display.length-1?'bottom':''}}">
+        <view class="av">{{item.role==='child'?'我':'欧'}}</view>
+        <view class="bubble">
+          <view wx:if="{{item.reasoning}}" class="reasoning">{{item.reasoning}}</view>
+          <block wx:for="{{item.segments}}" wx:for-item="seg" wx:key="index">
+            <rich-text wx:if="{{seg.type==='rich'}}" nodes="{{seg.html}}"></rich-text>
+            <diagram wx:if="{{seg.type==='diagram'}}" spec="{{seg.spec}}" caption="{{seg.spec.caption||''}}"></diagram>
+          </block>
+          <text wx:if="{{item.streaming}}" class="cursor">▍</text>
+        </view>
+      </view>
+    </block>
+    <view id="bottom" style="height:1px"></view>
+  </scroll-view>
+
+  <scroll-view wx:if="{{quickActions.length}}" class="quick" scroll-x enhanced show-scrollbar="{{false}}">
+    <view wx:for="{{quickActions}}" wx:key="id" class="qbtn" data-msg="{{item.message}}" bindtap="onQuick">{{item.label}}</view>
+  </scroll-view>
+
+  <view wx:if="{{pendingImage}}" class="preview">
+    <image src="{{pendingImage}}" mode="aspectFit" class="prev-img"/>
+    <text class="prev-x" bindtap="clearPhoto">×</text>
+  </view>
+
+  <view class="composer">
+    <button wx:if="{{mode==='explore'}}" class="explore-btn" bindtap="startExplore" disabled="{{streaming||!configured}}">✨ 出个新题</button>
+    <button wx:if="{{mode==='bring'}}" class="cam-btn" bindtap="choosePhoto" disabled="{{streaming}}">📷</button>
+    <textarea class="input" value="{{input}}" bindinput="onInput" auto-height maxlength="-1" placeholder="{{mode==='explore'?'把你的想法告诉小欧…':'题目或拍照…'}}" disabled="{{streaming}}"/>
+    <button class="send-btn" bindtap="onSend" disabled="{{streaming}}">发送</button>
+  </view>
+</view>

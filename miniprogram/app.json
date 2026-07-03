@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/settings/settings"
+  ],
+  "window": {
+    "navigationBarTitleText": "小欧 · 数学",
+    "navigationBarBackgroundColor": "#4f6bed",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f4f1ea"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

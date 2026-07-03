@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "diagram": "/components/diagram/index"
+  },
+  "navigationBarTitleText": "小欧 · 数学"
+}

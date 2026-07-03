@@ -1,0 +1,4 @@
+<view class="diagram-wrap" style="width:{{cssW}}px">
+  <canvas type="2d" id="cv" class="diagram-canvas" style="width:{{cssW}}px;height:{{cssH}}px"></canvas>
+  <view wx:if="{{caption}}" class="diagram-cap">{{caption}}</view>
+</view>

@@ -1,0 +1,16 @@
+.diagram-wrap {
+  margin: 8rpx 0;
+  padding: 16rpx;
+  background: #f8f7f3;
+  border: 1px solid #e7e3da;
+  border-radius: 16rpx;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.diagram-canvas { display: block; }
+.diagram-cap {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #6b6a76;
+  text-align: center;
+}
