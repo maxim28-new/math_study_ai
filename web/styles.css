@@ -219,9 +219,23 @@ html, body {
 .msg .bubble .katex { font-size: 1.05em; }
 .msg .bubble .katex-display { margin: 0.45em 0; overflow-x: auto; overflow-y: hidden; }
 
-.msg.tutor { align-self: flex-start; }
+.msg.tutor {
+  align-self: flex-start;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 0;
+  align-items: start;
+}
 .msg.tutor .avatar { background: linear-gradient(135deg, var(--primary), #6f86ff); }
 .msg.tutor .bubble { background: var(--tutor-bubble); border: 1px solid var(--line); }
+.msg.tutor > .avatar { grid-column: 1; grid-row: 1 / span 2; }
+.msg.tutor > .msg-body,
+.msg.tutor > .reasoning,
+.msg.tutor > .bubble {
+  grid-column: 2;
+  min-width: 0;
+}
 .msg.tutor .reasoning {
   padding: 8px 14px;
   background: #f3f3f3;
@@ -237,6 +251,7 @@ html, body {
   word-break: break-word;
 }
 .msg.tutor .reasoning:empty { display: none; }
+.messages.hide-reasoning .reasoning { display: none !important; }
 .msg.tutor .reasoning + .bubble { border-top-left-radius: 0; border-top-right-radius: 0; }
 
 .msg.child { align-self: flex-end; flex-direction: row-reverse; }

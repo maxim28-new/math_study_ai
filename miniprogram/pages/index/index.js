@@ -29,13 +29,16 @@ Page({
   onLoad() {
     const settings = loadSettings();
     const session = loadSession();
+    const settingBool = (key, fallback) => (
+      typeof settings[key] === "boolean" ? settings[key] : fallback
+    );
     this.setData({
       mode: settings.mode || session?.mode || "explore",
       topicKey: settings.topicKey || session?.topicKey || "arithmetic",
       level: settings.level || session?.level || "middle",
       childName: settings.childName || session?.childName || "",
-      thinking: settings.thinking || session?.thinking || false,
-      showReasoning: settings.showReasoning || session?.showReasoning || false,
+      thinking: settingBool("thinking", !!session?.thinking),
+      showReasoning: settingBool("showReasoning", !!session?.showReasoning),
       messages: session?.messages || [],
     });
     this.refreshDisplay();
