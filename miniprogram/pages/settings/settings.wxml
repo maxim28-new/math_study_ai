@@ -1,0 +1,49 @@
+<view class="page">
+  <view class="sect">
+    <view class="label">服务器地址</view>
+    <view class="hint">密钥放在服务器 .env，小程序只连你的后端。部署后填 HTTPS 域名，并在微信后台 → 开发管理 → 服务器域名 里添加。</view>
+    <switch checked="{{useDev}}" bindchange="onUseDev"/> 开发模式（连本机，需勾选不校验合法域名）
+    <input class="field" value="{{baseUrl}}" bindinput="onBaseUrl" placeholder="https://your-domain.com" disabled="{{useDev}}"/>
+    <button class="btn ghost" bindtap="testConn">测试连接</button>
+    <view wx:if="{{connOk}}" class="ok">✓ 已连接 {{model}}</view>
+  </view>
+
+  <view class="sect">
+    <view class="label">孩子昵称</view>
+    <input class="field" value="{{childName}}" bindinput="onName" placeholder="例如：朵朵"/>
+  </view>
+
+  <view class="sect">
+    <view class="label">默认模式</view>
+    <view class="modes">
+      <view class="mb {{mode==='explore'?'on':''}}" data-mode="explore" bindtap="setMode">一起探索</view>
+      <view class="mb {{mode==='bring'?'on':''}}" data-mode="bring" bindtap="setMode">带题来问</view>
+    </view>
+  </view>
+
+  <view class="sect">
+    <view class="label">主题</view>
+    <picker range="{{topics}}" range-key="name" value="{{topicIndex}}" bindchange="onTopic">
+      <view class="field picker">{{topics[topicIndex].name || '算术与数'}}</view>
+    </picker>
+  </view>
+
+  <view class="sect">
+    <view class="label">难度</view>
+    <picker range="{{levels}}" range-key="name" value="{{levelIndex}}" bindchange="onLevel">
+      <view class="field picker">{{levels[levelIndex].name || '三四年级'}}</view>
+    </picker>
+  </view>
+
+  <view class="sect row">
+    <view class="label">思考模式（更慢更深）</view>
+    <switch checked="{{thinking}}" bindchange="onThinking"/>
+  </view>
+
+  <view class="sect row" wx:if="{{thinking}}">
+    <view class="label">展示思考过程</view>
+    <switch checked="{{showReasoning}}" bindchange="onShowReasoning"/>
+  </view>
+
+  <button class="btn primary" bindtap="save">保存并返回</button>
+</view>

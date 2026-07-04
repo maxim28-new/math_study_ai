@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncGenerator, Union
+from typing import Any, AsyncGenerator, Optional, Union
 
 import httpx
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -20,6 +21,15 @@ from .config import WEB_DIR, settings
 from . import tutor
 
 app = FastAPI(title="小欧 · 启发式数学老师")
+
+# 允许微信小程序、GitHub Pages 等跨域调用 API（密钥仍在服务端 .env）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class Message(BaseModel):
@@ -37,8 +47,14 @@ class ChatRequest(BaseModel):
     # 探索模式下点"出个新题"：追加一条出题指令给模型（不进入前端展示的历史）。
     kickoff: bool = False
     # 思考模式：前端可按请求覆盖 .env 默认值（None=沿用默认）。
-    thinking: bool | None = None
-    show_reasoning: bool | None = None
+    thinking: Optional[bool] = None
+    show_reasoning: Optional[bool] = None
+
+
+@app.get("/api/health")
+def health() -> dict:
+    """小程序 / 运维探测：确认服务在线且密钥已配置。"""
+    return {"ok": True, "configured": settings.is_configured}
 
 
 @app.get("/api/config")

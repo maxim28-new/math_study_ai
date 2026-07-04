@@ -1,0 +1,16 @@
+{
+  "description": "小欧 · 启发式数学老师",
+  "packOptions": { "ignore": [], "include": [] },
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "enhance": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.4.0",
+  "appid": "touristappid",
+  "projectname": "xiaoou-math",
+  "condition": {}
+}

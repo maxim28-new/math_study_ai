@@ -9,7 +9,8 @@ const state = {
   level: null,
   childName: "",
   mode: "explore", // explore=小欧出题 / bring=孩子带题
-  thinking: false, // 思考模式（开启时同时展示思考过程）
+  thinking: false, // API 深度思考（更慢）
+  showReasoning: false, // 是否在界面展示思考过程（独立于 thinking）
   messages: [], // 发给模型的历史：{role:'user'|'assistant', content}（content 可能是字符串或多模态数组）
   pendingImage: null, // 待发送的题目照片（dataURL）
   streaming: false,
@@ -34,6 +35,7 @@ function saveSession() {
     childName: state.childName,
     mode: state.mode,
     thinking: state.thinking,
+    showReasoning: state.showReasoning,
     messages: sanitizeForStore(state.messages),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch (e) {}
@@ -318,10 +320,13 @@ function addMessageEl(role) {
   const avatar = document.createElement("div");
   avatar.className = "avatar";
   avatar.textContent = avatarText(role);
+  const body = document.createElement("div");
+  body.className = "msg-body";
   const bubble = document.createElement("div");
   bubble.className = "bubble";
+  body.appendChild(bubble);
   wrap.appendChild(avatar);
-  wrap.appendChild(bubble);
+  wrap.appendChild(body);
   $("#messages").appendChild(wrap);
   scrollToBottom();
   return bubble;
@@ -333,14 +338,15 @@ function scrollToBottom() {
 }
 
 function getReasoningEl(tutorBubble) {
-  if (!state.thinking) return null;
-  const msg = tutorBubble.closest(".msg");
-  let el = msg.querySelector(".reasoning");
+  if (!state.showReasoning) return null;
+  const body = tutorBubble.closest(".msg-body");
+  if (!body) return null;
+  let el = body.querySelector(".reasoning");
   if (!el) {
     el = document.createElement("div");
     el.className = "reasoning";
     el.setAttribute("aria-label", "小欧的思考过程");
-    msg.insertBefore(el, tutorBubble);
+    body.insertBefore(el, tutorBubble);
   }
   return el;
 }
@@ -404,6 +410,9 @@ async function loadConfig() {
   state.childName = (saved && saved.childName) || "";
   state.mode = (saved && saved.mode) || cfg.default_mode || "explore";
   state.thinking = (saved && typeof saved.thinking === "boolean") ? saved.thinking : !!cfg.thinking_enabled;
+  state.showReasoning = (saved && typeof saved.showReasoning === "boolean")
+    ? saved.showReasoning
+    : !!cfg.show_reasoning;
   state.messages = (saved && saved.messages) || [];
 
   // 主题下拉
@@ -429,6 +438,8 @@ async function loadConfig() {
   levelSel.value = state.level;
 
   $("#thinkingSelect").value = state.thinking ? "on" : "off";
+  $("#showReasoningSelect").value = state.showReasoning ? "on" : "off";
+  syncReasoningUi();
 
   $("#childName").value = state.childName;
 
@@ -474,6 +485,21 @@ async function loadConfig() {
   updatePhotoHint(cfg);
   applyModeUI();
   renderHistory();
+}
+
+// 思考模式关闭时，展示思考的选项不可用。
+function syncReasoningUi() {
+  const on = state.thinking;
+  const field = $("#showReasoningField");
+  const sel = $("#showReasoningSelect");
+  if (field) field.classList.toggle("disabled", !on);
+  if (sel) {
+    sel.disabled = !on;
+    if (!on) {
+      state.showReasoning = false;
+      sel.value = "off";
+    }
+  }
 }
 
 // 根据当前模式调整界面：探索模式突出"出个新题"、隐藏相机；带题模式相反。
@@ -579,7 +605,7 @@ async function streamAssistant(kickoff) {
         mode: state.mode,
         kickoff: !!kickoff,
         thinking: state.thinking,
-        show_reasoning: state.thinking,
+        show_reasoning: state.showReasoning,
       }),
     });
 
@@ -852,6 +878,11 @@ function bindEvents() {
   });
   $("#thinkingSelect").addEventListener("change", (e) => {
     state.thinking = e.target.value === "on";
+    syncReasoningUi();
+    saveSession();
+  });
+  $("#showReasoningSelect").addEventListener("change", (e) => {
+    state.showReasoning = e.target.value === "on";
     saveSession();
   });
   $("#childName").addEventListener("input", (e) => {

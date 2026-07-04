@@ -283,6 +283,48 @@ LLM_VISION_MODEL=
 
 ---
 
+## 微信小程序版
+
+`miniprogram/` 目录是微信小程序客户端，功能与网页版对齐：一起探索 / 带题来问、流式对话、拍照读题、xiaoou-draw 图形、快捷按钮、思考模式。
+
+**架构：** 小程序 **不** 直连 DeepSeek/通义（密钥会暴露、域名也无法过审），而是连接 **你自己部署的后端**（本项目的 FastAPI），密钥仍放在服务器 `.env`。
+
+### 1. 部署后端到 HTTPS
+
+把本项目部署到有 **HTTPS** 的服务器（云主机 + Nginx + 证书），确保：
+
+```bash
+python3 run.py   # 或用 gunicorn/uvicorn 守护进程
+```
+
+外网可访问 `https://你的域名/api/health` 返回 `{"ok":true,"configured":true}`。
+
+服务器需监听 `0.0.0.0`（在 `.env` 里设 `HOST=0.0.0.0`）。
+
+### 2. 配置小程序
+
+1. 用 [微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html) 打开 **`miniprogram/`** 目录。
+2. 编辑 `miniprogram/config.js`：
+   - 生产：`baseUrl: "https://你的域名"`，`useDev: false`
+   - 本地调试：`useDev: true`，开发者工具勾选 **不校验合法域名**
+3. 在微信公众平台 → **开发管理 → 开发设置 → 服务器域名**，把 `https://你的域名` 加入 **request 合法域名**。
+4. 把 `project.config.json` 里的 `appid` 改成你的小程序 AppID。
+
+### 3. 设置页
+
+小程序 **设置** 里可填：服务器地址、孩子昵称、主题、难度、默认模式、思考开关。API 密钥仍在服务器 `.env`，不要写进小程序。
+
+### 4. 与网页版的差异
+
+| 功能 | 网页 | 小程序 |
+|------|------|--------|
+| LaTeX 公式 | KaTeX 渲染 | 常见符号转 Unicode（× ÷ 分数） |
+| 图形 | SVG | Canvas 2D（同款 xiaoou-draw） |
+| 语音输入 | Web Speech API | 暂未接入（可后续加微信录音 + 后端 STT） |
+| 画板手写 | 有 | 暂未接入（可拍照代替） |
+
+---
+
 ## 项目结构
 
 ```
@@ -290,6 +332,12 @@ math_study_ai/
 ├── run.py               # 启动入口：python run.py
 ├── requirements.txt     # Python 依赖
 ├── .env.example         # 配置模板（复制成 .env 使用）
+├── miniprogram/         # 微信小程序（连你的 HTTPS 后端）
+│   ├── app.js / app.json
+│   ├── config.js        # 后端域名
+│   ├── pages/           # 对话页 + 设置页
+│   ├── components/diagram/
+│   └── utils/           # 流式 SSE、Markdown、图形
 ├── server/
 │   ├── app.py           # FastAPI 后端：网页 + 配置接口 + 流式对话
 │   ├── tutor.py         # 教学引擎：把启发式教学法写成给模型的指令（灵魂所在）
@@ -307,5 +355,5 @@ math_study_ai/
 ## 隐私
 
 - 密钥只保存在你本机的 `.env` 文件里（已通过 `.gitignore` 排除，不会被提交）。
-- 对话记录只存在你自己浏览器的本地存储中。
-- 服务默认只监听本机（`127.0.0.1`），不对外网开放。
+- 网页版对话记录存在浏览器本地；小程序对话存在微信本地存储。
+- 服务默认只监听本机（`127.0.0.1`）；对外部署（网页/小程序）时请自行加固 HTTPS 与访问控制。
