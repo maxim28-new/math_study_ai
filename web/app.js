@@ -81,6 +81,26 @@ function renderTextWithMath(s) {
 function inlineFmt(s) {
   return renderTextWithMath(String(s));
 }
+
+const DIAGRAM_TYPES = new Set(["dots", "square_layers", "square_steps", "square_compare", "numberline", "bars"]);
+
+/** 识别 xiaoou-draw JSON（模型有时用 ```json 或裸 JSON，也要能画图） */
+function tryParseDiagramSpec(text) {
+  const t = String(text).trim();
+  if (!t.startsWith("{")) return null;
+  try {
+    const spec = JSON.parse(t);
+    if (spec && typeof spec.type === "string" && DIAGRAM_TYPES.has(spec.type)) return spec;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+function renderDiagramBlock(code) {
+  const spec = tryParseDiagramSpec(code);
+  const svg = renderDiagram(spec ? JSON.stringify(spec) : code.trim());
+  return svg || "";
+}
+
 function renderMarkdown(text) {
   const lines = text.split("\n");
   let html = "";
@@ -88,7 +108,26 @@ function renderMarkdown(text) {
   const closeList = () => { if (list) { html += `</${list}>`; list = null; } };
   let para = [];
   const flushPara = () => {
-    if (para.length) { html += `<p>${para.map(inlineFmt).join("<br>")}</p>`; para = []; }
+    if (!para.length) return;
+    let textLines = [];
+    const emitText = () => {
+      if (textLines.length) {
+        html += `<p>${textLines.map(inlineFmt).join("<br>")}</p>`;
+        textLines = [];
+      }
+    };
+    for (const line of para) {
+      const spec = tryParseDiagramSpec(line);
+      if (spec) {
+        emitText();
+        const svg = renderDiagram(JSON.stringify(spec));
+        if (svg) html += svg;
+      } else {
+        textLines.push(line);
+      }
+    }
+    emitText();
+    para = [];
   };
   let fence = null; // {lang, buf:[]}
   for (const raw of lines) {
@@ -98,11 +137,9 @@ function renderMarkdown(text) {
       if (fenceMatch) {
         // 结束围栏块
         const code = fence.buf.join("\n");
-        if (fence.lang === "xiaoou-draw") {
-          html += renderDiagram(code);
-        } else if (code.trim()) {
-          html += `<pre class="code">${escapeHtml(code)}</pre>`;
-        }
+        const svg = renderDiagramBlock(code);
+        if (svg) html += svg;
+        else if (code.trim()) html += `<pre class="code">${escapeHtml(code)}</pre>`;
         fence = null;
       } else {
         fence.buf.push(raw);
@@ -133,12 +170,9 @@ function renderMarkdown(text) {
   // 流式过程中围栏可能还没闭合：把已收到的 xiaoou-draw 尝试渲染，其它按代码显示
   if (fence) {
     const code = fence.buf.join("\n");
-    if (fence.lang === "xiaoou-draw") {
-      const svg = renderDiagram(code);
-      if (svg) html += svg;
-    } else if (code.trim()) {
-      html += `<pre class="code">${escapeHtml(code)}</pre>`;
-    }
+    const svg = renderDiagramBlock(code);
+    if (svg) html += svg;
+    else if (code.trim()) html += `<pre class="code">${escapeHtml(code)}</pre>`;
   }
   flushPara(); closeList();
   return html || "<p></p>";

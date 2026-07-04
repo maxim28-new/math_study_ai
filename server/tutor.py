@@ -274,6 +274,11 @@ DRAWING_GUIDE = """\
 
 回复结构固定为：**一两句口语 → 一张图 → 一个追问**（图放在文字和提问之间）。
 
+**图的格式（必须严格遵守）：** 用围栏 ```xiaoou-draw 包住 JSON，不要用 ```json、不要裸写 JSON。正确示例：
+```xiaoou-draw
+{"type":"bars","items":[{"label":"姐姐","value":20},{"label":"弟弟","value":10}],"caption":"原来的样子"}
+```
+
 ## 图形类型
 - 点阵（矩形格子、乘法表）：{"type":"dots","rows":3,"cols":4,"newLastRowCol":false,"caption":"简短说明"}
   newLastRowCol 为 true 时，最后一行和最后一列标金色，适合"在外面再包一圈"。
