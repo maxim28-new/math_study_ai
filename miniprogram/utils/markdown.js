@@ -1,4 +1,5 @@
 const MATH_RE = /\$\$([\s\S]+?)\$\$|\$([^\$\n]+?)\$|\\\(([\s\S]+?)\\\)|\\\[([\s\S]+?)\\\]/g;
+const DIAGRAM_TYPES = new Set(["dots", "square_layers", "square_steps", "square_compare", "numberline", "bars"]);
 
 function esc(s) {
   return String(s)
@@ -6,6 +7,16 @@ function esc(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function tryParseDiagramSpec(text) {
+  const t = String(text).trim();
+  if (!t.startsWith("{")) return null;
+  try {
+    const spec = JSON.parse(t);
+    if (spec && typeof spec.type === "string" && DIAGRAM_TYPES.has(spec.type)) return spec;
+  } catch (e) { /* ignore */ }
+  return null;
 }
 
 function latexSimple(s) {
@@ -34,7 +45,6 @@ function inlineFmt(s) {
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 
-/** 轻量 Markdown → rich-text 可用的 HTML */
 function markdownToHtml(text) {
   const lines = String(text || "").split("\n");
   let html = "";
@@ -74,23 +84,51 @@ function markdownToHtml(text) {
   return html || "<p></p>";
 }
 
+function parseTextSegment(text) {
+  const segments = [];
+  const lines = String(text || "").split("\n");
+  let buf = [];
+  const flush = () => {
+    if (buf.length) {
+      segments.push({ type: "rich", html: markdownToHtml(buf.join("\n")) });
+      buf = [];
+    }
+  };
+  for (const line of lines) {
+    const spec = tryParseDiagramSpec(line);
+    if (spec) {
+      flush();
+      segments.push({ type: "diagram", spec });
+    } else {
+      buf.push(line);
+    }
+  }
+  flush();
+  if (!segments.length && text) {
+    segments.push({ type: "rich", html: markdownToHtml(text) });
+  }
+  return segments;
+}
+
 /** 把消息拆成 rich-text 段 + diagram 段 */
 function parseContent(text) {
   const segments = [];
-  const re = /```\s*xiaoou-draw\s*\n([\s\S]*?)```/g;
+  const fenceRe = /```\s*([\w-]*)\s*\n([\s\S]*?)```/g;
   let last = 0;
   let m;
-  while ((m = re.exec(text)) !== null) {
+  while ((m = fenceRe.exec(text)) !== null) {
     if (m.index > last) {
-      segments.push({ type: "rich", html: markdownToHtml(text.slice(last, m.index)) });
+      segments.push(...parseTextSegment(text.slice(last, m.index)));
     }
-    try {
-      segments.push({ type: "diagram", spec: JSON.parse(m[1].trim()) });
-    } catch (e) { /* skip bad json */ }
+    const spec = tryParseDiagramSpec(m[2]);
+    if (spec) segments.push({ type: "diagram", spec });
+    else if (m[2].trim()) {
+      segments.push({ type: "rich", html: `<pre class="code">${esc(m[2])}</pre>` });
+    }
     last = m.lastIndex;
   }
   if (last < text.length) {
-    segments.push({ type: "rich", html: markdownToHtml(text.slice(last)) });
+    segments.push(...parseTextSegment(text.slice(last)));
   }
   if (!segments.length) {
     segments.push({ type: "rich", html: markdownToHtml(text || "") });
@@ -98,4 +136,4 @@ function parseContent(text) {
   return segments;
 }
 
-module.exports = { parseContent, markdownToHtml };
+module.exports = { parseContent, markdownToHtml, tryParseDiagramSpec };
