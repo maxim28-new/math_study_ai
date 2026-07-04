@@ -14,7 +14,7 @@
       <view class="msg {{item.role}}" id="{{index===display.length-1?'bottom':''}}">
         <view class="av">{{item.role==='child'?'我':'欧'}}</view>
         <view class="bubble">
-          <view wx:if="{{item.reasoning}}" class="reasoning">{{item.reasoning}}</view>
+          <view wx:if="{{showReasoning && item.reasoning}}" class="reasoning">{{item.reasoning}}</view>
           <block wx:for="{{item.segments}}" wx:for-item="seg" wx:key="index">
             <rich-text wx:if="{{seg.type==='rich'}}" nodes="{{seg.html}}"></rich-text>
             <diagram wx:if="{{seg.type==='diagram'}}" spec="{{seg.spec}}" caption="{{seg.spec.caption||''}}"></diagram>

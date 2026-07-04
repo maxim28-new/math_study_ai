@@ -16,6 +16,7 @@ Page({
     level: "middle",
     childName: "",
     thinking: false,
+    showReasoning: false,
     streaming: false,
     input: "",
     pendingImage: "",
@@ -34,6 +35,7 @@ Page({
       level: settings.level || session?.level || "middle",
       childName: settings.childName || session?.childName || "",
       thinking: settings.thinking || session?.thinking || false,
+      showReasoning: settings.showReasoning || session?.showReasoning || false,
       messages: session?.messages || [],
     });
     this.refreshDisplay();
@@ -49,6 +51,7 @@ Page({
         level: settings.level || this.data.level,
         childName: settings.childName || "",
         thinking: !!settings.thinking,
+        showReasoning: !!settings.showReasoning,
       });
       delete settings._updated;
     }
@@ -110,6 +113,7 @@ Page({
       level: this.data.level,
       childName: this.data.childName,
       thinking: this.data.thinking,
+      showReasoning: this.data.showReasoning,
       messages: this.data.messages,
     });
   },
@@ -221,7 +225,7 @@ Page({
           mode: this.data.mode,
           kickoff: !!kickoff,
           thinking: this.data.thinking,
-          show_reasoning: this.data.thinking,
+          show_reasoning: this.data.showReasoning,
         },
         {
           onDelta: (d) => {
@@ -231,6 +235,7 @@ Page({
             this.setData({ display: [...display], scrollTo: "bottom" });
           },
           onReasoning: (d) => {
+            if (!this.data.showReasoning) return;
             reasoningAcc += d;
             display[tutorIdx].reasoning = reasoningAcc;
             this.setData({ display: [...display], scrollTo: "bottom" });

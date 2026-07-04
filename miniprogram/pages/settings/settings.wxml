@@ -40,5 +40,10 @@
     <switch checked="{{thinking}}" bindchange="onThinking"/>
   </view>
 
+  <view class="sect row" wx:if="{{thinking}}">
+    <view class="label">展示思考过程</view>
+    <switch checked="{{showReasoning}}" bindchange="onShowReasoning"/>
+  </view>
+
   <button class="btn primary" bindtap="save">保存并返回</button>
 </view>

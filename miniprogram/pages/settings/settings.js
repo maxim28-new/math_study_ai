@@ -17,6 +17,7 @@ Page({
     level: "middle",
     mode: "explore",
     thinking: false,
+    showReasoning: false,
     topics: [],
     levels: [],
     topicIndex: 0,
@@ -36,6 +37,7 @@ Page({
       level: s.level || "middle",
       mode: s.mode || "explore",
       thinking: !!s.thinking,
+      showReasoning: !!s.showReasoning,
     });
     this.loadRemote();
   },
@@ -64,7 +66,11 @@ Page({
   onBaseUrl(e) { this.setData({ baseUrl: e.detail.value.trim() }); },
   onUseDev(e) { this.setData({ useDev: !!e.detail.value }); },
   onName(e) { this.setData({ childName: e.detail.value }); },
-  onThinking(e) { this.setData({ thinking: !!e.detail.value }); },
+  onThinking(e) {
+    const thinking = !!e.detail.value;
+    this.setData({ thinking, showReasoning: thinking ? this.data.showReasoning : false });
+  },
+  onShowReasoning(e) { this.setData({ showReasoning: !!e.detail.value }); },
 
   onTopic(e) {
     const i = parseInt(e.detail.value, 10);
@@ -115,6 +121,7 @@ Page({
       level: this.data.level,
       mode: this.data.mode,
       thinking: this.data.thinking,
+      showReasoning: this.data.showReasoning,
       _updated: true,
     });
     wx.showToast({ title: "已保存" });
