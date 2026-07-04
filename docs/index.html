@@ -407,13 +407,16 @@ function withMath(s){MRE.lastIndex=0;let o="",l=0,m;while((m=MRE.exec(s))!==null
   else if(m[3]!=null)o+=rTex(m[3],false);else if(m[4]!=null)o+=rTex(m[4],true);
   l=MRE.lastIndex}if(l<s.length)o+=fmtPlain(s.slice(l));return o}
 function inl(s){return withMath(String(s))}
+const DTYPES=new Set(["dots","square_layers","square_steps","square_compare","numberline","bars"]);
+function tryDiag(t){t=String(t).trim();if(!t.startsWith("{"))return null;try{const s=JSON.parse(t);if(s&&typeof s.type==="string"&&DTYPES.has(s.type))return s}catch(e){}return null}
+function fenceDiagram(code){const sp=tryDiag(code);return renderDiagram(sp?JSON.stringify(sp):code.trim())||""}
 function md(text){
   const L=text.split("\n");let h="",list=null,para=[],fence=null;
   const cl=()=>{if(list){h+=`</${list}>`;list=null}};
-  const fp=()=>{if(para.length){h+=`<p>${para.map(inl).join("<br>")}</p>`;para=[]}};
-  const flushFence=()=>{const code=fence.buf.join("\n");
-    if(fence.lang==="xiaoou-draw"){const s=renderDiagram(code);if(s)h+=s;}
-    else if(code.trim())h+=`<pre class="code">${esc(code)}</pre>`;};
+  const fp=()=>{if(!para.length)return;let tl=[];const emit=()=>{if(tl.length){h+=`<p>${tl.map(inl).join("<br>")}</p>`;tl=[]}};
+    for(const ln of para){const sp=tryDiag(ln);if(sp){emit();const s=renderDiagram(JSON.stringify(sp));if(s)h+=s}else tl.push(ln)}
+    emit();para=[]};
+  const flushFence=()=>{const code=fence.buf.join("\n");const s=fenceDiagram(code);if(s)h+=s;else if(code.trim())h+=`<pre class="code">${esc(code)}</pre>`;};
   for(const raw of L){const ln=raw.trimEnd();
     const fm=ln.match(/^```\s*([\w-]*)\s*$/);
     if(fence){if(fm){flushFence();fence=null}else fence.buf.push(raw);continue}
