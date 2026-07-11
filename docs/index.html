@@ -50,12 +50,15 @@
   .msg .b ul,.msg .b ol{margin:5px 0;padding-left:20px}
   .msg .b code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:5px;font-size:14px}
   .msg .b .ph{max-width:min(220px,60vw);border-radius:10px;display:block;margin:2px 0 6px}
-  .tutor{align-self:flex-start}
+  .tutor{align-self:flex-start;display:grid;grid-template-columns:30px minmax(0,1fr);column-gap:8px;row-gap:0;align-items:start}
+  .tutor>.av{grid-column:1;grid-row:1 / span 2}
+  .tutor>.msg-body,.tutor>.reasoning,.tutor>.b{grid-column:2;min-width:0}
   .tutor .av{background:linear-gradient(135deg,var(--primary),#6f86ff)}
   .tutor .b{background:#fff;border:1px solid var(--line)}
   .tutor .reasoning{padding:7px 12px;background:#f3f3f3;color:#8a8a96;font-size:12.5px;line-height:1.5;
     border:1px solid var(--line);border-bottom:none;border-radius:14px 14px 0 0;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
   .tutor .reasoning:empty{display:none}
+  #chat.hide-reasoning .reasoning{display:none!important}
   .tutor .reasoning+.b{border-top-left-radius:0;border-top-right-radius:0}
   .child{align-self:flex-end;flex-direction:row-reverse}
   .child .av{background:linear-gradient(135deg,var(--accent),#f0b95e)}
@@ -167,7 +170,7 @@
       <button class="ic" id="drawBtn" aria-label="画板">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3 0z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z"></path><circle cx="11" cy="11" r="2"></circle></svg>
       </button>
-      <button class="ic" id="micBtn" aria-label="语音">
+      <button class="ic" id="micBtn" aria-label="语音" title="点一下开始说话，再点一下结束识别">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0"></path><path d="M12 17v5"></path></svg>
       </button>
       <textarea id="input" rows="1" placeholder="把你的想法告诉小欧…"></textarea>
@@ -499,6 +502,8 @@ function diagBars(s){const items=(Array.isArray(s.items)?s.items:[]).slice(0,8);
 
 /* ---------------- 渲染 ---------------- */
 function scroll(){const c=$("#chat");c.scrollTop=c.scrollHeight}
+function removeReasoningBlocks(){document.querySelectorAll(".reasoning").forEach(el=>el.remove())}
+function setReasoningVisibility(show){const c=$("#chat");if(c)c.classList.toggle("hide-reasoning",!show);if(!show)removeReasoningBlocks()}
 function getReasoningEl(bubble){
   if(!cfg.showReasoning)return null;
   const body=bubble.closest(".msg-body");if(!body)return null;
@@ -681,18 +686,23 @@ function clearImg(){pendingImage=null;$("#prevImg").removeAttribute("src");$("#p
 function setPendingImage(d){pendingImage=d;$("#prevImg").src=d;$("#prev").classList.remove("hidden")}
 
 /* ---------------- 语音输入 ---------------- */
-let recog=null,recognizing=false;
+let recog=null,recognizing=false,voiceWanted=false,voiceBase="",voiceParts=[],voiceTimer=null;
+function startRecogSafe(){if(!voiceWanted||!recog)return;try{recog.start()}catch(e){}}
+function finishVoice(){
+  voiceWanted=false;if(voiceTimer){clearTimeout(voiceTimer);voiceTimer=null}
+  const btn=$("#micBtn");btn.classList.remove("recording");btn.title="点一下开始说话，再点一下结束识别";
+  const t=voiceParts.join("").trim();if(t){$("#input").value=(voiceBase?voiceBase+" ":"")+t;autoGrow();$("#input").focus()}
+}
 function initVoice(){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;const btn=$("#micBtn");
   if(!SR){btn.disabled=true;btn.title="这个浏览器不支持语音输入";return}
-  recog=new SR();recog.lang="zh-CN";recog.interimResults=true;recog.continuous=false;
-  let base="";
-  recog.onstart=()=>{recognizing=true;btn.classList.add("recording")};
-  recog.onend=()=>{recognizing=false;btn.classList.remove("recording")};
-  recog.onerror=()=>{recognizing=false;btn.classList.remove("recording")};
-  recog.onresult=e=>{let t="";for(let i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;
-    $("#input").value=(base?base+" ":"")+t;autoGrow()};
-  btn.addEventListener("click",()=>{if(recognizing){recog.stop();return}base=$("#input").value.trim();try{recog.start()}catch(e){}});
+  btn.title="点一下开始说话，再点一下结束识别";
+  recog=new SR();recog.lang="zh-CN";recog.interimResults=false;recog.continuous=true;
+  recog.onstart=()=>{recognizing=true;btn.classList.add("recording");btn.title="正在听你说话，再点一下结束识别"};
+  recog.onend=()=>{recognizing=false;if(voiceWanted){voiceTimer=setTimeout(startRecogSafe,200);return}finishVoice()};
+  recog.onerror=e=>{recognizing=false;if(voiceWanted&&(e.error==="no-speech"||e.error==="network")){voiceTimer=setTimeout(startRecogSafe,300);return}if(e.error!=="aborted")finishVoice()};
+  recog.onresult=e=>{for(let i=e.resultIndex||0;i<e.results.length;i++)if(e.results[i].isFinal&&e.results[i][0]?.transcript)voiceParts.push(e.results[i][0].transcript)};
+  btn.addEventListener("click",()=>{if(voiceWanted||recognizing){voiceWanted=false;try{recog.stop()}catch(e){finishVoice()}return}voiceBase=$("#input").value.trim();voiceParts=[];voiceWanted=true;startRecogSafe()});
 }
 
 /* ---------------- 画板输入 ---------------- */
@@ -750,6 +760,7 @@ function syncThinkingUi(){
   $("#showReasoningLbl").style.display=srOn?"":"none";
   $("#cShowReasoning").style.display=srOn?"":"none";
   if(!on)cfg.showReasoning=false;
+  setReasoningVisibility(cfg.showReasoning);
 }
 function openDrawer(){
   $("#cName").value=cfg.name;$("#tBase").value=cfg.tBase;$("#tKey").value=cfg.tKey;$("#tModel").value=cfg.tModel;
@@ -764,6 +775,7 @@ function applySettings(){
   cfg.tModel=$("#tModel").value.trim()||(cfg.pipeline==="unified"?"qwen3.7-plus":"deepseek-v4-flash");
   cfg.thinking=$("#cThinking").value==="enabled";cfg.reasoningEffort=$("#cEffort").value;
   cfg.showReasoning=cfg.thinking&&$("#cShowReasoning").value==="on";
+  setReasoningVisibility(cfg.showReasoning);
   cfg.vBase=$("#vBase").value.trim()||"https://api-inference.modelscope.cn/v1";cfg.vKey=$("#vKey").value.trim();cfg.vModel=$("#vModel").value.trim()||"Qwen/Qwen2.5-VL-7B-Instruct";
   saveCfg();closeDrawer();
   if(!messages.length)renderAll();

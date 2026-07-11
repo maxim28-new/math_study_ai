@@ -337,6 +337,16 @@ function scrollToBottom() {
   m.scrollTop = m.scrollHeight;
 }
 
+function removeReasoningBlocks() {
+  document.querySelectorAll(".reasoning").forEach((el) => el.remove());
+}
+
+function setReasoningVisibility(show) {
+  const messages = $("#messages");
+  if (messages) messages.classList.toggle("hide-reasoning", !show);
+  if (!show) removeReasoningBlocks();
+}
+
 function getReasoningEl(tutorBubble) {
   if (!state.showReasoning) return null;
   const body = tutorBubble.closest(".msg-body");
@@ -440,6 +450,7 @@ async function loadConfig() {
   $("#thinkingSelect").value = state.thinking ? "on" : "off";
   $("#showReasoningSelect").value = state.showReasoning ? "on" : "off";
   syncReasoningUi();
+  setReasoningVisibility(state.showReasoning);
 
   $("#childName").value = state.childName;
 
@@ -500,6 +511,7 @@ function syncReasoningUi() {
       sel.value = "off";
     }
   }
+  setReasoningVisibility(state.showReasoning);
 }
 
 // 根据当前模式调整界面：探索模式突出"出个新题"、隐藏相机；带题模式相反。
@@ -627,6 +639,7 @@ async function streamAssistant(kickoff) {
           tutorBubble.innerHTML = renderMarkdown(acc);
           scrollToBottom();
         } else if (payload.reasoning_delta) {
+          if (!state.showReasoning) continue;
           reasoningAcc += payload.reasoning_delta;
           const rel = getReasoningEl(tutorBubble);
           if (rel) {
@@ -735,7 +748,40 @@ function setPendingImage(dataUrl) {
 }
 
 // ---------------- 语音输入（浏览器 Web Speech API） ----------------
-let recognition = null, recognizing = false;
+let recognition = null;
+let recognizing = false;
+let voiceWanted = false;
+let voiceBaseText = "";
+let voiceFinalParts = [];
+let voiceRestartTimer = null;
+
+function startRecognitionSafely() {
+  if (!voiceWanted || !recognition) return;
+  try {
+    recognition.start();
+  } catch (e) {
+    // Some browsers throw if start() is called while a previous session is closing.
+  }
+}
+
+function finishVoiceSession() {
+  voiceWanted = false;
+  if (voiceRestartTimer) {
+    clearTimeout(voiceRestartTimer);
+    voiceRestartTimer = null;
+  }
+  const micBtn = $("#micBtn");
+  micBtn.classList.remove("recording");
+  micBtn.title = "点一下开始说话，再点一下结束识别";
+  const transcript = voiceFinalParts.join("").trim();
+  if (transcript) {
+    const input = $("#input");
+    input.value = (voiceBaseText ? voiceBaseText + " " : "") + transcript;
+    autoGrow(input);
+    input.focus();
+  }
+}
+
 function initVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const micBtn = $("#micBtn");
@@ -746,23 +792,46 @@ function initVoice() {
   }
   recognition = new SR();
   recognition.lang = "zh-CN";
-  recognition.interimResults = true;
-  recognition.continuous = false;
-  let baseText = "";
-  recognition.onstart = () => { recognizing = true; micBtn.classList.add("recording"); };
-  recognition.onend = () => { recognizing = false; micBtn.classList.remove("recording"); };
-  recognition.onerror = () => { recognizing = false; micBtn.classList.remove("recording"); };
+  recognition.interimResults = false;
+  recognition.continuous = true;
+  recognition.onstart = () => {
+    recognizing = true;
+    micBtn.classList.add("recording");
+    micBtn.title = "正在听你说话，再点一下结束识别";
+  };
+  recognition.onend = () => {
+    recognizing = false;
+    if (voiceWanted) {
+      voiceRestartTimer = setTimeout(startRecognitionSafely, 200);
+      return;
+    }
+    finishVoiceSession();
+  };
+  recognition.onerror = (e) => {
+    recognizing = false;
+    if (voiceWanted && (e.error === "no-speech" || e.error === "network")) {
+      voiceRestartTimer = setTimeout(startRecognitionSafely, 300);
+      return;
+    }
+    if (e.error !== "aborted") finishVoiceSession();
+  };
   recognition.onresult = (e) => {
-    let txt = "";
-    for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
-    const input = $("#input");
-    input.value = (baseText ? baseText + " " : "") + txt;
-    autoGrow(input);
+    for (let i = e.resultIndex || 0; i < e.results.length; i++) {
+      if (e.results[i].isFinal && e.results[i][0] && e.results[i][0].transcript) {
+        voiceFinalParts.push(e.results[i][0].transcript);
+      }
+    }
   };
   micBtn.addEventListener("click", () => {
-    if (recognizing) { recognition.stop(); return; }
-    baseText = $("#input").value.trim();
-    try { recognition.start(); } catch (e) {}
+    if (voiceWanted || recognizing) {
+      voiceWanted = false;
+      try { recognition.stop(); } catch (e) { finishVoiceSession(); }
+      return;
+    }
+    voiceBaseText = $("#input").value.trim();
+    voiceFinalParts = [];
+    voiceWanted = true;
+    startRecognitionSafely();
   });
 }
 
@@ -883,6 +952,7 @@ function bindEvents() {
   });
   $("#showReasoningSelect").addEventListener("change", (e) => {
     state.showReasoning = e.target.value === "on";
+    setReasoningVisibility(state.showReasoning);
     saveSession();
   });
   $("#childName").addEventListener("input", (e) => {
