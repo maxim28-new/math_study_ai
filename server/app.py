@@ -12,7 +12,7 @@ from typing import Any, AsyncGenerator, Optional, Union
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -30,6 +30,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def disable_frontend_cache(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".css", ".js")):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 class Message(BaseModel):
@@ -269,14 +279,9 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 
 
 @app.get("/")
-def index() -> FileResponse:
-    return FileResponse(
-        WEB_DIR / "index.html",
-        headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-            "Pragma": "no-cache",
-        },
-    )
+def index() -> RedirectResponse:
+    # 换 URL，避免浏览器继续用已经打开的旧桌面页。
+    return RedirectResponse(url="/index.html?v=mobile-h5", status_code=302)
 
 
 # 其余静态资源（css / js）

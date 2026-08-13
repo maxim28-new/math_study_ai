@@ -56,6 +56,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("visualViewport", app)
         self.assertIn("手机版", html)
         self.assertIn("no-store", read("server/app.py"))
+        self.assertIn("RedirectResponse", read("server/app.py"))
         self.assertIn('HOST", "0.0.0.0"', read("server/config.py"))
 
 
