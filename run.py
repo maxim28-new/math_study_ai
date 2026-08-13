@@ -24,6 +24,7 @@ def lan_ip() -> Optional[str]:
 if __name__ == "__main__":
     print("=" * 56)
     print("  小欧 · 启发式数学老师（手机 H5）")
+    print("  若仍看到左侧设置栏，说明跑的是旧代码，请切到 cursor/kid-h5-d734 后重启")
     mode = "多模态一体（unified）" if settings.is_unified else "OCR + 文字（split）"
     print(f"  处理模式：{mode}")
     if settings.is_configured:

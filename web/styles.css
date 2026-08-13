@@ -63,7 +63,16 @@ button, input, select, textarea { font-family: inherit; }
   flex: 0 0 auto;
 }
 .brand-text { min-width: 0; }
-.brand-text h1 { margin: 0; font-size: 16px; font-weight: 700; }
+.brand-text h1 { margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.edition {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
 .brand-text p {
   margin: 1px 0 0;
   color: var(--ink-soft);

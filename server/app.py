@@ -270,7 +270,13 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(WEB_DIR / "index.html")
+    return FileResponse(
+        WEB_DIR / "index.html",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 # 其余静态资源（css / js）
