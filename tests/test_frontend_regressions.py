@@ -47,9 +47,13 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('apple-mobile-web-app-capable', html)
         self.assertIn('id="gearBtn"', html)
         self.assertIn('id="drawer"', html)
+        self.assertIn('id="plusBtn"', html)
+        self.assertIn('id="attachSheet"', html)
         self.assertNotIn('grid-template-columns: 320px 1fr', css)
         self.assertIn("100dvh", css)
+        self.assertIn(".sheet-handle", css)
         self.assertIn("function openDrawer()", app)
+        self.assertIn("visualViewport", app)
         self.assertIn('HOST", "0.0.0.0"', read("server/config.py"))
 
 
