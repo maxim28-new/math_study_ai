@@ -529,8 +529,8 @@ function applyModeUI() {
 
   const input = $("#input");
   input.placeholder = explore
-    ? "把你的想法告诉小欧……（回车发送，Shift+回车换行）"
-    : "把题目告诉小欧，或点相机拍下作业本……（回车发送，Shift+回车换行）";
+    ? "把你的想法告诉小欧…"
+    : "把题目告诉小欧，或点相机拍照…";
 
   const tip = document.querySelector(".composer .tip");
   if (tip) {
@@ -916,6 +916,15 @@ function autoGrow(el) {
   el.style.height = Math.min(el.scrollHeight, 160) + "px";
 }
 
+function openDrawer() {
+  const drawer = $("#drawer");
+  if (drawer) drawer.classList.add("open");
+}
+function closeDrawer() {
+  const drawer = $("#drawer");
+  if (drawer) drawer.classList.remove("open");
+}
+
 function bindEvents() {
   const input = $("#input");
   input.addEventListener("input", () => autoGrow(input));
@@ -935,6 +944,17 @@ function bindEvents() {
     b.addEventListener("click", () => switchMode(b.dataset.mode));
   });
   $("#exploreBtn").addEventListener("click", () => startExplore());
+
+  const gear = $("#gearBtn");
+  if (gear) gear.addEventListener("click", openDrawer);
+  const drawerClose = $("#drawerClose");
+  if (drawerClose) drawerClose.addEventListener("click", closeDrawer);
+  const drawer = $("#drawer");
+  if (drawer) {
+    drawer.addEventListener("click", (e) => {
+      if (e.target === drawer) closeDrawer();
+    });
+  }
 
   $("#topicSelect").addEventListener("change", (e) => {
     state.topicKey = e.target.value;

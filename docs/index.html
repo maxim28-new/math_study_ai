@@ -4,7 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#4f6bed" />
-<title>小欧 · 启发式数学老师（手机体验版）</title>
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="小欧" />
+<title>小欧 · 陪你想数学</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 <style>
@@ -132,6 +134,8 @@
   .save{width:100%;padding:12px;border:none;border-radius:12px;background:var(--primary);color:#fff;font-size:15px;cursor:pointer;margin-top:4px}
   .clear{width:100%;padding:11px;border:1px dashed var(--primary);border-radius:12px;background:transparent;color:var(--primary);font-size:14px;cursor:pointer;margin-top:10px}
   .warn{background:#fff4e5;border:1px solid #f3d6a5;color:#935b12;border-radius:10px;padding:9px 11px;font-size:12px;line-height:1.55;margin-bottom:12px}
+  details.adv{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:14px}
+  details.adv>summary{cursor:pointer;font-size:13.5px;color:var(--primary);font-weight:600}
 </style>
 </head>
 <body>
@@ -195,8 +199,8 @@
   <!-- 设置抽屉 -->
   <div class="drawer" id="drawer">
     <div class="sheet">
-      <h2>设置</h2>
-      <p class="sub">密钥只存在你这台手机的浏览器里，只会直接发给模型服务商，不经过任何中间服务器。</p>
+      <h2>家长设置</h2>
+      <p class="sub">孩子平时只看到聊天。密钥只存在这台手机，不经过中间服务器。</p>
 
       <div class="grp">
         <h3>孩子与主题</h3>
@@ -210,6 +214,19 @@
       </div>
 
       <div class="grp">
+        <h3>主模型密钥（家长填一次即可）</h3>
+        <p class="hint" id="textHint">推荐 DeepSeek：中文好、便宜、手机网页可直连。填好密钥后点「保存并开始」，孩子就能聊了。</p>
+        <label>接口地址</label>
+        <input id="tBase" placeholder="https://api.deepseek.com/v1" />
+        <label>密钥 API Key</label>
+        <input id="tKey" type="password" placeholder="sk-..." />
+        <label>模型名</label>
+        <input id="tModel" placeholder="deepseek-v4-flash" />
+      </div>
+
+      <details class="adv">
+        <summary>高级选项（处理模式 / 思考 / 拍照 OCR）</summary>
+      <div class="grp">
         <h3>处理模式</h3>
         <label>题目怎么处理</label>
         <select id="cPipeline">
@@ -220,14 +237,7 @@
       </div>
 
       <div class="grp">
-        <h3>主模型（文字 · unified 时也负责看图）</h3>
-        <p class="hint" id="textHint">split 模式填文字教学模型；unified 模式填多模态模型（如 qwen3.7-plus）。</p>
-        <label>接口地址</label>
-        <input id="tBase" placeholder="https://api.deepseek.com/v1" />
-        <label>密钥 API Key</label>
-        <input id="tKey" type="password" placeholder="sk-..." />
-        <label>模型名</label>
-        <input id="tModel" placeholder="deepseek-v4-flash" />
+        <h3>思考与拍照 OCR</h3>
         <label>思考模式（DeepSeek / 通义）</label>
         <select id="cThinking">
           <option value="disabled">关闭 · 回答更快（推荐日常）</option>
@@ -255,6 +265,7 @@
         <label>模型名</label>
         <input id="vModel" placeholder="Qwen/Qwen2.5-VL-7B-Instruct" />
       </div>
+      </details>
 
       <button class="save" id="saveBtn">保存并开始</button>
       <button class="clear" id="clearBtn">清空当前对话</button>
