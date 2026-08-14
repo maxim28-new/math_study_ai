@@ -33,6 +33,12 @@ class Settings:
     show_reasoning: bool   # 开启 thinking 时，是否在界面灰色展示思考过程
     host: str
     port: int
+    # 公网访问验证码。默认 maxim；设为 off/disabled/none 则关闭门禁。
+    access_code: str
+
+    @property
+    def gate_enabled(self) -> bool:
+        return bool(self.access_code)
 
     @property
     def is_configured(self) -> bool:
@@ -114,7 +120,18 @@ def load_settings() -> Settings:
         show_reasoning=show_reasoning,
         host=os.getenv("HOST", "0.0.0.0").strip(),
         port=int(os.getenv("PORT", "8000")),
+        access_code=_load_access_code(),
     )
+
+
+def _load_access_code() -> str:
+    raw = os.getenv("ACCESS_CODE")
+    if raw is None or raw.strip() == "":
+        return "maxim"
+    code = raw.strip()
+    if code.lower() in ("off", "disabled", "none"):
+        return ""
+    return code
 
 
 settings = load_settings()

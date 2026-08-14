@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#3f5bd6" />
+  <title>小欧 · 请输入验证码</title>
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: #2a241c;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(1200px 480px at 10% -10%, rgba(63, 91, 214, 0.12), transparent 55%),
+        radial-gradient(900px 420px at 110% 0%, rgba(224, 154, 44, 0.16), transparent 50%),
+        #e8dfd0;
+    }
+    .wrap {
+      max-width: 390px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      padding: calc(28px + env(safe-area-inset-top)) 22px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .card {
+      background: #fffaf2;
+      border-radius: 24px;
+      padding: 28px 22px 24px;
+      box-shadow: 0 10px 28px rgba(62, 48, 24, 0.08);
+    }
+    .mark {
+      width: 48px; height: 48px;
+      display: grid; place-items: center;
+      color: #fff;
+      background: linear-gradient(160deg, #6b7ef0, #3f5bd6 55%, #2f4ab8);
+      border-radius: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 6px 14px rgba(63, 91, 214, .28);
+    }
+    h1 { margin: 0 0 6px; font-size: 22px; }
+    p { margin: 0 0 18px; color: #7a7166; font-size: 15px; line-height: 1.5; }
+    label { display: block; font-size: 13px; font-weight: 650; margin-bottom: 8px; }
+    input[type="password"], input[type="text"] {
+      width: 100%;
+      font-size: 18px;
+      letter-spacing: 0.08em;
+      padding: 12px 14px;
+      border: 1px solid #eadfce;
+      border-radius: 14px;
+      background: #fff;
+      outline: none;
+    }
+    input:focus { border-color: #3f5bd6; box-shadow: 0 0 0 3px #eef1ff; }
+    button {
+      margin-top: 16px;
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 16px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      background: #3f5bd6;
+    }
+    button:disabled { opacity: .6; }
+    .err { min-height: 22px; margin: 10px 0 0; color: #c0392b; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="24" cy="14" r="6"></circle>
+          <path d="M18 20 L10 40"></path>
+          <path d="M30 20 L38 40"></path>
+          <path d="M10 40 L38 40"></path>
+        </svg>
+      </div>
+      <h1>小欧</h1>
+      <p>这是家里的学习页。请先输入验证码，再开始玩。</p>
+      <form id="gateForm">
+        <label for="codeInput">验证码</label>
+        <input id="codeInput" name="code" type="password" autocomplete="current-password" required autofocus />
+        <button type="submit" id="unlockBtn">进入</button>
+        <p class="err" id="errBox"></p>
+      </form>
+    </div>
+  </div>
+  <script>
+    const form = document.getElementById("gateForm");
+    const input = document.getElementById("codeInput");
+    const btn = document.getElementById("unlockBtn");
+    const err = document.getElementById("errBox");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.textContent = "";
+      btn.disabled = true;
+      try {
+        const resp = await fetch("/api/unlock", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ code: input.value }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          err.textContent = data.error || "验证码不对";
+          return;
+        }
+        window.location.replace("/");
+      } catch (ex) {
+        err.textContent = "网络有点问题，请再试一次。";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
