@@ -227,6 +227,14 @@ function destroyMountedActivities() {
   state.mountedActivities = [];
 }
 
+function clearActivitySession() {
+  if (state.milestoneTimer) { clearTimeout(state.milestoneTimer); state.milestoneTimer = null; }
+  state.pendingMilestone = null;
+  state.queuedMilestone = null;
+  state.boards = [];
+  destroyMountedActivities();
+}
+
 function hydrateSnapGrids(bubble, interactive) {
   if (!bubble || !window.XiaoouActivity || !XiaoouActivity.mountSnapGrid) return;
   const hosts = bubble.querySelectorAll("figure.diagram[data-snap-grid]");
@@ -791,6 +799,7 @@ function switchMode(mode) {
   state.mode = mode;
   state.messages = [];
   clearPendingImage();
+  clearActivitySession();
   saveSession();
   applyModeUI();
   renderHistory();
@@ -1122,6 +1131,7 @@ function bindEvents() {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
     state.messages = [];
     clearPendingImage();
+    clearActivitySession();
     saveSession();
     renderHistory();
   });

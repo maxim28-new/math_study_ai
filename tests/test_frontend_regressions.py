@@ -114,6 +114,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("MILESTONE_DEBOUNCE_MS = 400", app)
         self.assertIn("function sendActivityMilestone(", app)
         self.assertIn("activity-status", app)
+        self.assertIn("function clearActivitySession(", app)
+        self.assertIn("clearActivitySession()", app)
 
 
 if __name__ == "__main__":
