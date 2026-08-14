@@ -20,6 +20,9 @@ const state = {
   milestoneTimer: null,
   pendingMilestone: null,
   queuedMilestone: null,
+  stageSpec: null,
+  talkOpen: false,
+  toastTimer: null,
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -234,11 +237,198 @@ function clearActivitySession() {
   state.pendingMilestone = null;
   state.queuedMilestone = null;
   state.boards = [];
+  state.stageSpec = null;
   destroyMountedActivities();
+}
+
+function setCaption(text) {
+  const el = $("#tutorCaption");
+  if (el) el.textContent = text || "";
+}
+
+function showStartPlay() {
+  const wrap = $("#startPlayWrap");
+  const play = $(".play-stage");
+  if (wrap) wrap.classList.remove("hidden");
+  if (play) play.classList.remove("is-playing");
+  const tools = $("#stageTools");
+  if (tools) tools.classList.add("hidden");
+}
+
+function hideStartPlay() {
+  const wrap = $("#startPlayWrap");
+  const play = $(".play-stage");
+  if (wrap) wrap.classList.add("hidden");
+  if (play) play.classList.add("is-playing");
+}
+
+function resetExploreEmpty() {
+  destroyMountedActivities();
+  state.stageSpec = null;
+  const host = $("#stageHost");
+  if (host) host.innerHTML = "";
+  setCaption("点开始玩，把方块拖进格子");
+  showStartPlay();
+}
+
+function updateTrayUi() {
+  const live = state.liveActivities[state.liveActivities.length - 1];
+  const snap = live && live.getSnapshot ? live.getSnapshot() : null;
+  const count = $("#trayCount");
+  if (count && window.XiaoouActivity && XiaoouActivity.trayCountLabel) {
+    count.textContent = XiaoouActivity.trayCountLabel(snap ? snap.tray_left : 0);
+  }
+  const undoBtn = $("#undoTileBtn");
+  if (undoBtn) undoBtn.disabled = !(live && live.canUndo && live.canUndo());
+}
+
+function showStageToast(text) {
+  const el = $("#stageToast");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove("hidden");
+  if (state.toastTimer) clearTimeout(state.toastTimer);
+  state.toastTimer = setTimeout(() => {
+    el.classList.add("hidden");
+    state.toastTimer = null;
+  }, 900);
+}
+
+function remountStage(spec, occupied) {
+  if (!spec || !window.XiaoouActivity) return;
+  freezeLiveActivities();
+  state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
+  state.mountedActivities = [];
+  state.stageSpec = spec;
+  state.boards = [{ occupied: occupied || [], trayLeft: 0 }];
+  hideStartPlay();
+  const host = $("#stageHost");
+  if (!host) return;
+  host.innerHTML = XiaoouActivity.renderSnapGridPlaceholder(spec);
+  const tools = $("#stageTools");
+  if (tools) tools.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      hydrateSnapGrids(host, true);
+      updateTrayUi();
+    });
+  });
+}
+
+function lastSnapGridSpec(text) {
+  if (!window.XiaoouActivity || !XiaoouActivity.parseSnapGrid) return null;
+  let spec = null;
+  const re = /```(?:xiaoou-draw|json)?\s*([\s\S]*?)```/g;
+  let m;
+  while ((m = re.exec(String(text || ""))) !== null) {
+    const parsed = XiaoouActivity.parseSnapGrid(m[1]);
+    if (parsed) spec = parsed;
+  }
+  String(text || "").split("\n").forEach((line) => {
+    const parsed = XiaoouActivity.parseSnapGrid(line.trim());
+    if (parsed) spec = parsed;
+  });
+  return spec;
+}
+
+function lastStaticDiagramHtml(text) {
+  const html = renderMarkdown(String(text || ""));
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  const figs = div.querySelectorAll("figure.diagram");
+  if (!figs.length) return "";
+  return figs[figs.length - 1].outerHTML;
+}
+
+function syncStageFromTutor(text) {
+  const spec = lastSnapGridSpec(text);
+  if (spec) {
+    if (window.XiaoouActivity && XiaoouActivity.sameSnapGrid(state.stageSpec, spec)) return;
+    remountStage(spec, []);
+    return;
+  }
+  const html = lastStaticDiagramHtml(text);
+  if (!html) return;
+  freezeLiveActivities();
+  state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
+  state.mountedActivities = [];
+  state.stageSpec = null;
+  hideStartPlay();
+  const host = $("#stageHost");
+  if (host) host.innerHTML = html;
+  const tools = $("#stageTools");
+  if (tools) tools.classList.add("hidden");
+}
+
+function restoreStageFromHistory() {
+  const lastAsst = [...state.messages].reverse().find((m) => m.role === "assistant" && typeof m.content === "string");
+  if (lastAsst && window.XiaoouActivity && XiaoouActivity.tutorCaption) {
+    const cap = XiaoouActivity.tutorCaption(lastAsst.content);
+    if (cap) setCaption(cap);
+  }
+  if (!lastAsst) return;
+  const spec = lastSnapGridSpec(lastAsst.content);
+  if (spec) {
+    const occ = (state.boards.length && state.boards[state.boards.length - 1].occupied) || [];
+    remountStage(spec, occ);
+    return;
+  }
+  syncStageFromTutor(lastAsst.content);
+}
+
+async function startPlay() {
+  if (state.streaming) return;
+  if (state.config && !state.config.configured) return;
+  hideStartPlay();
+  const spec = window.XiaoouActivity
+    ? XiaoouActivity.parseSnapGrid(XiaoouActivity.DEFAULT_SNAP_GRID)
+    : null;
+  if (spec) remountStage(spec, []);
+  setCaption("先随便摆摆，小欧马上出题。");
+  applyModeUI();
+  await streamAssistant(true);
+}
+
+function placeMessages() {
+  const messages = $("#messages");
+  const historyMount = $("#historyMount");
+  const app = $(".app");
+  const composer = $(".composer");
+  if (!messages) return;
+  if (state.mode === "explore" && historyMount) historyMount.appendChild(messages);
+  else if (app && composer) app.insertBefore(messages, composer);
+}
+
+function setTalkOpen(on) {
+  state.talkOpen = !!on;
+  const app = $(".app");
+  if (app) app.classList.toggle("talk-open", state.talkOpen);
+  const talkBtn = $("#talkBtn");
+  if (talkBtn) talkBtn.textContent = state.talkOpen ? "收起" : "想跟小欧说";
+}
+
+function openHistorySheet() {
+  placeMessages();
+  const sheet = $("#historySheet");
+  if (sheet) sheet.classList.add("open");
+  scrollToBottom();
+}
+function closeHistorySheet() {
+  const sheet = $("#historySheet");
+  if (sheet) sheet.classList.remove("open");
+}
+function openHelpSheet() {
+  const sheet = $("#helpSheet");
+  if (sheet) sheet.classList.add("open");
+}
+function closeHelpSheet() {
+  const sheet = $("#helpSheet");
+  if (sheet) sheet.classList.remove("open");
 }
 
 function hydrateSnapGrids(bubble, interactive) {
   if (!bubble || !window.XiaoouActivity || !XiaoouActivity.mountSnapGrid) return;
+  if (!interactive && state.mode === "explore") return;
   const hosts = bubble.querySelectorAll("figure.diagram[data-snap-grid]");
   hosts.forEach((host, i) => {
     const spec = XiaoouActivity.parseSnapGrid(decodeURIComponent(host.getAttribute("data-spec") || ""));
@@ -258,6 +448,8 @@ function hydrateSnapGrids(bubble, interactive) {
 function onSnapGridSettled(snapshot, eventName) {
   state.boards = collectBoards();
   saveSession();
+  updateTrayUi();
+  if (eventName === "board_full") showStageToast("摆好了");
   if (!eventName) {
     if (state.pendingMilestone && !XiaoouActivity.milestoneHolds(state.pendingMilestone.event, snapshot)) {
       state.pendingMilestone = null;
@@ -541,26 +733,32 @@ function renderWelcome() {
   const topic = state.topics.find((t) => t.key === state.topicKey);
   const name = state.childName ? `${state.childName}，` : "";
   const bubble = addMessageEl("tutor");
-  let body;
-  if (state.mode === "explore") {
-    const tname = topic ? topic.name : "这个主题";
-    body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n今天想玩 **${tname}**。点上面的主题可以换；点下面 **✨ 出个新题**，我就出一个能动手摆的小问题。`;
-  } else {
-    const starter = topic ? topic.starter : "";
-    body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「带题来问」模式。${starter}`;
-  }
+  const starter = topic ? topic.starter : "";
+  const body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「带题来问」模式。${starter}`;
   bubble.innerHTML = renderMarkdown(body);
 }
 
 function renderHistory() {
   destroyMountedActivities();
+  state.stageSpec = null;
   $("#messages").innerHTML = "";
-  if (state.messages.length === 0) { renderWelcome(); return; }
+  if (state.messages.length === 0) {
+    if (state.mode === "explore") {
+      resetExploreEmpty();
+    } else {
+      renderWelcome();
+    }
+    applyModeUI();
+    return;
+  }
+  hideStartPlay();
   for (const m of state.messages) {
     const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
     renderContentInto(bubble, m.content);
     if (m.role === "assistant") hydrateSnapGrids(bubble, false);
   }
+  if (state.mode === "explore") restoreStageFromHistory();
+  applyModeUI();
 }
 
 // ---------------- 配置加载 ----------------
@@ -615,13 +813,27 @@ async function loadConfig() {
   // 快捷按钮
   const qa = $("#quickActions");
   qa.innerHTML = "";
+  const help = $("#helpActions");
+  if (help) help.innerHTML = "";
   cfg.quick_actions.forEach((a) => {
-    const b = document.createElement("button");
-    b.textContent = a.label;
-    b.dataset.message = a.message;
-    b.addEventListener("click", () => sendMessage(a.message));
-    qa.appendChild(b);
+    const make = (into) => {
+      if (!into) return;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = a.label;
+      b.dataset.message = a.message;
+      b.addEventListener("click", () => {
+        closeHelpSheet();
+        sendMessage(a.message);
+      });
+      into.appendChild(b);
+    };
+    make(qa);
+    make(help);
   });
+
+  const modeSel = $("#modeSelect");
+  if (modeSel) modeSel.value = state.mode;
 
   // 拍照按钮：未连接模型时禁用并提示
   const attach = $("#attachBtn");
@@ -675,18 +887,28 @@ function syncReasoningUi() {
 // 根据当前模式调整界面：探索模式突出"出个新题"、隐藏相机；带题模式相反。
 function applyModeUI() {
   const explore = state.mode === "explore";
-  document.querySelectorAll("#modeSwitch .mode-btn").forEach((b) => {
-    b.classList.toggle("active", b.dataset.mode === state.mode);
-  });
+  const app = $(".app");
+  if (app) {
+    app.classList.toggle("layout-explore", explore);
+    app.classList.toggle("layout-bring", !explore);
+  }
+  placeMessages();
+  if (!explore) setTalkOpen(true);
+  else if (!state.talkOpen) setTalkOpen(false);
+
   const exploreBtn = $("#exploreBtn");
-  exploreBtn.classList.toggle("hidden", !explore);
-  if (state.config && !state.config.configured) exploreBtn.disabled = true;
+  if (exploreBtn) exploreBtn.classList.add("hidden");
+  if (state.config && !state.config.configured) {
+    if (exploreBtn) exploreBtn.disabled = true;
+    const startBtn = $("#startPlayBtn");
+    if (startBtn) startBtn.disabled = true;
+  }
 
   const attach = $("#attachBtn");
   if (attach) attach.classList.toggle("hidden", explore);
 
   const input = $("#input");
-  input.placeholder = explore ? "说给你听，或打字…" : "拍题或打字告诉小欧…";
+  if (input) input.placeholder = explore ? "说给你听，或打字…" : "拍题或打字告诉小欧…";
 
   const line = $("#topicLine");
   if (line) {
@@ -696,6 +918,17 @@ function applyModeUI() {
   }
   const chip = $("#topicChip");
   if (chip) chip.setAttribute("aria-expanded", "false");
+
+  const modeSel = $("#modeSelect");
+  if (modeSel) modeSel.value = state.mode;
+
+  const started = explore && ($(".play-stage") && $(".play-stage").classList.contains("is-playing") || state.messages.length > 0);
+  const helpBtn = $("#helpBtn");
+  const talkBtn = $("#talkBtn");
+  const historyBtn = $("#historyBtn");
+  if (helpBtn) helpBtn.classList.toggle("hidden", !explore || !started);
+  if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
+  if (historyBtn) historyBtn.disabled = !explore;
 }
 
 function updatePhotoHint(cfg) {
@@ -804,6 +1037,10 @@ async function streamAssistant(kickoff) {
         if (payload.delta) {
           acc += payload.delta;
           tutorBubble.innerHTML = renderMarkdown(acc);
+          if (state.mode === "explore" && window.XiaoouActivity && XiaoouActivity.tutorCaption) {
+            const cap = XiaoouActivity.tutorCaption(acc);
+            if (cap) setCaption(cap);
+          }
           scrollToBottom();
         } else if (payload.reasoning_delta) {
           if (!state.showReasoning) continue;
@@ -836,9 +1073,17 @@ async function streamAssistant(kickoff) {
   if (acc.trim()) {
     state.messages.push({ role: "assistant", content: acc });
     saveSession();
-    const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
-    if (hasGrid) freezeLiveActivities();
-    hydrateSnapGrids(tutorBubble, true);
+    if (state.mode === "explore") {
+      const cap = window.XiaoouActivity && XiaoouActivity.tutorCaption
+        ? XiaoouActivity.tutorCaption(acc)
+        : "";
+      if (cap) setCaption(cap);
+      syncStageFromTutor(acc);
+    } else {
+      const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
+      if (hasGrid) freezeLiveActivities();
+      hydrateSnapGrids(tutorBubble, true);
+    }
     saveSession();
   }
   setStreaming(false);
@@ -856,15 +1101,24 @@ function setStreaming(on) {
   if (attach && state.config && state.config.vision_enabled) attach.disabled = on;
   const exploreBtn = $("#exploreBtn");
   if (exploreBtn && state.config && state.config.configured) exploreBtn.disabled = on;
-  document.querySelectorAll(".quick-actions button").forEach((b) => (b.disabled = on));
+  const startBtn = $("#startPlayBtn");
+  if (startBtn && state.config && state.config.configured) startBtn.disabled = on;
+  const newQ = $("#newQuestionBtn");
+  if (newQ) newQ.disabled = on;
+  document.querySelectorAll(".quick-actions button, #helpActions button").forEach((b) => (b.disabled = on));
 }
 
 // 切换探究模式。切换会清空当前对话（因为教学设定不同）。
 function switchMode(mode) {
   if (mode === state.mode || state.streaming) return;
-  if (state.messages.length && !confirm("切换模式会清空当前对话，确定吗？")) return;
+  if (state.messages.length && !confirm("切换模式会清空当前对话，确定吗？")) {
+    const modeSel = $("#modeSelect");
+    if (modeSel) modeSel.value = state.mode;
+    return;
+  }
   state.mode = mode;
   state.messages = [];
+  state.talkOpen = false;
   clearPendingImage();
   clearActivitySession();
   saveSession();
@@ -1182,6 +1436,55 @@ function bindEvents() {
     b.addEventListener("click", () => switchMode(b.dataset.mode));
   });
   $("#exploreBtn").addEventListener("click", () => startExplore());
+  const startPlayBtn = $("#startPlayBtn");
+  if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
+  const talkBtn = $("#talkBtn");
+  if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
+  const helpBtn = $("#helpBtn");
+  if (helpBtn) helpBtn.addEventListener("click", openHelpSheet);
+  const helpCancel = $("#helpCancel");
+  if (helpCancel) helpCancel.addEventListener("click", closeHelpSheet);
+  const helpSheet = $("#helpSheet");
+  if (helpSheet) {
+    helpSheet.addEventListener("click", (e) => {
+      if (e.target === helpSheet) closeHelpSheet();
+    });
+  }
+  const newQuestionBtn = $("#newQuestionBtn");
+  if (newQuestionBtn) {
+    newQuestionBtn.addEventListener("click", () => {
+      closeHelpSheet();
+      startExplore();
+    });
+  }
+  const historyBtn = $("#historyBtn");
+  if (historyBtn) historyBtn.addEventListener("click", openHistorySheet);
+  const historyClose = $("#historyClose");
+  if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
+  const historySheet = $("#historySheet");
+  if (historySheet) {
+    historySheet.addEventListener("click", (e) => {
+      if (e.target === historySheet) closeHistorySheet();
+    });
+  }
+  const undoTileBtn = $("#undoTileBtn");
+  if (undoTileBtn) {
+    undoTileBtn.addEventListener("click", () => {
+      const live = state.liveActivities[state.liveActivities.length - 1];
+      if (live && live.undo) live.undo();
+    });
+  }
+  const homeworkBtn = $("#homeworkBtn");
+  if (homeworkBtn) {
+    homeworkBtn.addEventListener("click", () => {
+      closeAttachSheet();
+      switchMode("bring");
+    });
+  }
+  const modeSelect = $("#modeSelect");
+  if (modeSelect) {
+    modeSelect.addEventListener("change", (e) => switchMode(e.target.value));
+  }
 
   const plus = $("#plusBtn");
   if (plus) plus.addEventListener("click", openAttachSheet);

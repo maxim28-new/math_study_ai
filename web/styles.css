@@ -577,3 +577,189 @@ button, input, select, textarea { font-family: inherit; }
 .msg.child .bubble .activity-status {
   color: rgba(255, 255, 255, 0.95);
 }
+
+.chip-quiet {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset;
+  border: 1px solid var(--line);
+}
+.talk-btn {
+  width: 100%;
+  margin-bottom: 8px;
+  border: none;
+  border-radius: 16px;
+  padding: 12px 16px;
+  font-size: 16px;
+  font-weight: 750;
+  color: var(--primary);
+  background: var(--primary-soft);
+  cursor: pointer;
+}
+.talk-btn.hidden { display: none !important; }
+
+.app.layout-explore {
+  display: flex;
+  flex-direction: column;
+}
+.app.layout-explore .explore-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding: 8px 12px 0;
+}
+.app.layout-bring .explore-stage { display: none; }
+.app.layout-explore > .messages { display: none; }
+.app.layout-bring > .messages { display: flex; flex: 1; }
+
+.explore-stage .caption-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+#tutorCaption {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.history-btn {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.play-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #fff, #fbf7ef);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.start-play {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px;
+}
+.start-play.hidden { display: none; }
+.start-kicker {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  font-weight: 650;
+}
+.start-play-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 16px 40px;
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(160deg, #6b7ef0, var(--primary));
+  box-shadow: 0 10px 22px rgba(63, 91, 214, .28);
+  cursor: pointer;
+}
+.start-play-btn:disabled { opacity: .5; }
+
+.stage-host {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  overflow: hidden;
+}
+.play-stage.is-playing .stage-host { display: flex; }
+.stage-host .snap-grid,
+.stage-host .diagram {
+  width: 100%;
+  margin: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+.stage-host .snap-grid-stage {
+  width: 100%;
+}
+
+.stage-toast {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  background: rgba(42, 36, 28, .88);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 750;
+  pointer-events: none;
+}
+.stage-toast.hidden { display: none; }
+
+.stage-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 4px 4px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 650;
+}
+.stage-tools.hidden { display: none; }
+#undoTileBtn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#undoTileBtn:disabled { opacity: .4; }
+
+.app.layout-explore:not(.talk-open) #inputRow,
+.app.layout-explore:not(.talk-open) #imgPreview { display: none; }
+.app.layout-bring .talk-btn,
+.app.layout-bring #helpBtn { display: none !important; }
+.app.layout-explore .quick-actions { display: none; }
+.app.layout-bring #homeworkBtn { display: none; }
+
+.history-sheet {
+  max-height: 88dvh;
+  height: 80dvh;
+}
+.history-mount {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.history-mount .messages {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}

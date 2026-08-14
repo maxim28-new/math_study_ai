@@ -16,6 +16,18 @@
     return A.makeSnapshot(spec, filled, trayCount);
   }
 
+  function clonePlace(p) {
+    if (!p) return { kind: "tray", index: 0 };
+    if (p.kind === "cell") return { kind: "cell", r: p.r, c: p.c };
+    return { kind: "tray", index: p.index || 0 };
+  }
+
+  function placesEqual(a, b) {
+    if (!a || !b || a.kind !== b.kind) return false;
+    if (a.kind === "cell") return a.r === b.r && a.c === b.c;
+    return true;
+  }
+
   A.mountSnapGrid = function mountSnapGrid(host, spec, options) {
     options = options || {};
     spec = spec || (host && host.getAttribute("data-spec")
@@ -26,6 +38,8 @@
       destroy() {},
       getSnapshot() { return spec ? A.makeSnapshot(spec, 0, spec.tray) : null; },
       getOccupancy() { return { occupied: [], trayLeft: spec ? spec.tray : 0 }; },
+      undo() { return false; },
+      canUndo() { return false; },
     };
     if (!spec || !host) return emptyHandle;
     if (typeof Konva === "undefined") {
@@ -41,7 +55,7 @@
     const pad = 10;
     const cell = Math.max(
       CELL_MIN,
-      Math.min(56, Math.floor((width - pad * 2 - gap * (spec.cols - 1)) / spec.cols))
+      Math.min(72, Math.floor((width - pad * 2 - gap * (spec.cols - 1)) / spec.cols))
     );
     const gridH = spec.rows * cell + (spec.rows - 1) * gap;
     const trayTop = pad + gridH + 18;
@@ -79,6 +93,7 @@
     }
 
     const tiles = [];
+    const history = [];
     let trayCount = 0;
 
     function reindexTray() {
@@ -117,7 +132,27 @@
       return { occupied: occupied, trayLeft: trayCount };
     }
 
+    function emitSettled() {
+      const next = occupancySnapshot(spec, cells, trayCount);
+      const eventName = A.detectMilestone(lastSnap, next);
+      lastSnap = next;
+      if (typeof options.onSettled === "function") options.onSettled(next, eventName);
+    }
+
+    function applyPlace(tile, place) {
+      if (tile.place.kind === "cell") cells[tile.place.r][tile.place.c] = null;
+      if (place && place.kind === "cell" && !cells[place.r][place.c]) {
+        tile.place = { kind: "cell", r: place.r, c: place.c };
+        cells[place.r][place.c] = tile;
+        tile.group.position({ x: cellRects[place.r][place.c].x, y: cellRects[place.r][place.c].y });
+      } else {
+        tile.place = { kind: "tray", index: 0 };
+      }
+      reindexTray();
+    }
+
     function settle(tile) {
+      const from = clonePlace(tile.place);
       const pos = tile.group.position();
       if (tile.place.kind === "cell") cells[tile.place.r][tile.place.c] = null;
       const hit = nearestCell(pos.x, pos.y);
@@ -129,11 +164,9 @@
         tile.place = { kind: "tray", index: 0 };
       }
       reindexTray();
+      if (!placesEqual(from, clonePlace(tile.place))) history.push({ tile: tile, from: from });
       layer.draw();
-      const next = occupancySnapshot(spec, cells, trayCount);
-      const eventName = A.detectMilestone(lastSnap, next);
-      lastSnap = next;
-      if (typeof options.onSettled === "function") options.onSettled(next, eventName);
+      emitSettled();
     }
 
     const startOccupied = Array.isArray(options.occupied) ? options.occupied.slice() : [];
@@ -184,8 +217,26 @@
     function getOccupancy() {
       return readOccupancy();
     }
+    function undo() {
+      const step = history.pop();
+      if (!step) return false;
+      applyPlace(step.tile, step.from);
+      layer.draw();
+      emitSettled();
+      return true;
+    }
+    function canUndo() {
+      return history.length > 0;
+    }
 
-    return { freeze: freeze, destroy: destroy, getSnapshot: getSnapshot, getOccupancy: getOccupancy };
+    return {
+      freeze: freeze,
+      destroy: destroy,
+      getSnapshot: getSnapshot,
+      getOccupancy: getOccupancy,
+      undo: undo,
+      canUndo: canUndo,
+    };
   };
 
   root.XiaoouActivity = A;

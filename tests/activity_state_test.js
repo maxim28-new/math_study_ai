@@ -69,4 +69,26 @@ assert.ok(html.includes("data-spec="));
 assert.ok(html.includes("snap-grid-stage"));
 assert.ok(html.includes("<svg"));
 
+assert.strictEqual(A.DEFAULT_SNAP_GRID.type, "snap_grid");
+assert.strictEqual(A.DEFAULT_SNAP_GRID.cols, 3);
+assert.strictEqual(A.DEFAULT_SNAP_GRID.rows, 3);
+assert.strictEqual(A.DEFAULT_SNAP_GRID.tray, 9);
+
+assert.strictEqual(A.sameSnapGrid(d, spec()), true);
+assert.strictEqual(A.sameSnapGrid(d, spec({ cols: 4 })), false);
+assert.strictEqual(A.sameSnapGrid(d, spec({ tray: 7 })), false);
+assert.strictEqual(A.sameSnapGrid(null, d), false);
+
+assert.strictEqual(A.trayCountLabel(4), "还剩 4 块");
+assert.strictEqual(A.trayCountLabel(0), "方块用完了");
+assert.strictEqual(A.trayCountLabel(-3), "方块用完了");
+
+assert.strictEqual(
+  A.tutorCaption("这 9 块，能摆成一个正方形吗？\n\n```xiaoou-draw\n{\"type\":\"snap_grid\",\"cols\":3,\"rows\":3,\"tray\":9}\n```"),
+  "这 9 块，能摆成一个正方形吗？"
+);
+assert.ok(A.tutorCaption("先数一数。\n{\"type\":\"bars\",\"items\":[]}\n再比一比。").startsWith("先数一数。"));
+assert.strictEqual(A.tutorCaption("```xiaoou-draw\n{\"type\":\"snap_grid\"}"), "");
+assert.ok(A.tutorCaption("**你好**，我们来摆方块。").includes("你好"));
+
 console.log("activity_state_test.js ok");
