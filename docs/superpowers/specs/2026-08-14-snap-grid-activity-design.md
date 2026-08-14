@@ -1,7 +1,7 @@
 # 小欧 H5 可动手学具（snap_grid）设计
 
 日期：2026-08-14  
-状态：已确认（实现计划：docs/superpowers/plans/2026-08-14-snap-grid-activity.md）  
+状态：已实现  
 产品：小欧（苏格拉底式数学老师）手机 H5
 
 ## 1. 背景与目标
