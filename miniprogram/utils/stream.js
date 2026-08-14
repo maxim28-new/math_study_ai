@@ -1,4 +1,4 @@
-const { getBaseUrl } = require("./api.js");
+const { getBaseUrl, accessHeader } = require("./api.js");
 
 function decodeChunk(data) {
   if (typeof data === "string") return data;
@@ -42,7 +42,7 @@ function streamChat(body, handlers) {
       method: "POST",
       enableChunked: true,
       responseType: "text",
-      header: { "Content-Type": "application/json" },
+      header: { "Content-Type": "application/json", ...accessHeader() },
       data: body,
       success: () => {
         if (buf.trim()) parseSseBlock(buf, handlers);

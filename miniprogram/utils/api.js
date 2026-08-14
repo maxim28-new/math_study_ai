@@ -6,10 +6,17 @@ function getBaseUrl() {
   return cfg.useDev ? cfg.devBaseUrl : cfg.baseUrl;
 }
 
+function accessHeader() {
+  const code = (cfg.accessCode || "").trim();
+  return code ? { "X-Access-Code": code } : {};
+}
+
 function request(options) {
+  const header = { ...(options.header || {}), ...accessHeader() };
   return new Promise((resolve, reject) => {
     wx.request({
       ...options,
+      header,
       url: getBaseUrl() + options.path,
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) resolve(res.data);
@@ -28,4 +35,4 @@ function healthCheck() {
   return request({ path: "/api/health", method: "GET" });
 }
 
-module.exports = { getBaseUrl, fetchConfig, healthCheck };
+module.exports = { getBaseUrl, accessHeader, fetchConfig, healthCheck };

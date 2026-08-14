@@ -161,7 +161,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260814-stage", html)
+        self.assertIn("v=20260814-gate", html)
+        self.assertIn('location.replace("/gate.html")', app)
 
     def test_snap_grid_undo_api(self):
         src = read("web/activity/snap-grid.js")

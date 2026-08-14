@@ -10,14 +10,15 @@ import json
 from typing import Any, AsyncGenerator, Optional, Union
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config as teaching_config
 from .config import WEB_DIR, settings
+from . import gate
 from . import tutor
 
 app = FastAPI(title="小欧 · 启发式数学老师")
@@ -30,6 +31,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def require_access_code(request, call_next):
+    """未输入验证码时，页面跳转到门禁，接口返回 401。"""
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    access_code = teaching_config.settings.access_code
+    path = request.url.path
+    if gate.request_unlocked(
+        access_code,
+        request.cookies.get(gate.COOKIE_NAME),
+        request.headers.get("x-access-code", ""),
+    ) or gate.is_public_path(path):
+        return await call_next(request)
+    if request.method == "GET" and (
+        path == "/" or path.endswith(".html") or "text/html" in request.headers.get("accept", "")
+    ):
+        return RedirectResponse(url="/gate.html", status_code=302)
+    return JSONResponse({"ok": False, "error": "请先输入验证码"}, status_code=401)
 
 
 @app.middleware("http")
@@ -59,6 +80,38 @@ class ChatRequest(BaseModel):
     # 思考模式：前端可按请求覆盖 .env 默认值（None=沿用默认）。
     thinking: Optional[bool] = None
     show_reasoning: Optional[bool] = None
+
+
+class UnlockRequest(BaseModel):
+    code: str = ""
+
+
+@app.post("/api/unlock")
+def unlock(req: UnlockRequest, request: Request, response: Response):
+    access_code = teaching_config.settings.access_code
+    if not access_code:
+        return {"ok": True}
+    ip = gate.client_ip(request)
+    if gate.unlock_limiter.blocked(ip):
+        return JSONResponse(
+            {"ok": False, "error": "试得太勤了，请稍后再试"},
+            status_code=429,
+        )
+    if not gate.codes_match(req.code, access_code):
+        gate.unlock_limiter.fail(ip)
+        return JSONResponse({"ok": False, "error": "验证码不对"}, status_code=401)
+    gate.unlock_limiter.success(ip)
+    forwarded_https = request.headers.get("x-forwarded-proto", "").lower() == "https"
+    response.set_cookie(
+        gate.COOKIE_NAME,
+        gate.sign_cookie(access_code),
+        max_age=gate.COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https" or forwarded_https,
+        path="/",
+    )
+    return {"ok": True}
 
 
 @app.get("/api/health")
