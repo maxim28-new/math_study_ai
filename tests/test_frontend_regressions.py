@@ -118,6 +118,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("clearActivitySession()", app)
         self.assertIn("renderMilestoneStatus", app)
 
+    def test_app_js_appends_board_note_on_typed_send(self):
+        app = read("web/app.js")
+        self.assertIn("当前学具盘面", app)
+        self.assertIn("contentForModel", app)
+
 
 if __name__ == "__main__":
     unittest.main()

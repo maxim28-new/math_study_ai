@@ -489,6 +489,13 @@ function renderContentInto(bubble, content) {
       bubble.innerHTML = renderMilestoneStatus(content);
       return;
     }
+    const liveMarker = "（当前学具盘面，这不是她打的字）";
+    const cut = content.indexOf(liveMarker);
+    if (cut >= 0) {
+      const spoken = content.slice(0, cut).trim();
+      bubble.innerHTML = renderMarkdown(spoken || "…");
+      return;
+    }
     bubble.innerHTML = renderMarkdown(content);
     return;
   }
@@ -707,7 +714,15 @@ async function sendMessage(text) {
   }
 
   // 显示孩子的消息
-  state.messages.push({ role: "user", content });
+  let contentForModel = content;
+  if (!image && typeof content === "string") {
+    const live = state.liveActivities[state.liveActivities.length - 1];
+    if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
+      const note = XiaoouActivity.formatBoardNote(live.getSnapshot(), null);
+      contentForModel = typed + "\n\n" + note;
+    }
+  }
+  state.messages.push({ role: "user", content: image ? content : contentForModel });
   const childBubble = addMessageEl("child");
   renderContentInto(childBubble, content);
   $("#input").value = "";
