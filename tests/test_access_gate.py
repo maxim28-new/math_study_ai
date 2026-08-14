@@ -63,6 +63,10 @@ class GateHelpersTests(unittest.TestCase):
         self.assertFalse(cookie_valid("other", token))
         self.assertFalse(cookie_valid("maxim", "forged"))
 
+    def test_expired_cookie_is_rejected(self):
+        token = sign_cookie("maxim", now=1_700_000_000)
+        self.assertFalse(cookie_valid("maxim", token, now=1_700_000_000 + 40 * 24 * 3600))
+
     def test_public_paths(self):
         self.assertTrue(is_public_path("/gate.html"))
         self.assertTrue(is_public_path("/api/unlock"))
@@ -75,6 +79,8 @@ class GateHelpersTests(unittest.TestCase):
 
 class AccessGateHttpTests(unittest.TestCase):
     def setUp(self):
+        from server.gate import reset_unlock_limiter
+        reset_unlock_limiter()
         self.client = TestClient(app, follow_redirects=False)
 
     def test_gate_page_is_public(self):
@@ -119,6 +125,7 @@ class AccessGateHttpTests(unittest.TestCase):
             self.assertEqual(unlock.status_code, 200)
             self.assertTrue(unlock.json()["ok"])
             self.assertIn(COOKIE_NAME, unlock.cookies)
+            self.assertIn("HttpOnly", unlock.headers.get("set-cookie", ""))
             cfg = self.client.get("/api/config")
             self.assertEqual(cfg.status_code, 200)
             home = self.client.get("/")
@@ -134,6 +141,18 @@ class AccessGateHttpTests(unittest.TestCase):
         with override_access_code(""):
             resp = self.client.get("/index.html")
         self.assertEqual(resp.status_code, 200)
+
+    def test_unlock_rate_limited_after_repeated_failures(self):
+        with override_access_code("maxim"):
+            for _ in range(5):
+                self.assertEqual(
+                    self.client.post("/api/unlock", json={"code": "nope"}).status_code,
+                    401,
+                )
+            blocked = self.client.post("/api/unlock", json={"code": "nope"})
+            self.assertEqual(blocked.status_code, 429)
+            still = self.client.post("/api/unlock", json={"code": "maxim"})
+            self.assertEqual(still.status_code, 429)
 
 
 if __name__ == "__main__":

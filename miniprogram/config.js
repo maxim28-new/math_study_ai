@@ -6,4 +6,6 @@ module.exports = {
   devBaseUrl: "http://127.0.0.1:8000",
   // true = 使用 devBaseUrl（仅开发）
   useDev: true,
+  // 与服务端 .env 的 ACCESS_CODE 相同；公网 H5 门禁默认 maxim
+  accessCode: "maxim",
 };

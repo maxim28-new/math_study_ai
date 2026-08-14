@@ -10,7 +10,7 @@ import json
 from typing import Any, AsyncGenerator, Optional, Union
 
 import httpx
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -87,18 +87,28 @@ class UnlockRequest(BaseModel):
 
 
 @app.post("/api/unlock")
-def unlock(req: UnlockRequest, response: Response):
+def unlock(req: UnlockRequest, request: Request, response: Response):
     access_code = teaching_config.settings.access_code
     if not access_code:
         return {"ok": True}
+    ip = gate.client_ip(request)
+    if gate.unlock_limiter.blocked(ip):
+        return JSONResponse(
+            {"ok": False, "error": "试得太勤了，请稍后再试"},
+            status_code=429,
+        )
     if not gate.codes_match(req.code, access_code):
+        gate.unlock_limiter.fail(ip)
         return JSONResponse({"ok": False, "error": "验证码不对"}, status_code=401)
+    gate.unlock_limiter.success(ip)
+    forwarded_https = request.headers.get("x-forwarded-proto", "").lower() == "https"
     response.set_cookie(
         gate.COOKIE_NAME,
         gate.sign_cookie(access_code),
         max_age=gate.COOKIE_MAX_AGE,
         httponly=True,
         samesite="lax",
+        secure=request.url.scheme == "https" or forwarded_https,
         path="/",
     )
     return {"ok": True}

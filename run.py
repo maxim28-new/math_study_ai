@@ -50,6 +50,10 @@ if __name__ == "__main__":
     if ip:
         print(f"  手机打开（同一 WiFi）： http://{ip}:{settings.port}")
         print("  把这个网址发给孩子，用浏览器打开即可；可「添加到主屏幕」。")
+    if settings.gate_enabled:
+        print("  访问门禁：已开启（验证码写在 .env 的 ACCESS_CODE，不要把码印在网址里）")
+    else:
+        print("  访问门禁：已关闭")
     print("  按 Ctrl+C 停止")
     print("=" * 56)
     uvicorn.run("server.app:app", host=settings.host, port=settings.port, reload=False)

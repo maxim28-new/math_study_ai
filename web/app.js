@@ -764,6 +764,10 @@ function renderHistory() {
 // ---------------- 配置加载 ----------------
 async function loadConfig() {
   const res = await fetch("/api/config");
+  if (res.status === 401) {
+    window.location.replace("/gate.html");
+    return;
+  }
   const cfg = await res.json();
   state.config = cfg;
   state.topics = cfg.topics;
@@ -1020,6 +1024,10 @@ async function streamAssistant(kickoff) {
         show_reasoning: state.showReasoning,
       }),
     });
+    if (res.status === 401) {
+      window.location.replace("/gate.html");
+      return;
+    }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();

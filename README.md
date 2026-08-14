@@ -43,6 +43,8 @@ python run.py
 
 把手机网址发给孩子。Safari / Chrome 里可以「添加到主屏幕」，以后像 App 一样点开。
 
+公网（VPS）打开时会先要验证码，默认是 `maxim`，可在 `.env` 里改 `ACCESS_CODE`。放到公网请换成自己的码；只在家里局域网用可设 `ACCESS_CODE=off`。微信小程序请在 `miniprogram/config.js` 填同一个 `accessCode`。
+
 ### 没有电脑时：纯网页版
 
 `docs/index.html` 也可以单独打开（或走 GitHub Pages）。家长在齿轮里填一次 DeepSeek 密钥即可，密钥只存在这台手机。
