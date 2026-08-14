@@ -288,10 +288,14 @@ DRAWING_GUIDE = """\
 - 两个正方形对比（从 A 长到 B）：{"type":"square_compare","from":3,"to":4,"caption":"左边是旧的，右边外面金色是新加的"}
 - 数轴：{"type":"numberline","from":0,"to":10,"marks":[3,7],"caption":"简短说明"}
 - 线段图（比多少）：{"type":"bars","items":[{"label":"小明","value":8},{"label":"小红","value":5}],"caption":"简短说明"}
+- 可动手吸附格子（请孩子自己摆时必须用这个，不要用点阵 SVG 代替）：{"type":"snap_grid","cols":3,"rows":3,"tray":9,"caption":"把方块放进格子里试试"}
+  cols/rows 为格子行列（1–8），tray 为托盘里的方块数（可多于或少于格子）。孩子能拖方块；你看不到拖的过程，只会在她明显摆完时收到一条「孩子在学具上摆完了一步」的消息，内含已放/空格/托盘剩余/节点（board_full 或 tiles_exhausted）。
 
 ## 积木平方数探索 —— 每一步用什么图（照此更新参数）
 | 当前在聊什么 | 用什么图 |
-| 第一问「$3\\times 3$ 几块？」 | square_steps max:3 highlight:3 |
+| 第一问「这 9 块能不能摆成正方形？」 | snap_grid cols:3 rows:3 tray:9 |
+| 她摆满后，问「再包一圈会怎样」 | 新的 snap_grid 4×4 tray:7（只给新的一圈）或静态 square_compare from:3 to:4 |
+| 只需要看、不要拖时 | 仍用 square_layers / square_steps / square_compare |
 | 确认「对了，$3\\times 3=9$」 | square_layers size:3 highlight:"none" |
 | 问「外面再包一圈变 $4\\times 4$，新加几块？」 | square_compare from:3 to:4 或 square_layers size:4 highlight:4 |
 | 问「$4\\times 4$ 一共几块？」 | square_layers size:4 highlight:"none" |
@@ -299,9 +303,17 @@ DRAWING_GUIDE = """\
 | 总结 $1+3+5+7=16$ 规律 | square_steps max:4 highlight:4 |
 | 猜 $5\\times 5$ 外面再加几层 | square_layers size:5 highlight:5 |
 
+## 学具回传（你会当普通 user 消息收到）
+若消息以「（孩子在学具上摆完了一步，这不是她打的字）」开头，那是前端根据盘面发的，不是孩子打的字。
+- 根据已放/空格/托盘剩余问下一句。
+- 不要祝贺「成功」「真棒」。
+- 不要把 board_full 说成「这就是正方形」或直接报「一共 9 块」。
+- 一次仍只问一个问题，仍必须带一张对应当前这一步的 xiaoou-draw 图。
+
 规则：
 - 图是帮**思考**的工具；除非孩子已经自己算出来了，否则别在 caption 里直接泄露答案。
-- 数值小一点（size、行列各不超过 8）。"""
+- 数值小一点（size、行列各不超过 8）。
+- 需要孩子动手摆、数、试铺满时，用 snap_grid；只看对比/数轴/线段图时用原来的静态类型。禁止输出 SVG/Konva 代码。caption 仍然不得泄露答案。"""
 
 
 # ------------------------------------------------------------------

@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 import unittest
 
 
@@ -58,6 +59,72 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("no-store", read("server/app.py"))
         self.assertIn("RedirectResponse", read("server/app.py"))
         self.assertIn('HOST", "0.0.0.0"', read("server/config.py"))
+
+    def test_activity_state_js_rules(self):
+        proc = subprocess.run(
+            ["node", str(ROOT / "tests" / "activity_state_test.js")],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("activity_state_test.js ok", proc.stdout)
+
+    def test_activity_state_js_has_no_konva(self):
+        src = read("web/activity/state.js")
+        self.assertNotIn("Konva", src)
+        self.assertIn("parseSnapGrid", src)
+        self.assertIn("detectMilestone", src)
+
+    def test_web_snap_grid_assets_are_wired(self):
+        html = read("web/index.html")
+        self.assertIn("cdn.jsdelivr.net/npm/konva@9", html)
+        self.assertIn('src="/activity/state.js?v=', html)
+        self.assertIn('src="/activity/snap-grid.js?v=', html)
+        self.assertIn('src="/app.js?v=', html)
+        konva_at = html.find("konva@9")
+        state_at = html.find("/activity/state.js")
+        snap_at = html.find("/activity/snap-grid.js")
+        app_at = html.find("/app.js")
+        self.assertTrue(0 < konva_at < state_at < snap_at < app_at)
+
+    def test_drawing_guide_teaches_snap_grid(self):
+        guide = read("server/tutor.py")
+        self.assertIn('"type":"snap_grid"', guide)
+        self.assertIn("board_full", guide)
+        self.assertIn("tiles_exhausted", guide)
+        self.assertIn("不要祝贺", guide)
+        self.assertIn('{"type":"dots"', guide)
+        self.assertIn('{"type":"square_layers"', guide)
+        self.assertIn('{"type":"bars"', guide)
+
+    def test_app_js_routes_snap_grid(self):
+        app = read("web/app.js")
+        self.assertIn('"snap_grid"', app)
+        self.assertIn("renderSnapGridPlaceholder", app)
+        css = read("web/styles.css")
+        self.assertIn(".snap-grid-stage", css)
+        self.assertIn("touch-action: none", css)
+
+    def test_app_js_hydrates_and_freezes_snap_grid(self):
+        app = read("web/app.js")
+        css = read("web/styles.css")
+        self.assertIn("function hydrateSnapGrids(", app)
+        self.assertIn("function freezeLiveActivities(", app)
+        self.assertIn("onSnapGridSettled", app)
+        self.assertIn("MILESTONE_DEBOUNCE_MS = 400", app)
+        self.assertIn("function sendActivityMilestone(", app)
+        self.assertIn("activity-status", app)
+        self.assertIn("function clearActivitySession(", app)
+        self.assertIn("clearActivitySession()", app)
+        self.assertIn("renderMilestoneStatus", app)
+        self.assertIn("if (hasGrid) freezeLiveActivities()", app)
+        self.assertIn(".msg.child .bubble .activity-status", css)
+
+    def test_app_js_appends_board_note_on_typed_send(self):
+        app = read("web/app.js")
+        self.assertIn("当前学具盘面", app)
+        self.assertIn("contentForModel", app)
 
 
 if __name__ == "__main__":
