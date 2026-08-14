@@ -296,7 +296,7 @@ function sendActivityMilestone(eventName, snapshot) {
   streamAssistant(false).catch((err) => console.warn("milestone send failed", err));
 }
 
-const DIAG_BLUE = "#4f6bed", DIAG_GOLD = "#e8a13a";
+const DIAG_BLUE = "#3f5bd6", DIAG_GOLD = "#e09a2c";
 function clampInt(v, lo, hi, dflt) {
   v = parseInt(v, 10);
   if (isNaN(v)) return dflt;
@@ -304,9 +304,9 @@ function clampInt(v, lo, hi, dflt) {
 }
 function diagramDots(s) {
   const rows = clampInt(s.rows, 1, 10, 1), cols = clampInt(s.cols, 1, 10, 1);
-  const cell = 26, r = 9, pad = 8;
+  const cell = 30, r = 10, pad = 14;
   const w = cols * cell + pad * 2, h = rows * cell + pad * 2;
-  let dots = "";
+  let dots = `<rect x="0" y="0" width="${w}" height="${h}" rx="16" fill="#fffdf8"/>`;
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
       const cx = pad + j * cell + cell / 2, cy = pad + i * cell + cell / 2;
@@ -397,19 +397,41 @@ function diagramNumberline(s) {
 function diagramBars(s) {
   const items = (Array.isArray(s.items) ? s.items : []).slice(0, 8);
   if (!items.length) return "";
-  const max = Math.max(...items.map((it) => Math.max(0, Number(it.value) || 0)), 1);
-  const rowH = 30, labelW = 70, barMax = 240, pad = 8;
-  const w = labelW + barMax + 46, h = items.length * rowH + pad * 2;
+  const vals = items.map((it) => Math.max(0, Number(it.value) || 0));
+  const max = Math.max(...vals, 1);
+  const tile = 18, gap = 5, labelH = 22, rowGap = 16, pad = 8;
+  const useTiles = max <= 12;
   let el = "";
-  items.forEach((it, i) => {
-    const v = Math.max(0, Number(it.value) || 0);
-    const bw = Math.round((v / max) * barMax);
-    const y = pad + i * rowH;
-    el += `<text x="0" y="${y + 19}" font-size="13" fill="#333">${escapeHtml(String(it.label ?? ""))}</text>`;
-    el += `<rect x="${labelW}" y="${y + 6}" width="${bw}" height="16" rx="4" fill="${DIAG_BLUE}"/>`;
-    el += `<text x="${labelW + bw + 6}" y="${y + 19}" font-size="12" fill="#555">${v}</text>`;
-  });
-  return `<svg viewBox="0 0 ${w} ${h}" width="${Math.min(w, 420)}" height="${h}" role="img">${el}</svg>`;
+  let y = pad;
+  let w = 280;
+  if (useTiles) {
+    items.forEach((it, i) => {
+      const v = vals[i];
+      const label = escapeHtml(String(it.label ?? ""));
+      el += `<text x="${pad}" y="${y + 13}" font-size="13" fill="#5c5348">${label}</text>`;
+      y += labelH;
+      for (let k = 0; k < v; k++) {
+        const x = pad + k * (tile + gap);
+        el += `<rect x="${x}" y="${y}" width="${tile}" height="${tile}" rx="6" fill="${DIAG_BLUE}"/>`;
+      }
+      el += `<text x="${pad + v * (tile + gap)}" y="${y + 14}" font-size="12" fill="#8a8074">${v}</text>`;
+      w = Math.max(w, pad + v * (tile + gap) + 28);
+      y += tile + rowGap;
+    });
+  } else {
+    const labelW = 72, barMax = 220;
+    items.forEach((it, i) => {
+      const v = vals[i];
+      const bw = Math.round((v / max) * barMax);
+      el += `<text x="0" y="${y + 16}" font-size="13" fill="#5c5348">${escapeHtml(String(it.label ?? ""))}</text>`;
+      el += `<rect x="${labelW}" y="${y + 4}" width="${bw}" height="18" rx="9" fill="${DIAG_BLUE}"/>`;
+      el += `<text x="${labelW + bw + 6}" y="${y + 17}" font-size="12" fill="#8a8074">${v}</text>`;
+      y += 32;
+    });
+    w = labelW + barMax + 40;
+  }
+  const h = y + pad - (useTiles ? rowGap : 0);
+  return `<svg viewBox="0 0 ${w} ${h}" width="${Math.min(w, 360)}" height="${h}" role="img">${el}</svg>`;
 }
 
 // ---------------- 消息渲染 ----------------
@@ -522,7 +544,7 @@ function renderWelcome() {
   let body;
   if (state.mode === "explore") {
     const tname = topic ? topic.name : "这个主题";
-    body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「一起探索」模式。选好左边的主题（现在是**${tname}**），点一下 **✨ 出个新题**，我就从那几条公理出发，给你出一个好玩、值得琢磨的问题。`;
+    body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n今天想玩 **${tname}**。点上面的主题可以换；点下面 **✨ 出个新题**，我就出一个能动手摆的小问题。`;
   } else {
     const starter = topic ? topic.starter : "";
     body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「带题来问」模式。${starter}`;
@@ -569,6 +591,7 @@ async function loadConfig() {
     topicSel.appendChild(o);
   });
   topicSel.value = state.topicKey;
+  fillTopicList();
 
   // 难度下拉
   const levelSel = $("#levelSelect");
@@ -668,9 +691,11 @@ function applyModeUI() {
   const line = $("#topicLine");
   if (line) {
     const topic = state.topics.find((t) => t.key === state.topicKey);
-    const tname = topic ? topic.name : "";
-    line.textContent = explore ? (tname ? "探索 · " + tname : "一起探索") : "带题来问";
+    const tname = topic ? topic.name : "选主题";
+    line.textContent = tname;
   }
+  const chip = $("#topicChip");
+  if (chip) chip.setAttribute("aria-expanded", "false");
 }
 
 function updatePhotoHint(cfg) {
@@ -1084,6 +1109,47 @@ function closeDrawer() {
   const drawer = $("#drawer");
   if (drawer) drawer.classList.remove("open");
 }
+function openTopicSheet() {
+  fillTopicList();
+  const sheet = $("#topicSheet");
+  const chip = $("#topicChip");
+  if (sheet) sheet.classList.add("open");
+  if (chip) chip.setAttribute("aria-expanded", "true");
+}
+function closeTopicSheet() {
+  const sheet = $("#topicSheet");
+  const chip = $("#topicChip");
+  if (sheet) sheet.classList.remove("open");
+  if (chip) chip.setAttribute("aria-expanded", "false");
+}
+function fillTopicList() {
+  const list = $("#topicList");
+  if (!list) return;
+  list.innerHTML = "";
+  state.topics.forEach((t) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "topic-option" + (t.key === state.topicKey ? " active" : "");
+    b.textContent = t.name;
+    b.addEventListener("click", () => chooseTopic(t.key));
+    list.appendChild(b);
+  });
+}
+function chooseTopic(key) {
+  closeTopicSheet();
+  if (key === state.topicKey) return;
+  if (state.streaming) return;
+  if (state.messages.length && !confirm("换主题会开始新的探究，确定吗？")) return;
+  state.topicKey = key;
+  const sel = $("#topicSelect");
+  if (sel) sel.value = key;
+  state.messages = [];
+  clearPendingImage();
+  if (typeof clearActivitySession === "function") clearActivitySession();
+  updateAxioms();
+  saveSession();
+  renderHistory();
+}
 function openAttachSheet() {
   const sheet = $("#attachSheet");
   if (sheet) sheet.classList.add("open");
@@ -1136,6 +1202,17 @@ function bindEvents() {
   if (drawer) {
     drawer.addEventListener("click", (e) => {
       if (e.target === drawer) closeDrawer();
+    });
+  }
+
+  const topicChip = $("#topicChip");
+  if (topicChip) topicChip.addEventListener("click", openTopicSheet);
+  const topicCancel = $("#topicCancel");
+  if (topicCancel) topicCancel.addEventListener("click", closeTopicSheet);
+  const topicSheet = $("#topicSheet");
+  if (topicSheet) {
+    topicSheet.addEventListener("click", (e) => {
+      if (e.target === topicSheet) closeTopicSheet();
     });
   }
 
