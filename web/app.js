@@ -14,6 +14,12 @@ const state = {
   messages: [], // 发给模型的历史：{role:'user'|'assistant', content}（content 可能是字符串或多模态数组）
   pendingImage: null, // 待发送的题目照片（dataURL）
   streaming: false,
+  liveActivities: [],
+  mountedActivities: [],
+  boards: [],
+  milestoneTimer: null,
+  pendingMilestone: null,
+  queuedMilestone: null,
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -37,8 +43,13 @@ function saveSession() {
     thinking: state.thinking,
     showReasoning: state.showReasoning,
     messages: sanitizeForStore(state.messages),
+    boards: collectBoards(),
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch (e) {}
+}
+
+function collectBoards() {
+  return state.mountedActivities.map((h) => h.getOccupancy ? h.getOccupancy() : { occupied: [], trayLeft: 0 });
 }
 function loadSession() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (e) { return null; }
@@ -202,6 +213,79 @@ function renderDiagram(jsonText) {
   const cap = s.caption ? `<figcaption>${escapeHtml(String(s.caption))}</figcaption>` : "";
   return `<figure class="diagram">${inner}${cap}</figure>`;
 }
+
+const MILESTONE_DEBOUNCE_MS = 400;
+
+function freezeLiveActivities() {
+  state.liveActivities.forEach((h) => { try { h.freeze(); } catch (e) {} });
+  state.liveActivities = [];
+}
+
+function destroyMountedActivities() {
+  freezeLiveActivities();
+  state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
+  state.mountedActivities = [];
+}
+
+function hydrateSnapGrids(bubble, interactive) {
+  if (!bubble || !window.XiaoouActivity || !XiaoouActivity.mountSnapGrid) return;
+  const hosts = bubble.querySelectorAll("figure.diagram[data-snap-grid]");
+  hosts.forEach((host, i) => {
+    const spec = XiaoouActivity.parseSnapGrid(decodeURIComponent(host.getAttribute("data-spec") || ""));
+    const isLive = !!(interactive && i === hosts.length - 1);
+    const occ = state.boards[state.mountedActivities.length] || {};
+    const handle = XiaoouActivity.mountSnapGrid(host, spec, {
+      interactive: isLive,
+      occupied: occ.occupied || [],
+      onSettled: onSnapGridSettled,
+    });
+    state.mountedActivities.push(handle);
+    if (isLive) state.liveActivities.push(handle);
+    else handle.freeze();
+  });
+}
+
+function onSnapGridSettled(snapshot, eventName) {
+  state.boards = collectBoards();
+  saveSession();
+  if (!eventName) {
+    if (state.pendingMilestone && !XiaoouActivity.milestoneHolds(state.pendingMilestone.event, snapshot)) {
+      state.pendingMilestone = null;
+      if (state.milestoneTimer) { clearTimeout(state.milestoneTimer); state.milestoneTimer = null; }
+    }
+    return;
+  }
+  state.pendingMilestone = { event: eventName, snapshot: snapshot };
+  if (state.milestoneTimer) clearTimeout(state.milestoneTimer);
+  state.milestoneTimer = setTimeout(flushPendingMilestone, MILESTONE_DEBOUNCE_MS);
+}
+
+function flushPendingMilestone() {
+  state.milestoneTimer = null;
+  const pending = state.pendingMilestone;
+  state.pendingMilestone = null;
+  if (!pending) return;
+  const live = state.liveActivities[state.liveActivities.length - 1];
+  const now = live && live.getSnapshot ? live.getSnapshot() : pending.snapshot;
+  if (!XiaoouActivity.milestoneHolds(pending.event, now)) return;
+  sendActivityMilestone(pending.event, now);
+}
+
+function sendActivityMilestone(eventName, snapshot) {
+  if (state.streaming) {
+    state.queuedMilestone = { event: eventName, snapshot: snapshot };
+    return;
+  }
+  if (!snapshot) return;
+  const modelText = XiaoouActivity.formatBoardNote(snapshot, eventName);
+  const label = XiaoouActivity.childLabel(eventName, snapshot);
+  state.messages.push({ role: "user", content: modelText });
+  const bubble = addMessageEl("child");
+  bubble.innerHTML = `<p class="activity-status">${escapeHtml(label)}</p>`;
+  saveSession();
+  streamAssistant(false).catch((err) => console.warn("milestone send failed", err));
+}
+
 const DIAG_BLUE = "#4f6bed", DIAG_GOLD = "#e8a13a";
 function clampInt(v, lo, hi, dflt) {
   v = parseInt(v, 10);
@@ -406,11 +490,13 @@ function renderWelcome() {
 }
 
 function renderHistory() {
+  destroyMountedActivities();
   $("#messages").innerHTML = "";
   if (state.messages.length === 0) { renderWelcome(); return; }
   for (const m of state.messages) {
     const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
     renderContentInto(bubble, m.content);
+    if (m.role === "assistant") hydrateSnapGrids(bubble, false);
   }
 }
 
@@ -431,6 +517,7 @@ async function loadConfig() {
     ? saved.showReasoning
     : !!cfg.show_reasoning;
   state.messages = (saved && saved.messages) || [];
+  state.boards = (saved && Array.isArray(saved.boards)) ? saved.boards : [];
 
   // 主题下拉
   const topicSel = $("#topicSelect");
@@ -606,6 +693,7 @@ async function startExplore() {
 // 共用的流式接收逻辑。kickoff=true 时请求小欧出题。
 async function streamAssistant(kickoff) {
   setStreaming(true);
+  freezeLiveActivities();
   const tutorBubble = addMessageEl("tutor");
   tutorBubble.classList.add("cursor-blink");
   let acc = "";
@@ -675,8 +763,15 @@ async function streamAssistant(kickoff) {
   if (acc.trim()) {
     state.messages.push({ role: "assistant", content: acc });
     saveSession();
+    hydrateSnapGrids(tutorBubble, true);
+    saveSession();
   }
   setStreaming(false);
+  if (state.queuedMilestone) {
+    const queued = state.queuedMilestone;
+    state.queuedMilestone = null;
+    sendActivityMilestone(queued.event, queued.snapshot);
+  }
 }
 
 function setStreaming(on) {
@@ -1038,4 +1133,5 @@ function bindEvents() {
   initVoice();
   initDraw();
   await loadConfig();
+  window.XiaoouDebug = { addMessageEl, renderMarkdown, hydrateSnapGrids };
 })();

@@ -106,6 +106,15 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".snap-grid-stage", css)
         self.assertIn("touch-action: none", css)
 
+    def test_app_js_hydrates_and_freezes_snap_grid(self):
+        app = read("web/app.js")
+        self.assertIn("function hydrateSnapGrids(", app)
+        self.assertIn("function freezeLiveActivities(", app)
+        self.assertIn("onSnapGridSettled", app)
+        self.assertIn("MILESTONE_DEBOUNCE_MS = 400", app)
+        self.assertIn("function sendActivityMilestone(", app)
+        self.assertIn("activity-status", app)
+
 
 if __name__ == "__main__":
     unittest.main()
