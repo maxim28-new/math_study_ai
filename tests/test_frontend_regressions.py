@@ -59,6 +59,16 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("no-store", read("server/app.py"))
         self.assertIn("RedirectResponse", read("server/app.py"))
         self.assertIn('HOST", "0.0.0.0"', read("server/config.py"))
+        self.assertIn('id="topicChip"', html)
+        self.assertIn('id="topicSheet"', html)
+        self.assertIn(".topic-chip", css)
+        self.assertIn("function openTopicSheet(", app)
+        self.assertNotIn("选好左边的主题", app)
+
+    def test_explore_kickoff_prefers_snap_grid(self):
+        tutor = read("server/tutor.py")
+        self.assertIn("第一问优先用可动手的 snap_grid", tutor)
+        self.assertIn('"type":"snap_grid"', tutor)
 
     def test_activity_state_js_rules(self):
         proc = subprocess.run(
