@@ -76,6 +76,28 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("parseSnapGrid", src)
         self.assertIn("detectMilestone", src)
 
+    def test_web_snap_grid_assets_are_wired(self):
+        html = read("web/index.html")
+        self.assertIn("cdn.jsdelivr.net/npm/konva@9", html)
+        self.assertIn('src="/activity/state.js?v=', html)
+        self.assertIn('src="/activity/snap-grid.js?v=', html)
+        self.assertIn('src="/app.js?v=', html)
+        konva_at = html.find("konva@9")
+        state_at = html.find("/activity/state.js")
+        snap_at = html.find("/activity/snap-grid.js")
+        app_at = html.find("/app.js")
+        self.assertTrue(0 < konva_at < state_at < snap_at < app_at)
+
+    def test_drawing_guide_teaches_snap_grid(self):
+        guide = read("server/tutor.py")
+        self.assertIn('"type":"snap_grid"', guide)
+        self.assertIn("board_full", guide)
+        self.assertIn("tiles_exhausted", guide)
+        self.assertIn("不要祝贺", guide)
+        self.assertIn('{"type":"dots"', guide)
+        self.assertIn('{"type":"square_layers"', guide)
+        self.assertIn('{"type":"bars"', guide)
+
 
 if __name__ == "__main__":
     unittest.main()
