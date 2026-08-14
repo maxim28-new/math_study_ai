@@ -281,7 +281,7 @@ async def chat(req: ChatRequest) -> StreamingResponse:
 @app.get("/")
 def index() -> RedirectResponse:
     # 换 URL，避免浏览器继续用已经打开的旧桌面页。
-    return RedirectResponse(url="/index.html?v=mobile-h5", status_code=302)
+    return RedirectResponse(url="/index.html?v=ui-polish", status_code=302)
 
 
 # 其余静态资源（css / js）

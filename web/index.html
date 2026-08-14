@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
-  <meta name="theme-color" content="#4f6bed" />
+  <meta name="theme-color" content="#3f5bd6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260814-snap-grid" />
+  <link rel="stylesheet" href="/styles.css?v=20260814-ui-polish" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -25,8 +25,11 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1>小欧 <span class="edition">手机版</span></h1>
-          <p id="topicLine">陪你一起想数学</p>
+          <h1>小欧</h1>
+          <button type="button" class="topic-chip" id="topicChip" aria-haspopup="listbox" aria-expanded="false" title="换主题">
+            <span id="topicLine">陪你一起想数学</span>
+            <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
         </div>
       </div>
       <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="探究模式">
@@ -75,6 +78,14 @@
         </button>
       </div>
     </footer>
+  </div>
+
+  <div class="sheet-mask" id="topicSheet">
+    <div class="action-sheet topic-picker" role="dialog" aria-label="选择主题">
+      <p class="sheet-kicker">今天想玩什么</p>
+      <div id="topicList" class="topic-list"></div>
+      <button type="button" class="sheet-cancel" id="topicCancel">取消</button>
+    </div>
   </div>
 
   <div class="sheet-mask" id="attachSheet">
@@ -155,8 +166,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260814-snap-grid"></script>
-  <script src="/activity/snap-grid.js?v=20260814-snap-grid"></script>
-  <script src="/app.js?v=20260814-snap-grid"></script>
+  <script src="/activity/state.js?v=20260814-ui-polish"></script>
+  <script src="/activity/snap-grid.js?v=20260814-ui-polish"></script>
+  <script src="/app.js?v=20260814-ui-polish"></script>
 </body>
 </html>

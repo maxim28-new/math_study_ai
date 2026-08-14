@@ -2,7 +2,7 @@
 
 (function (root) {
   const A = root.XiaoouActivity || {};
-  const BLUE = "#4f6bed";
+  const BLUE = "#3f5bd6";
   const CELL_MIN = 44;
   const SNAP_RATIO = 0.55;
 
