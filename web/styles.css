@@ -509,3 +509,6 @@ button, input, select, textarea { font-family: inherit; }
   font-size: 13px;
   color: var(--ink-soft);
 }
+.msg.child .bubble .activity-status {
+  color: rgba(255, 255, 255, 0.95);
+}

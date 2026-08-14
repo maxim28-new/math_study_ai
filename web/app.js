@@ -742,7 +742,6 @@ async function startExplore() {
 // 共用的流式接收逻辑。kickoff=true 时请求小欧出题。
 async function streamAssistant(kickoff) {
   setStreaming(true);
-  freezeLiveActivities();
   const tutorBubble = addMessageEl("tutor");
   tutorBubble.classList.add("cursor-blink");
   let acc = "";
@@ -812,14 +811,16 @@ async function streamAssistant(kickoff) {
   if (acc.trim()) {
     state.messages.push({ role: "assistant", content: acc });
     saveSession();
+    const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
+    if (hasGrid) freezeLiveActivities();
     hydrateSnapGrids(tutorBubble, true);
     saveSession();
   }
   setStreaming(false);
   if (state.queuedMilestone) {
-    const queued = state.queuedMilestone;
+    const q = state.queuedMilestone;
     state.queuedMilestone = null;
-    sendActivityMilestone(queued.event, queued.snapshot);
+    sendActivityMilestone(q.event, q.snapshot);
   }
 }
 

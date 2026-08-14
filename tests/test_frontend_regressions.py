@@ -108,6 +108,7 @@ class FrontendRegressionTests(unittest.TestCase):
 
     def test_app_js_hydrates_and_freezes_snap_grid(self):
         app = read("web/app.js")
+        css = read("web/styles.css")
         self.assertIn("function hydrateSnapGrids(", app)
         self.assertIn("function freezeLiveActivities(", app)
         self.assertIn("onSnapGridSettled", app)
@@ -117,6 +118,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function clearActivitySession(", app)
         self.assertIn("clearActivitySession()", app)
         self.assertIn("renderMilestoneStatus", app)
+        self.assertIn("if (hasGrid) freezeLiveActivities()", app)
+        self.assertIn(".msg.child .bubble .activity-status", css)
 
     def test_app_js_appends_board_note_on_typed_send(self):
         app = read("web/app.js")
