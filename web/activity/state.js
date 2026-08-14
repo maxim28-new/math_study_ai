@@ -26,6 +26,51 @@
     return Math.min(8, n);
   }
 
+  A.DEFAULT_SNAP_GRID = {
+    type: "snap_grid",
+    cols: 3,
+    rows: 3,
+    tray: 9,
+    goal: "fill",
+    caption: "把方块放进格子里试试",
+  };
+
+  A.sameSnapGrid = function sameSnapGrid(a, b) {
+    return !!(a && b
+      && a.cols === b.cols
+      && a.rows === b.rows
+      && a.tray === b.tray);
+  };
+
+  A.trayCountLabel = function trayCountLabel(n) {
+    const left = clampInt(n, 0, 64, 0);
+    return left <= 0 ? "方块用完了" : "还剩 " + left + " 块";
+  };
+
+  A.tutorCaption = function tutorCaption(markdown) {
+    let s = String(markdown || "");
+    s = s.replace(/```[\s\S]*?```/g, " ");
+    s = s.replace(/```[\s\S]*$/g, " ");
+    s = s.split("\n").filter((line) => {
+      const t = line.trim();
+      return !(t.charAt(0) === "{" && t.indexOf('"type"') >= 0);
+    }).join("\n");
+    s = s.replace(/[*_`#]/g, "");
+    s = s.replace(/\s+/g, " ").trim();
+    if (!s) return "";
+    const sentences = s.match(/[^。！？]+[。！？]?/g);
+    if (sentences && sentences.length) {
+      let out = sentences[0].trim();
+      if (sentences[1] && (out + sentences[1]).length <= 90) {
+        out = (out + sentences[1]).trim();
+      }
+      if (out.length > 90) out = out.slice(0, 90).replace(/[,，、]\s*\S*$/, "") + "…";
+      return out;
+    }
+    if (s.length <= 90) return s;
+    return s.slice(0, 90).replace(/[,，、]\s*\S*$/, "") + "…";
+  };
+
   A.parseSnapGrid = function parseSnapGrid(raw) {
     let s = raw;
     if (typeof raw === "string") {

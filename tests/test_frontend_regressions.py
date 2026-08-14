@@ -59,6 +59,16 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("no-store", read("server/app.py"))
         self.assertIn("RedirectResponse", read("server/app.py"))
         self.assertIn('HOST", "0.0.0.0"', read("server/config.py"))
+        self.assertIn('id="topicChip"', html)
+        self.assertIn('id="topicSheet"', html)
+        self.assertIn(".topic-chip", css)
+        self.assertIn("function openTopicSheet(", app)
+        self.assertNotIn("选好左边的主题", app)
+
+    def test_explore_kickoff_prefers_snap_grid(self):
+        tutor = read("server/tutor.py")
+        self.assertIn("第一问优先用可动手的 snap_grid", tutor)
+        self.assertIn('"type":"snap_grid"', tutor)
 
     def test_activity_state_js_rules(self):
         proc = subprocess.run(
@@ -125,6 +135,39 @@ class FrontendRegressionTests(unittest.TestCase):
         app = read("web/app.js")
         self.assertIn("当前学具盘面", app)
         self.assertIn("contentForModel", app)
+
+    def test_explore_stage_shell(self):
+        html = read("web/index.html")
+        css = read("web/styles.css")
+        app = read("web/app.js")
+        for token in (
+            'id="exploreStage"',
+            'id="startPlayBtn"',
+            'id="tutorCaption"',
+            'id="stageHost"',
+            'id="talkBtn"',
+            'id="historySheet"',
+            'id="helpSheet"',
+            'id="modeSelect"',
+            'id="undoTileBtn"',
+            'id="trayCount"',
+            "开始玩",
+        ):
+            self.assertIn(token, html)
+        self.assertNotIn('id="modeSwitch"', html)
+        self.assertIn(".layout-explore", css)
+        self.assertIn(".play-stage", css)
+        self.assertIn("function remountStage(", app)
+        self.assertIn("function startPlay(", app)
+        self.assertIn("tutorCaption", app)
+        self.assertIn("activity-stage", read("server/app.py"))
+        self.assertIn("v=20260814-stage", html)
+
+    def test_snap_grid_undo_api(self):
+        src = read("web/activity/snap-grid.js")
+        self.assertIn("undo:", src)
+        self.assertIn("canUndo:", src)
+        self.assertIn("Math.min(72", src)
 
 
 if __name__ == "__main__":

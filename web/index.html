@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
-  <meta name="theme-color" content="#4f6bed" />
+  <meta name="theme-color" content="#3f5bd6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260814-snap-grid" />
+  <link rel="stylesheet" href="/styles.css?v=20260814-stage" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
 <body>
-  <div class="app">
+  <div class="app layout-explore">
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
@@ -25,13 +25,12 @@
           </svg>
         </div>
         <div class="brand-text">
-          <h1>小欧 <span class="edition">手机版</span></h1>
-          <p id="topicLine">陪你一起想数学</p>
+          <h1>小欧</h1>
+          <button type="button" class="topic-chip" id="topicChip" aria-haspopup="listbox" aria-expanded="false" title="换主题">
+            <span id="topicLine">陪你一起想数学</span>
+            <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
         </div>
-      </div>
-      <div class="mode-switch" id="modeSwitch" role="tablist" aria-label="探究模式">
-        <button class="mode-btn active" data-mode="explore" role="tab">探索</button>
-        <button class="mode-btn" data-mode="bring" role="tab">带题</button>
       </div>
       <button class="gear" id="gearBtn" aria-label="家长设置" title="家长设置">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -42,19 +41,41 @@
     </header>
 
     <div id="banner" class="banner hidden"></div>
+
+    <section id="exploreStage" class="explore-stage">
+      <div class="caption-bar">
+        <p id="tutorCaption">点开始玩，把方块拖进格子</p>
+        <button type="button" class="history-btn" id="historyBtn">对话</button>
+      </div>
+      <div class="play-stage">
+        <div id="startPlayWrap" class="start-play">
+          <p class="start-kicker">把方块拖进格子里</p>
+          <button type="button" id="startPlayBtn" class="start-play-btn">开始玩</button>
+        </div>
+        <div id="stageHost" class="stage-host"></div>
+        <div id="stageToast" class="stage-toast hidden">摆好了</div>
+      </div>
+      <div id="stageTools" class="stage-tools hidden">
+        <span id="trayCount">还剩 9 块</span>
+        <button type="button" id="undoTileBtn">收回</button>
+      </div>
+    </section>
+
     <div id="messages" class="messages" aria-live="polite"></div>
 
     <footer class="composer">
       <div class="chips">
         <button id="exploreBtn" class="chip chip-primary hidden">✨ 出个新题</button>
+        <button type="button" id="helpBtn" class="chip chip-quiet hidden">需要帮忙</button>
         <div id="quickActions" class="quick-actions"></div>
       </div>
+      <button type="button" id="talkBtn" class="talk-btn hidden">想跟小欧说</button>
       <div id="imgPreview" class="img-preview hidden">
         <img id="imgPreviewThumb" alt="待发送的题目照片" />
         <span class="img-hint">拍好了，点发送给小欧。</span>
         <button id="imgRemoveBtn" class="img-remove" aria-label="移除照片">×</button>
       </div>
-      <div class="input-row">
+      <div class="input-row" id="inputRow">
         <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
         <button id="plusBtn" class="icon-btn" aria-label="更多" title="拍照或画图">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
@@ -77,11 +98,43 @@
     </footer>
   </div>
 
+  <div class="sheet-mask" id="topicSheet">
+    <div class="action-sheet topic-picker" role="dialog" aria-label="选择主题">
+      <p class="sheet-kicker">今天想玩什么</p>
+      <div id="topicList" class="topic-list"></div>
+      <button type="button" class="sheet-cancel" id="topicCancel">取消</button>
+    </div>
+  </div>
+
   <div class="sheet-mask" id="attachSheet">
     <div class="action-sheet" role="dialog" aria-label="添加">
+      <button type="button" id="homeworkBtn">📓 我有作业</button>
       <button type="button" id="attachBtn">📷 拍作业本</button>
       <button type="button" id="drawBtn">✏️ 打开画板</button>
       <button type="button" class="sheet-cancel" id="attachCancel">取消</button>
+    </div>
+  </div>
+
+  <div class="sheet-mask" id="helpSheet">
+    <div class="action-sheet" role="dialog" aria-label="需要帮忙">
+      <p class="sheet-kicker">需要帮忙</p>
+      <div id="helpActions" class="topic-list"></div>
+      <button type="button" id="newQuestionBtn">换一题</button>
+      <button type="button" class="sheet-cancel" id="helpCancel">取消</button>
+    </div>
+  </div>
+
+  <div class="sheet-mask" id="historySheet">
+    <div class="sheet history-sheet" role="dialog" aria-label="刚才说了什么">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <div>
+          <h2>刚才说了什么</h2>
+          <p>正在玩的方块还在上面那块盘里。</p>
+        </div>
+        <button class="sheet-close" id="historyClose" aria-label="完成">完成</button>
+      </div>
+      <div id="historyMount" class="history-mount"></div>
     </div>
   </div>
 
@@ -99,6 +152,13 @@
       <label class="field">
         <span>孩子的名字</span>
         <input id="childName" type="text" placeholder="例如：朵朵" maxlength="12" />
+      </label>
+      <label class="field">
+        <span>现在怎么玩</span>
+        <select id="modeSelect">
+          <option value="explore">一起探索（小欧出题）</option>
+          <option value="bring">带题来问（拍照作业）</option>
+        </select>
       </label>
       <label class="field">
         <span>今天想研究什么</span>
@@ -155,8 +215,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260814-snap-grid"></script>
-  <script src="/activity/snap-grid.js?v=20260814-snap-grid"></script>
-  <script src="/app.js?v=20260814-snap-grid"></script>
+  <script src="/activity/state.js?v=20260814-stage"></script>
+  <script src="/activity/snap-grid.js?v=20260814-stage"></script>
+  <script src="/app.js?v=20260814-stage"></script>
 </body>
 </html>
