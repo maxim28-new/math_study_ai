@@ -219,6 +219,8 @@ const MILESTONE_DEBOUNCE_MS = 400;
 function freezeLiveActivities() {
   state.liveActivities.forEach((h) => { try { h.freeze(); } catch (e) {} });
   state.liveActivities = [];
+  if (state.milestoneTimer) { clearTimeout(state.milestoneTimer); state.milestoneTimer = null; }
+  state.pendingMilestone = null;
 }
 
 function destroyMountedActivities() {
@@ -461,8 +463,32 @@ function getReasoningEl(tutorBubble) {
 }
 
 // content 可能是纯文字，也可能是含图片的数组。这里统一渲染进气泡。
+function renderMilestoneStatus(content) {
+  const eventM = content.match(/节点：(\w+)/);
+  const gridM = content.match(/格子：(\d+)\s*×\s*(\d+)/);
+  const filledM = content.match(/已放：(\d+)/);
+  const emptyM = content.match(/空格：(\d+)/);
+  const trayM = content.match(/托盘剩余：(\d+)/);
+  const eventName = eventM ? eventM[1] : "";
+  const snapshot = {
+    cols: gridM ? parseInt(gridM[1], 10) : 0,
+    rows: gridM ? parseInt(gridM[2], 10) : 0,
+    filled: filledM ? parseInt(filledM[1], 10) : 0,
+    empty: emptyM ? parseInt(emptyM[1], 10) : 0,
+    tray_left: trayM ? parseInt(trayM[1], 10) : 0,
+  };
+  const label = (window.XiaoouActivity && XiaoouActivity.childLabel)
+    ? XiaoouActivity.childLabel(eventName, snapshot)
+    : "摆了一下";
+  return `<p class="activity-status">${escapeHtml(label)}</p>`;
+}
+
 function renderContentInto(bubble, content) {
   if (typeof content === "string") {
+    if (content.includes("（孩子在学具上摆完了一步，这不是她打的字）")) {
+      bubble.innerHTML = renderMilestoneStatus(content);
+      return;
+    }
     bubble.innerHTML = renderMarkdown(content);
     return;
   }

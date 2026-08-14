@@ -116,6 +116,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("activity-status", app)
         self.assertIn("function clearActivitySession(", app)
         self.assertIn("clearActivitySession()", app)
+        self.assertIn("renderMilestoneStatus", app)
 
 
 if __name__ == "__main__":
