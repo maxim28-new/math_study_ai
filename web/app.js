@@ -84,7 +84,7 @@ function inlineFmt(s) {
   return renderTextWithMath(String(s));
 }
 
-const DIAGRAM_TYPES = new Set(["dots", "square_layers", "square_steps", "square_compare", "numberline", "bars"]);
+const DIAGRAM_TYPES = new Set(["dots", "square_layers", "square_steps", "square_compare", "numberline", "bars", "snap_grid"]);
 
 /** 识别 xiaoou-draw JSON（模型有时用 ```json 或裸 JSON，也要能画图） */
 function tryParseDiagramSpec(text) {
@@ -184,6 +184,13 @@ function renderMarkdown(text) {
 function renderDiagram(jsonText) {
   let s;
   try { s = JSON.parse(jsonText); } catch (e) { return ""; }
+  if (s.type === "snap_grid") {
+    const parsed = (window.XiaoouActivity && XiaoouActivity.parseSnapGrid)
+      ? XiaoouActivity.parseSnapGrid(s)
+      : null;
+    if (!parsed) return "";
+    return XiaoouActivity.renderSnapGridPlaceholder(parsed);
+  }
   let inner = "";
   if (s.type === "dots") inner = diagramDots(s);
   else if (s.type === "square_layers") inner = diagramSquareLayers(s);

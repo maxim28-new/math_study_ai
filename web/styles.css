@@ -491,3 +491,21 @@ button, input, select, textarea { font-family: inherit; }
     overflow: hidden;
   }
 }
+
+.msg .bubble .diagram.snap-grid {
+  padding: 10px 8px 8px;
+}
+.snap-grid-stage {
+  width: 100%;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.snap-grid:not(.is-live) .snap-grid-stage:empty { display: none; }
+.snap-grid.is-live .snap-grid-fallback { display: none; }
+.snap-grid.is-frozen .snap-grid-stage { pointer-events: none; }
+.msg .bubble .activity-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}

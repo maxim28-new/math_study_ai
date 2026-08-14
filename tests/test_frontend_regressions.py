@@ -98,6 +98,14 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('{"type":"square_layers"', guide)
         self.assertIn('{"type":"bars"', guide)
 
+    def test_app_js_routes_snap_grid(self):
+        app = read("web/app.js")
+        self.assertIn('"snap_grid"', app)
+        self.assertIn("renderSnapGridPlaceholder", app)
+        css = read("web/styles.css")
+        self.assertIn(".snap-grid-stage", css)
+        self.assertIn("touch-action: none", css)
+
 
 if __name__ == "__main__":
     unittest.main()
