@@ -525,18 +525,16 @@ function applyModeUI() {
   if (state.config && !state.config.configured) exploreBtn.disabled = true;
 
   const attach = $("#attachBtn");
-  if (attach) attach.style.display = explore ? "none" : "";
+  if (attach) attach.classList.toggle("hidden", explore);
 
   const input = $("#input");
-  input.placeholder = explore
-    ? "把你的想法告诉小欧……（回车发送，Shift+回车换行）"
-    : "把题目告诉小欧，或点相机拍下作业本……（回车发送，Shift+回车换行）";
+  input.placeholder = explore ? "说给你听，或打字…" : "拍题或打字告诉小欧…";
 
-  const tip = document.querySelector(".composer .tip");
-  if (tip) {
-    tip.textContent = explore
-      ? "点「✨ 出个新题」让小欧出题；它会陪你一步步想，不会直接给答案。"
-      : "把题目拍照或打出来发给小欧；它会陪你一步步想，不会直接给答案。";
+  const line = $("#topicLine");
+  if (line) {
+    const topic = state.topics.find((t) => t.key === state.topicKey);
+    const tname = topic ? topic.name : "";
+    line.textContent = explore ? (tname ? "探索 · " + tname : "一起探索") : "带题来问";
   }
 }
 
@@ -558,6 +556,7 @@ function updateAxioms() {
     li.textContent = a;
     ul.appendChild(li);
   });
+  applyModeUI();
 }
 
 // ---------------- 发送 / 流式接收 ----------------
@@ -879,6 +878,7 @@ function initDraw() {
   window.addEventListener("pointerup", end);
 
   function open() {
+    closeAttachSheet();
     modal.classList.remove("hidden");
     strokes = [];
     requestAnimationFrame(sizeCanvas);
@@ -913,21 +913,49 @@ function showTranscript(text, tutorBubble) {
 // ---------------- 输入框行为 ----------------
 function autoGrow(el) {
   el.style.height = "auto";
-  el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+function syncKeyboardInset() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  document.documentElement.style.setProperty("--kb", inset + "px");
+}
+
+function openDrawer() {
+  const drawer = $("#drawer");
+  if (drawer) drawer.classList.add("open");
+}
+function closeDrawer() {
+  const drawer = $("#drawer");
+  if (drawer) drawer.classList.remove("open");
+}
+function openAttachSheet() {
+  const sheet = $("#attachSheet");
+  if (sheet) sheet.classList.add("open");
+}
+function closeAttachSheet() {
+  const sheet = $("#attachSheet");
+  if (sheet) sheet.classList.remove("open");
 }
 
 function bindEvents() {
   const input = $("#input");
   input.addEventListener("input", () => autoGrow(input));
   input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    const touch = window.matchMedia("(pointer: coarse)").matches;
+    if (e.key === "Enter" && !e.shiftKey && !touch) {
       e.preventDefault();
       sendMessage();
     }
   });
   $("#sendBtn").addEventListener("click", () => sendMessage());
 
-  $("#attachBtn").addEventListener("click", () => $("#fileInput").click());
+  $("#attachBtn").addEventListener("click", () => {
+    closeAttachSheet();
+    $("#fileInput").click();
+  });
   $("#fileInput").addEventListener("change", onFileChosen);
   $("#imgRemoveBtn").addEventListener("click", clearPendingImage);
 
@@ -935,6 +963,34 @@ function bindEvents() {
     b.addEventListener("click", () => switchMode(b.dataset.mode));
   });
   $("#exploreBtn").addEventListener("click", () => startExplore());
+
+  const plus = $("#plusBtn");
+  if (plus) plus.addEventListener("click", openAttachSheet);
+  const attachCancel = $("#attachCancel");
+  if (attachCancel) attachCancel.addEventListener("click", closeAttachSheet);
+  const attachSheet = $("#attachSheet");
+  if (attachSheet) {
+    attachSheet.addEventListener("click", (e) => {
+      if (e.target === attachSheet) closeAttachSheet();
+    });
+  }
+
+  const gear = $("#gearBtn");
+  if (gear) gear.addEventListener("click", openDrawer);
+  const drawerClose = $("#drawerClose");
+  if (drawerClose) drawerClose.addEventListener("click", closeDrawer);
+  const drawer = $("#drawer");
+  if (drawer) {
+    drawer.addEventListener("click", (e) => {
+      if (e.target === drawer) closeDrawer();
+    });
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncKeyboardInset);
+    window.visualViewport.addEventListener("scroll", syncKeyboardInset);
+    syncKeyboardInset();
+  }
 
   $("#topicSelect").addEventListener("change", (e) => {
     state.topicKey = e.target.value;

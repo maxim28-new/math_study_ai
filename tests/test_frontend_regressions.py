@@ -38,6 +38,27 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("voiceWanted", app)
         self.assertIn("finishVoiceSession()", app)
 
+    def test_web_is_kid_h5_chat_shell(self):
+        html = read("web/index.html")
+        css = read("web/styles.css")
+        app = read("web/app.js")
+
+        self.assertIn('viewport-fit=cover', html)
+        self.assertIn('apple-mobile-web-app-capable', html)
+        self.assertIn('id="gearBtn"', html)
+        self.assertIn('id="drawer"', html)
+        self.assertIn('id="plusBtn"', html)
+        self.assertIn('id="attachSheet"', html)
+        self.assertNotIn('grid-template-columns: 320px 1fr', css)
+        self.assertIn("100dvh", css)
+        self.assertIn(".sheet-handle", css)
+        self.assertIn("function openDrawer()", app)
+        self.assertIn("visualViewport", app)
+        self.assertIn("手机版", html)
+        self.assertIn("no-store", read("server/app.py"))
+        self.assertIn("RedirectResponse", read("server/app.py"))
+        self.assertIn('HOST", "0.0.0.0"', read("server/config.py"))
+
 
 if __name__ == "__main__":
     unittest.main()

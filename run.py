@@ -1,12 +1,30 @@
 """启动脚本。填好 .env 之后，直接运行： python run.py"""
 
+from __future__ import annotations
+
+import socket
+from typing import Optional
+
 import uvicorn
 
 from server.config import settings
 
+
+def lan_ip() -> Optional[str]:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        ip = sock.getsockname()[0]
+        sock.close()
+        return ip
+    except OSError:
+        return None
+
+
 if __name__ == "__main__":
     print("=" * 56)
-    print("  小欧 · 启发式数学老师")
+    print("  小欧 · 启发式数学老师（手机 H5）")
+    print("  若仍看到左侧设置栏，说明跑的是旧代码，请切到 cursor/kid-h5-d734 后重启")
     mode = "多模态一体（unified）" if settings.is_unified else "OCR + 文字（split）"
     print(f"  处理模式：{mode}")
     if settings.is_configured:
@@ -27,7 +45,11 @@ if __name__ == "__main__":
         print(f"            {settings.vision_base_url}")
     elif not settings.is_unified:
         print("  拍照 OCR ：未配置（可选填 LLM_VISION_*，或改用 unified 模式）")
-    print(f"  打开浏览器访问： http://{settings.host}:{settings.port}")
+    print(f"  本机打开： http://127.0.0.1:{settings.port}")
+    ip = lan_ip()
+    if ip:
+        print(f"  手机打开（同一 WiFi）： http://{ip}:{settings.port}")
+        print("  把这个网址发给孩子，用浏览器打开即可；可「添加到主屏幕」。")
     print("  按 Ctrl+C 停止")
     print("=" * 56)
     uvicorn.run("server.app:app", host=settings.host, port=settings.port, reload=False)
