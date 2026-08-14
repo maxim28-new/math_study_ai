@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 import unittest
 
 
@@ -58,6 +59,22 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("no-store", read("server/app.py"))
         self.assertIn("RedirectResponse", read("server/app.py"))
         self.assertIn('HOST", "0.0.0.0"', read("server/config.py"))
+
+    def test_activity_state_js_rules(self):
+        proc = subprocess.run(
+            ["node", str(ROOT / "tests" / "activity_state_test.js")],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("activity_state_test.js ok", proc.stdout)
+
+    def test_activity_state_js_has_no_konva(self):
+        src = read("web/activity/state.js")
+        self.assertNotIn("Konva", src)
+        self.assertIn("parseSnapGrid", src)
+        self.assertIn("detectMilestone", src)
 
 
 if __name__ == "__main__":
