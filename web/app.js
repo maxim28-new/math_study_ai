@@ -111,10 +111,10 @@ const DIAGRAM_TYPES = new Set(["dots", "square_layers", "square_steps", "square_
 function tryParseDiagramSpec(text) {
   const t = String(text).trim();
   if (!t.startsWith("{")) return null;
-  try {
-    const spec = JSON.parse(t);
-    if (spec && typeof spec.type === "string" && DIAGRAM_TYPES.has(spec.type)) return spec;
-  } catch (e) { /* ignore */ }
+  const spec = (window.XiaoouActivity && XiaoouActivity.parseDiagramJson)
+    ? XiaoouActivity.parseDiagramJson(t)
+    : null;
+  if (spec && typeof spec.type === "string" && DIAGRAM_TYPES.has(spec.type)) return spec;
   return null;
 }
 
@@ -203,8 +203,12 @@ function renderMarkdown(text) {
 
 // ---------------- 图形渲染（小欧插入的 xiaoou-draw 图，用 SVG 安全生成） ----------------
 function renderDiagram(jsonText) {
-  let s;
-  try { s = JSON.parse(jsonText); } catch (e) { return ""; }
+  let s = (window.XiaoouActivity && XiaoouActivity.parseDiagramJson)
+    ? XiaoouActivity.parseDiagramJson(jsonText)
+    : null;
+  if (!s) {
+    try { s = JSON.parse(jsonText); } catch (e) { return ""; }
+  }
   if (s.type === "snap_grid") {
     const parsed = (window.XiaoouActivity && XiaoouActivity.parseSnapGrid)
       ? XiaoouActivity.parseSnapGrid(s)

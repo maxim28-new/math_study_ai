@@ -96,4 +96,23 @@ assert.ok(A.tutorCaption(longCap).includes("一共有多少块积木"));
 assert.strictEqual(A.tutorCaption("这是一个 $3 \\times 3$ 的正方形"), "这是一个 3 × 3 的正方形");
 assert.strictEqual(A.tutorCaption("这是一个 3\\times3 的正方形"), "这是一个 3×3 的正方形");
 
+// JSON.parse 会把 "\times" 吃成制表符，界面就变成 5imes5。
+assert.strictEqual(A.softenBareLatex("左边是 5\times5"), "左边是 5×5");
+const brokenJson = '{"type":"square_compare","from":5,"to":6,"caption":"左边是 5\\times5"}';
+const parsedCompare = A.parseDiagramJson(brokenJson);
+assert.ok(parsedCompare);
+assert.ok(!String(parsedCompare.caption).includes("\t"), parsedCompare.caption);
+assert.strictEqual(A.softenBareLatex(parsedCompare.caption), "左边是 5×5");
+
+const laterTurn = [
+  "你的思路非常清晰！那如果我们再往外包一圈，从 $5 \\times 5$ 变成 $6 \\times 6$,",
+  "",
+  "```xiaoou-draw",
+  '{"type":"square_compare","from":5,"to":6,"caption":"按照刚才的规律，这次金色的会有几块？"}',
+  "```",
+].join("\n");
+const laterCap = A.tutorCaption(laterTurn);
+assert.ok(laterCap.includes("从 5 × 5 变成 6 × 6"));
+assert.ok(laterCap.includes("这次金色的会有几块"));
+
 console.log("activity_state_test.js ok");
