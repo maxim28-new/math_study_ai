@@ -276,6 +276,31 @@ function setCaption(text) {
   const el = $("#tutorCaption");
   if (!el) return;
   el.innerHTML = text ? inlineFmt(text) : "";
+  const bar = $("#captionBar");
+  if (bar) bar.classList.remove("is-open");
+  requestAnimationFrame(syncCaptionOverflow);
+}
+
+function syncCaptionOverflow() {
+  const el = $("#tutorCaption");
+  const bar = $("#captionBar");
+  const more = $(".caption-more");
+  if (!el || !bar) return;
+  const open = bar.classList.contains("is-open");
+  const overflowing = el.scrollHeight > el.clientHeight + 4;
+  bar.classList.toggle("can-expand", overflowing || open);
+  bar.setAttribute("aria-expanded", open ? "true" : "false");
+  if (more) {
+    more.hidden = !(open || overflowing);
+    more.textContent = open ? "收起" : "展开全文";
+  }
+}
+
+function toggleCaptionOpen() {
+  const bar = $("#captionBar");
+  if (!bar) return;
+  bar.classList.toggle("is-open");
+  syncCaptionOverflow();
 }
 
 function showStartPlay() {
@@ -2083,6 +2108,16 @@ function bindEvents() {
   $("#exploreBtn").addEventListener("click", () => startExplore());
   const startPlayBtn = $("#startPlayBtn");
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
+  const captionBar = $("#captionBar");
+  if (captionBar) {
+    captionBar.addEventListener("click", toggleCaptionOpen);
+    captionBar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleCaptionOpen();
+      }
+    });
+  }
   const hintBtn = $("#hintBtn");
   if (hintBtn) {
     hintBtn.addEventListener("click", () => {
@@ -2159,6 +2194,7 @@ function bindEvents() {
   }
   window.addEventListener("resize", () => {
     if (isStageExpanded()) sizeDoodleCanvas();
+    syncCaptionOverflow();
   });
 
   $("#topicSelect").addEventListener("change", (e) => {

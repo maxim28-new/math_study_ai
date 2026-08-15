@@ -713,33 +713,57 @@ button, input, select, textarea { font-family: inherit; }
 
 .explore-stage .caption-bar {
   position: relative;
-  flex: 0 0 auto;
-  min-height: 0;
-  padding: 10px 12px 8px;
+  flex: 1 1 52%;
+  min-height: 148px;
+  max-height: 62%;
+  padding: 12px 14px 10px;
   background: #fffdf8;
   border: 1px solid var(--line);
   border-radius: 18px;
   box-shadow: 0 8px 18px rgba(62, 48, 24, .05);
   overflow: hidden;
+  cursor: pointer;
+}
+.explore-stage .caption-bar.is-open {
+  flex: 1 1 72%;
+  max-height: 78%;
+}
+.app.layout-explore.talk-open .caption-bar {
+  min-height: 108px;
+  max-height: 50%;
 }
 #tutorCaption {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 650;
-  line-height: 1.4;
+  line-height: 1.5;
   color: var(--ink);
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 8;
   overflow: hidden;
 }
+.caption-bar.is-open #tutorCaption {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: auto;
+  max-height: 100%;
+}
 #tutorCaption .katex { font-size: 1em; }
+.caption-more {
+  display: block;
+  margin-top: 6px;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+.caption-more[hidden] { display: none; }
 
 .play-stage {
   position: relative;
-  flex: 1 1 0;
-  min-height: 0;
-  max-height: none;
+  flex: 0 1 38%;
+  min-height: 168px;
+  max-height: 42%;
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #fff, #fbf7ef);

@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260815-layout6" />
+  <link rel="stylesheet" href="/styles.css?v=20260815-layout7" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -43,8 +43,9 @@
     <div id="banner" class="banner hidden"></div>
 
     <section id="exploreStage" class="explore-stage">
-      <div class="caption-bar" id="captionBar">
+      <div class="caption-bar" id="captionBar" role="button" tabindex="0" aria-expanded="false" aria-label="展开题目">
         <p id="tutorCaption">点开始玩，把方块拖进格子</p>
+        <span class="caption-more" hidden>展开全文</span>
       </div>
       <div class="play-stage">
         <div id="startPlayWrap" class="start-play">
@@ -229,11 +230,11 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260815-layout6"></script>
-  <script src="/activity/snap-grid.js?v=20260815-layout6"></script>
-  <script src="/board/state.js?v=20260815-layout6"></script>
-  <script src="/board/layer-pile.js?v=20260815-layout6"></script>
-  <script src="/board/path-board.js?v=20260815-layout6"></script>
-  <script src="/app.js?v=20260815-layout6"></script>
+  <script src="/activity/state.js?v=20260815-layout7"></script>
+  <script src="/activity/snap-grid.js?v=20260815-layout7"></script>
+  <script src="/board/state.js?v=20260815-layout7"></script>
+  <script src="/board/layer-pile.js?v=20260815-layout7"></script>
+  <script src="/board/path-board.js?v=20260815-layout7"></script>
+  <script src="/app.js?v=20260815-layout7"></script>
 </body>
 </html>
