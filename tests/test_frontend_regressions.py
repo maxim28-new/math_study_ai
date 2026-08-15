@@ -190,7 +190,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("我有作业", html)
         self.assertNotIn("打开画板", html)
         self.assertIn(".layout-explore", css)
-        self.assertIn(".solve-workspace", html)
+        self.assertIn("solve-workspace", html)
         self.assertIn(".play-stage", css)
         self.assertIn(".play-stage.is-drawing", css)
         self.assertIn(".caption-scroll", css)
