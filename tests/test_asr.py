@@ -7,7 +7,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from server.app import app
-from server.asr import MAX_AUDIO_BYTES, build_data_uri, extract_transcript
+from server.asr import MAX_AUDIO_BYTES, build_data_uri, build_transcribe_payload, extract_transcript
 
 
 class AsrHelperTests(unittest.TestCase):
@@ -25,6 +25,11 @@ class AsrHelperTests(unittest.TestCase):
 
     def test_extract_transcript_empty(self):
         self.assertEqual(extract_transcript({}), "")
+
+    def test_payload_is_user_audio_only(self):
+        payload = build_transcribe_payload(b"abc", "audio/webm", "qwen3-asr-flash")
+        self.assertEqual([m["role"] for m in payload["messages"]], ["user"])
+        self.assertEqual(payload["messages"][0]["content"][0]["type"], "input_audio")
 
 
 class AsrHttpTests(unittest.TestCase):

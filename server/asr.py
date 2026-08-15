@@ -56,17 +56,11 @@ def extract_transcript(data: dict[str, Any]) -> str:
     return ""
 
 
-async def transcribe_audio(audio_bytes: bytes, mime: str = "audio/webm") -> str:
-    if not settings.asr_model or not settings.api_key:
-        raise ValueError("还没有配置语音听写。")
-    payload = {
-        "model": settings.asr_model,
+def build_transcribe_payload(audio_bytes: bytes, mime: str, model: str) -> dict:
+    return {
+        "model": model,
         "stream": False,
         "messages": [
-            {
-                "role": "system",
-                "content": "把孩子说的话听写成简体中文。这是数学课上的对话，数字和加减乘除请写清楚。",
-            },
             {
                 "role": "user",
                 "content": [
@@ -75,10 +69,16 @@ async def transcribe_audio(audio_bytes: bytes, mime: str = "audio/webm") -> str:
                         "input_audio": {"data": build_data_uri(audio_bytes, mime)},
                     }
                 ],
-            },
+            }
         ],
         "asr_options": {"language": "zh", "enable_itn": True},
     }
+
+
+async def transcribe_audio(audio_bytes: bytes, mime: str = "audio/webm") -> str:
+    if not settings.asr_model or not settings.api_key:
+        raise ValueError("还没有配置语音听写。")
+    payload = build_transcribe_payload(audio_bytes, mime, settings.asr_model)
     headers = {
         "Authorization": f"Bearer {settings.api_key}",
         "Content-Type": "application/json",
