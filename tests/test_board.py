@@ -48,6 +48,25 @@ class SemanticBoardTests(unittest.TestCase):
         )
         self.assertEqual(spec["moves"], [1, 2])
         self.assertEqual(spec["purpose"], "explore_choices")
+        question = board.first_question_for_board(spec)
+        self.assertIn("第 5 级", question)
+        self.assertIn("1 级或2 级", question)
+
+    def test_layer_question_comes_from_validated_counts(self):
+        spec = board.normalize_semantic_board(
+            {
+                "schema": 2,
+                "kind": "layer_sum",
+                "layers": [1, 2, 3],
+                "item": "罐",
+                "ask": "total",
+                "reveal": "items_without_total",
+            }
+        )
+        self.assertEqual(
+            board.first_question_for_board(spec),
+            "从上到下每层分别有 1、2、3 罐，这些层一共有多少罐？",
+        )
 
     def test_rejects_unknown_or_unsafe_specs(self):
         bad = [

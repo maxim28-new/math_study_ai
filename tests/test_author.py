@@ -80,6 +80,38 @@ class AuthorCardTests(unittest.TestCase):
         self.assertIsNone(card["diagram"])
         self.assertEqual(card["semantic_board"]["kind"], "layer_sum")
         self.assertEqual(card["semantic_board"]["layers"], [1, 2, 3, 4, 5])
+        self.assertEqual(
+            card["first_question"],
+            "从上到下每层分别有 1、2、3、4、5 罐，这些层一共有多少罐？",
+        )
+
+    def test_semantic_board_is_source_of_truth_for_question_numbers(self):
+        raw = {
+            "topic": "reasoning",
+            "hook": "青蛙从 0 跳到 4",
+            "insight": "把所有走法不重不漏地列出来",
+            "axiom": "先列举，再检查。",
+            "representation": "semantic_board",
+            "semantic_board": {
+                "schema": 2,
+                "kind": "path_count",
+                "start": 0,
+                "target": 4,
+                "moves": [1, 2],
+                "ask": "number_of_paths",
+                "reveal": "rules_only",
+            },
+            "diagram": None,
+            "first_question": "先到第 2 级有几种走法？",
+            "ladder": [
+                {"rung": "do", "ask": "先走一次。"},
+                {"rung": "see", "ask": "还有别的走法吗？"},
+                {"rung": "why", "ask": "怎样保证不漏？"},
+            ],
+        }
+        card = author.normalize_card(raw, "reasoning")
+        self.assertIn("第 4 级", card["first_question"])
+        self.assertNotIn("第 2 级", card["first_question"])
 
     def test_keyword_does_not_rewrite_legacy_diagram(self):
         raw = {

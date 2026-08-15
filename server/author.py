@@ -50,6 +50,8 @@ AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看�
 - 如果研究「每层有不同数量的物体，问几层合计」，必须给 semantic_board.kind=layer_sum。
 - 如果研究「从起点按允许步长到终点有几种走法」，必须给 semantic_board.kind=path_count。
 - 不能因为故事里出现「台阶」「小山」就选择画法；先判断是在数分层物体，还是在枚举移动路径。
+- semantic_board 必须描述第一问正在问的那一个规模，不要在画板写目标 4、第一问却先问目标 2。
+- 语义画板题的第一问会由程序根据已校验数据统一数字；你仍要写一句自然的 first_question 供校验与参考。
 - semantic_board 不适用时填 null，才使用下面的旧学具。
 
 # 旧学具约束
@@ -181,6 +183,11 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
         diagram = None
     elif not isinstance(diagram, dict):
         diagram = None
+    first_question = (
+        semantic_board.first_question_for_board(semantic)
+        if semantic is not None
+        else str(data.get("first_question") or "").strip()
+    )
     card = {
         "topic": str(data.get("topic") or topic).strip() or topic,
         "hook": str(data.get("hook") or "").strip(),
@@ -189,7 +196,7 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
         "representation": representation,
         "semantic_board": semantic,
         "diagram": diagram,
-        "first_question": str(data.get("first_question") or "").strip(),
+        "first_question": first_question,
         "ladder": ladder,
         "misconceptions": [
             str(x).strip()

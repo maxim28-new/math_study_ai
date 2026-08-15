@@ -100,3 +100,19 @@ def validate_semantic_board(board: Any) -> str | None:
     if normalized != board:
         return "语义画板尚未标准化"
     return None
+
+
+def first_question_for_board(board: dict[str, Any]) -> str:
+    """由已校验的数学模型生成当前画板对应的问题，避免题目数字与画板漂移。"""
+    if board.get("kind") == "layer_sum":
+        counts = "、".join(str(n) for n in board["layers"])
+        item = str(board.get("item") or "块")
+        return f"从上到下每层分别有 {counts} {item}，这些层一共有多少{item}？"
+    if board.get("kind") == "path_count":
+        moves = [f"{n} 级" for n in board["moves"]]
+        move_text = "、".join(moves[:-1]) + ("或" if len(moves) > 1 else "") + moves[-1]
+        return (
+            f"从第 {board['start']} 级出发，每次只能跳 {move_text}，"
+            f"到第 {board['target']} 级一共有几种不同走法？"
+        )
+    return ""
