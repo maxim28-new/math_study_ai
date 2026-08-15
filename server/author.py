@@ -20,11 +20,16 @@ REPRESENTATIONS = {
     "bars",
     "dots",
     "numberline",
+    "stairs",
     "square_layers",
     "square_steps",
     "square_compare",
     "none",
 }
+
+STAIR_HINTS = ("台阶", "小山", "金字塔", "一层一层", "一层层", "罐子山", "罐山", "三角小山", "三角形山", "像台阶")
+SQUARE_HINTS = ("正方形", "方阵", "九宫", "包一圈")
+COERCE_TO_STAIRS = ("dots", "square_layers", "square_steps", "square_compare")
 
 AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看不到你。你只输出一张 JSON 题卡，不要讲解、不要 Markdown 前言。
 
@@ -44,13 +49,15 @@ AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看�
 - 最近出过、请避开的钩子：{recent_block}
 
 # 学具约束
-- 算术：snap_grid / dots / numberline，不要默认 3×3 九块。
+- 算术：snap_grid / dots / numberline / stairs，不要默认 3×3 九块。
+- 罐子小山、一层一层往下加、像台阶的三角形堆：必须用 stairs，禁止用矩形 dots 假装台阶。
 - 应用题：bars（线段图）。
 - 几何：拼、围、折；不要平方数包一圈。
 - 逻辑：规律、反例、判断。
 - 分数：先切成一样大的份（bars 或 dots）。
 - 代数：天平/猜数（bars 或 numberline）。
 diagram 必须是小欧能画的 xiaoou-draw JSON（type 与 representation 一致）。representation 为 none 时 diagram 为 null。
+stairs 示例：{{"type":"stairs","rows":5,"caption":"像台阶一样的小山"}}
 
 # 只输出这个 JSON
 {{
@@ -58,7 +65,7 @@ diagram 必须是小欧能画的 xiaoou-draw JSON（type 与 representation 一�
   "hook": "一句具体情景",
   "insight": "孩子最后要自己发现的那一个道理",
   "axiom": "对准的一条公理",
-  "representation": "snap_grid|bars|dots|numberline|square_layers|square_steps|square_compare|none",
+  "representation": "snap_grid|bars|dots|numberline|stairs|square_layers|square_steps|square_compare|none",
   "diagram": {{"type":"..."}},
   "first_question": "只有一句，口语，不泄底",
   "ladder": [
@@ -100,6 +107,56 @@ def is_nine_square(card: dict[str, Any]) -> bool:
     except (TypeError, ValueError):
         return False
     return cols == 3 and rows == 3 and tray == 9
+
+
+def _clamp_rows(value: Any, default: int = 5) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        n = default
+    return max(1, min(10, n))
+
+
+def _card_text(card: dict[str, Any]) -> str:
+    parts = [str(card.get(k) or "") for k in ("hook", "insight", "first_question", "axiom")]
+    diagram = card.get("diagram") if isinstance(card.get("diagram"), dict) else {}
+    parts.append(str(diagram.get("caption") or ""))
+    return " ".join(parts)
+
+
+def looks_like_stairs(card: dict[str, Any]) -> bool:
+    blob = _card_text(card)
+    if any(h in blob for h in SQUARE_HINTS) and not any(
+        h in blob for h in ("台阶", "小山", "金字塔", "三角小山", "三角形山")
+    ):
+        return False
+    return any(h in blob for h in STAIR_HINTS)
+
+
+def coerce_stairs_diagram(card: dict[str, Any]) -> dict[str, Any]:
+    diagram = card.get("diagram") if isinstance(card.get("diagram"), dict) else None
+    if diagram and diagram.get("type") == "stairs":
+        rows = _clamp_rows(diagram.get("rows") or diagram.get("layers") or diagram.get("cols"), 5)
+        caption = str(diagram.get("caption") or "像台阶一样的小山").strip()
+        card["representation"] = "stairs"
+        card["diagram"] = {"type": "stairs", "rows": rows, "caption": caption}
+        return card
+    if not looks_like_stairs(card):
+        return card
+    if diagram and diagram.get("type") not in COERCE_TO_STAIRS:
+        return card
+    rows = 5
+    caption = ""
+    if diagram:
+        rows = _clamp_rows(diagram.get("rows") or diagram.get("layers") or 5, 5)
+        caption = str(diagram.get("caption") or "").strip()
+    card["representation"] = "stairs"
+    card["diagram"] = {
+        "type": "stairs",
+        "rows": rows,
+        "caption": caption or "像台阶一样的小山",
+    }
+    return card
 
 
 def _allows_nine_square(card: dict[str, Any], topic: str) -> bool:
@@ -165,6 +222,7 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
             if str(x).strip()
         ][:4],
     }
+    coerce_stairs_diagram(card)
     if validate_card(card, topic):
         return None
     return card

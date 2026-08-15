@@ -334,10 +334,17 @@ class AuthorRequest(BaseModel):
     level: str = tutor.DEFAULT_LEVEL
     engine: str = ""
     recent: list[str] = Field(default_factory=list)
+    seed_only: bool = False
 
 
 @app.post("/api/author")
 async def author_card(req: AuthorRequest) -> JSONResponse:
+    if req.seed_only:
+        topic = req.topic if req.topic in tutor.TOPICS_BY_KEY else tutor.DEFAULT_TOPIC_KEY
+        level = req.level if req.level in tutor.LEVELS else tutor.DEFAULT_LEVEL
+        return JSONResponse(
+            {"ok": True, "card": author.seed_card(topic, level), "engine": "seed", "fallback": True}
+        )
     try:
         card = await author.author_problem(req.topic, req.level, req.recent, req.engine or None)
     except ValueError as exc:

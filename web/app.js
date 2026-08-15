@@ -111,7 +111,33 @@ function inlineFmt(s) {
   return renderTextWithMath(String(s));
 }
 
-const DIAGRAM_TYPES = new Set(["dots", "square_layers", "square_steps", "square_compare", "numberline", "bars", "snap_grid"]);
+const DIAGRAM_TYPES = new Set(["dots", "stairs", "square_layers", "square_steps", "square_compare", "numberline", "bars", "snap_grid"]);
+const STAIR_HINT_RE = /台阶|小山|金字塔|一层一层|一层层|罐子山|罐山|三角小山|三角形山|像台阶/;
+const SQUARE_HINT_RE = /正方形|方阵|九宫|包一圈/;
+
+function looksLikeStairsSpec(spec) {
+  const blob = String((spec && spec.caption) || "");
+  if (SQUARE_HINT_RE.test(blob) && !/台阶|小山|金字塔|三角小山|三角形山/.test(blob)) return false;
+  return STAIR_HINT_RE.test(blob);
+}
+
+function coerceStairsSpec(s) {
+  if (!s || typeof s !== "object") return s;
+  if (s.type === "stairs") {
+    return Object.assign({}, s, {
+      type: "stairs",
+      rows: clampInt(s.rows || s.layers || s.cols, 1, 10, 5),
+    });
+  }
+  if ((s.type === "dots" || s.type === "square_layers") && looksLikeStairsSpec(s)) {
+    return {
+      type: "stairs",
+      rows: clampInt(s.rows || s.layers || 5, 1, 10, 5),
+      caption: s.caption,
+    };
+  }
+  return s;
+}
 
 /** 识别 xiaoou-draw JSON（模型有时用 ```json 或裸 JSON，也要能画图） */
 function tryParseDiagramSpec(text) {
@@ -215,6 +241,7 @@ function renderDiagram(jsonText) {
   if (!s) {
     try { s = JSON.parse(jsonText); } catch (e) { return ""; }
   }
+  s = coerceStairsSpec(s);
   if (s.type === "snap_grid") {
     const parsed = (window.XiaoouActivity && XiaoouActivity.parseSnapGrid)
       ? XiaoouActivity.parseSnapGrid(s)
@@ -224,6 +251,7 @@ function renderDiagram(jsonText) {
   }
   let inner = "";
   if (s.type === "dots") inner = diagramDots(s);
+  else if (s.type === "stairs") inner = diagramStairs(s);
   else if (s.type === "square_layers") inner = diagramSquareLayers(s);
   else if (s.type === "square_steps") inner = diagramSquareSteps(s);
   else if (s.type === "square_compare") inner = diagramSquareCompare(s);
@@ -440,33 +468,73 @@ function mountFromCard(card) {
   if (host) host.innerHTML = diagram ? renderDiagram(JSON.stringify(diagram)) : "";
 }
 
+function friendlyAuthorError(err) {
+  const msg = String(err && err.message ? err.message : err || "");
+  if (/load failed|failed to fetch|networkerror|abort|timeout|network/i.test(msg)) {
+    return "这道题再想一会儿，点开始玩再试一次。";
+  }
+  return msg || "这道题再想一会儿，点开始玩再试一次。";
+}
+
+async function fetchAuthorOnce(body, timeoutMs) {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch("/api/author", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    if (res.status === 401) {
+      window.location.replace("/gate.html");
+      return null;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.card) {
+      throw new Error(data.error || "出题大脑这会儿有点忙，再试一次。");
+    }
+    return data.card;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function rememberAuthorCard(card) {
+  state.problemCard = card;
+  if (card && card.hook) {
+    state.recentHooks = (state.recentHooks || []).concat(card.hook).slice(-8);
+  }
+  return card;
+}
+
 async function fetchAuthorCard(force) {
   if (!force && state.problemCard && state.problemCard.topic === state.topicKey) {
     return state.problemCard;
   }
-  const res = await fetch("/api/author", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      topic: state.topicKey,
-      level: state.level,
-      engine: state.authorEngine,
-      recent: state.recentHooks || [],
-    }),
-  });
-  if (res.status === 401) {
-    window.location.replace("/gate.html");
-    return null;
+  const body = {
+    topic: state.topicKey,
+    level: state.level,
+    engine: state.authorEngine,
+    recent: state.recentHooks || [],
+  };
+  let lastErr;
+  for (let i = 0; i < 2; i++) {
+    try {
+      const card = await fetchAuthorOnce(body, 70000);
+      if (!card) return null;
+      return rememberAuthorCard(card);
+    } catch (err) {
+      lastErr = err;
+    }
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.card) {
-    throw new Error(data.error || "出题大脑这会儿有点忙，再试一次。");
+  try {
+    const card = await fetchAuthorOnce(Object.assign({}, body, { seed_only: true }), 8000);
+    if (card) return rememberAuthorCard(card);
+  } catch (err) {
+    lastErr = lastErr || err;
   }
-  state.problemCard = data.card;
-  if (data.card.hook) {
-    state.recentHooks = (state.recentHooks || []).concat(data.card.hook).slice(-8);
-  }
-  return data.card;
+  throw new Error(friendlyAuthorError(lastErr));
 }
 
 function prefetchAuthor() {
@@ -485,7 +553,7 @@ async function startPlay() {
     if (state.authorPromise) card = await state.authorPromise;
     if (!card || card.topic !== state.topicKey) card = await fetchAuthorCard(true);
   } catch (e) {
-    setCaption((e && e.message) || "这道题再想一会儿，点开始玩再试。");
+    setCaption(friendlyAuthorError(e));
     showStartPlay();
     return;
   }
@@ -626,6 +694,24 @@ function diagramDots(s) {
     }
   }
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
+}
+function diagramStairs(s) {
+  const rows = clampInt(s.rows || s.layers, 1, 10, 5);
+  const cell = 32, size = 22, pad = 16;
+  const maxW = rows * cell;
+  const w = maxW + pad * 2;
+  const h = rows * cell + pad * 2;
+  let parts = `<rect x="0" y="0" width="${w}" height="${h}" rx="16" fill="#fffdf8"/>`;
+  for (let r = 0; r < rows; r++) {
+    const count = r + 1;
+    const rowW = count * cell;
+    const x0 = pad + (maxW - rowW) / 2;
+    const y = pad + r * cell;
+    for (let c = 0; c < count; c++) {
+      parts += tileRect(x0 + c * cell + cell / 2, y + cell / 2, size, DIAG_BLUE);
+    }
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${parts}</svg>`;
 }
 function layerHighlight(raw, n) {
   if (raw === 0 || raw === "0" || raw === "none" || raw === false) return null;
@@ -1141,7 +1227,7 @@ async function startExplore() {
       if (card.first_question) setCaption(card.first_question);
     }
   } catch (e) {
-    setCaption((e && e.message) || "这道再想一会儿。");
+    setCaption(friendlyAuthorError(e));
     return;
   }
   await streamAssistant(true);

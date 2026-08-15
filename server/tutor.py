@@ -283,6 +283,7 @@ DRAWING_GUIDE = """\
 ## 图形类型
 - 点阵（矩形格子、乘法表；会画成圆角方块，不要写成圆点）：{"type":"dots","rows":3,"cols":4,"newLastRowCol":false,"caption":"简短说明"}
   newLastRowCol 为 true 时，最后一行和最后一列标金色，适合"在外面再包一圈"。
+- 台阶小山（第 1 层 1 块、第 2 层 2 块……居中堆成三角形；禁止用矩形 dots 假装台阶）：{"type":"stairs","rows":5,"caption":"像台阶一样的小山"}
 - 单层正方形（强调某一层）：{"type":"square_layers","size":4,"highlight":4,"caption":"金色是最外圈，数数有几块？"}
   highlight 填层号（1=最外圈）强调该层；填 "none" 则全部蓝色（问「一共几块」时用）。
 - 一步步长大的正方形（并排 1×1、2×2…）：{"type":"square_steps","max":4,"highlight":4,"caption":"每次加的那一圈"}
@@ -293,7 +294,7 @@ DRAWING_GUIDE = """\
   cols/rows 为格子行列（1–8），tray 为托盘里的方块数（可多于或少于格子）。孩子能拖方块；你看不到拖的过程，只会在她明显摆完时收到一条「孩子在学具上摆完了一步」的消息，内含已放/空格/托盘剩余/节点（board_full 或 tiles_exhausted）。
 
 ## 按主题选第一张图（有题卡时以题卡为准）
-- 算术：snap_grid / dots / numberline，不要默认 3×3 九块正方形。
+- 算术：snap_grid / dots / numberline / stairs，不要默认 3×3 九块正方形。罐子小山、一层一层往下加，必须用 stairs。
 - 应用题：bars 线段图。
 - 几何：拼、围、折；不要平方数包一圈。
 - 逻辑：规律、反例。

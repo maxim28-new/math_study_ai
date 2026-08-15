@@ -50,6 +50,85 @@ class AuthorCardTests(unittest.TestCase):
         card["insight"] = "连续奇数相加会得到平方数"
         self.assertIsNone(author.validate_card(card, "arithmetic"))
 
+    def test_coerce_mountain_dots_to_stairs(self):
+        raw = {
+            "topic": "arithmetic",
+            "hook": "仓库里的罐子堆成三角小山",
+            "insight": "第 n 层有 n 罐，前 n 层加起来是三角形数",
+            "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
+            "representation": "dots",
+            "diagram": {"type": "dots", "rows": 5, "cols": 5, "caption": "前5层的小山，像台阶"},
+            "first_question": "前5层一共多少罐？",
+            "ladder": [
+                {"rung": "do", "ask": "先数最上面一层有几罐。"},
+                {"rung": "see", "ask": "每一层比上一层多几罐？"},
+                {"rung": "why", "ask": "为什么可以一层一层加起来？"},
+            ],
+        }
+        card = author.normalize_card(raw, "arithmetic")
+        self.assertIsNotNone(card)
+        self.assertEqual(card["representation"], "stairs")
+        self.assertEqual(card["diagram"]["type"], "stairs")
+        self.assertEqual(card["diagram"]["rows"], 5)
+
+    def test_stairs_passthrough(self):
+        raw = {
+            "topic": "arithmetic",
+            "hook": "罐子小山",
+            "insight": "一层比一层多 1",
+            "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
+            "representation": "stairs",
+            "diagram": {"type": "stairs", "rows": 4, "caption": "4 层台阶"},
+            "first_question": "这 4 层一共多少罐？",
+            "ladder": [
+                {"rung": "do", "ask": "先数第一层。"},
+                {"rung": "see", "ask": "每层多几罐？"},
+                {"rung": "why", "ask": "为什么是三角形数？"},
+            ],
+        }
+        card = author.normalize_card(raw, "arithmetic")
+        self.assertEqual(card["diagram"]["type"], "stairs")
+        self.assertEqual(card["diagram"]["rows"], 4)
+
+    def test_square_dots_stay_square(self):
+        raw = {
+            "topic": "arithmetic",
+            "hook": "九块积木",
+            "insight": "连续奇数相加会得到平方数",
+            "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
+            "representation": "dots",
+            "diagram": {"type": "dots", "rows": 3, "cols": 3, "caption": "3×3 正方形"},
+            "first_question": "这 9 块能摆成正方形吗？",
+            "ladder": [
+                {"rung": "do", "ask": "先摆摆看。"},
+                {"rung": "see", "ask": "外面一圈有几块？"},
+                {"rung": "why", "ask": "为什么包一圈会变成更大的正方形？"},
+            ],
+        }
+        card = author.normalize_card(raw, "arithmetic")
+        self.assertIsNotNone(card)
+        self.assertEqual(card["diagram"]["type"], "dots")
+        self.assertEqual(card["representation"], "dots")
+
+    def test_geometry_triangle_is_not_stairs(self):
+        raw = {
+            "topic": "geometry",
+            "hook": "三根小棒围三角形",
+            "insight": "两边加起来必须比第三边长，才能围住",
+            "axiom": "任意两点之间，可以画一条直线段。",
+            "representation": "dots",
+            "diagram": {"type": "dots", "rows": 1, "cols": 3, "caption": "三根小棒"},
+            "first_question": "2、3、6 还能围成三角形吗？",
+            "ladder": [
+                {"rung": "do", "ask": "先拿 2、3、4 试一试。"},
+                {"rung": "see", "ask": "哪两边加起来还不够？"},
+                {"rung": "why", "ask": "为什么围不住？"},
+            ],
+        }
+        card = author.normalize_card(raw, "geometry")
+        self.assertIsNotNone(card)
+        self.assertEqual(card["diagram"]["type"], "dots")
+
     def test_seed_card_matches_topic_and_is_not_nine_square(self):
         for topic in ("wordproblems", "geometry", "reasoning", "fractions", "algebra"):
             card = author.seed_card(topic, "middle")
@@ -100,6 +179,16 @@ class AuthorHttpTests(unittest.TestCase):
         keys = [e["key"] for e in cfg["author_engines"]]
         self.assertEqual(keys, ["glm", "deepseek"])
         self.assertIn(cfg["default_author"], ("glm", "deepseek"))
+
+    def test_seed_only_returns_seed_card(self):
+        self.client.post("/api/unlock", json={"code": "maxim"})
+        resp = self.client.post("/api/author", json={"topic": "reasoning", "seed_only": True})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["engine"], "seed")
+        self.assertEqual(data["card"]["topic"], "reasoning")
+        self.assertFalse(author.is_nine_square(data["card"]))
 
 
 if __name__ == "__main__":

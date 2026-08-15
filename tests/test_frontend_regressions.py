@@ -110,6 +110,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("tiles_exhausted", guide)
         self.assertIn("不要祝贺", guide)
         self.assertIn('{"type":"dots"', guide)
+        self.assertIn('{"type":"stairs"', guide)
         self.assertIn('{"type":"square_layers"', guide)
         self.assertIn('{"type":"bars"', guide)
 
@@ -173,10 +174,15 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('id="authorSelect"', html)
         self.assertIn("/api/author", app)
         self.assertIn("function fetchAuthorCard(", app)
+        self.assertIn("function friendlyAuthorError(", app)
+        self.assertIn("这道题再想一会儿，点开始玩再试一次。", app)
+        self.assertIn("seed_only", app)
         start = app[app.find("async function startPlay"):app.find("function placeMessages")]
         self.assertIn("fetchAuthorCard", start)
+        self.assertIn("friendlyAuthorError", start)
         self.assertNotIn("DEFAULT_SNAP_GRID", start)
         self.assertIn('location.replace("/gate.html")', app)
+        self.assertNotIn("Load failed", start)
 
     def test_static_block_diagrams_use_rounded_squares(self):
         app = read("web/app.js")
@@ -188,6 +194,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("<circle", layers)
         self.assertIn("function softenBareLatex(", app)
         self.assertIn("function tileRect(", app)
+        self.assertIn("function diagramStairs(", app)
+        self.assertIn('"stairs"', app)
+        stairs = app[app.find("function diagramStairs"):app.find("function layerHighlight")]
+        self.assertIn("tileRect(", stairs)
+        self.assertNotIn("<circle", stairs)
 
     def test_caption_shows_full_math_text(self):
         css = read("web/styles.css")

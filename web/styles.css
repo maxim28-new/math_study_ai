@@ -788,7 +788,9 @@ button, input, select, textarea { font-family: inherit; }
   align-items: center;
 }
 .stage-host .diagram svg {
+  width: min(100%, 320px);
   max-width: 100%;
+  max-height: 280px;
   height: auto;
 }
 .stage-host .snap-grid-stage {
