@@ -75,6 +75,7 @@ class GateHelpersTests(unittest.TestCase):
         self.assertFalse(is_public_path("/index.html"))
         self.assertFalse(is_public_path("/api/config"))
         self.assertFalse(is_public_path("/api/chat"))
+        self.assertFalse(is_public_path("/api/author"))
 
 
 class AccessGateHttpTests(unittest.TestCase):

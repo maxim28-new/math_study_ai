@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260815-caption" />
+  <link rel="stylesheet" href="/styles.css?v=20260815-author" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -49,7 +49,7 @@
       </div>
       <div class="play-stage">
         <div id="startPlayWrap" class="start-play">
-          <p class="start-kicker">把方块拖进格子里</p>
+          <p class="start-kicker">点开始玩，小欧会先想一道题</p>
           <button type="button" id="startPlayBtn" class="start-play-btn">开始玩</button>
         </div>
         <div id="stageHost" class="stage-host"></div>
@@ -185,6 +185,13 @@
         <select id="levelSelect"></select>
       </label>
       <label class="field">
+        <span>出题大脑</span>
+        <select id="authorSelect">
+          <option value="deepseek">DeepSeek V4 Pro</option>
+          <option value="glm">GLM-5.3</option>
+        </select>
+      </label>
+      <label class="field">
         <span>思考模式</span>
         <select id="thinkingSelect">
           <option value="off">关闭 · 回答更快</option>
@@ -231,8 +238,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260815-caption"></script>
-  <script src="/activity/snap-grid.js?v=20260815-caption"></script>
-  <script src="/app.js?v=20260815-caption"></script>
+  <script src="/activity/state.js?v=20260815-author"></script>
+  <script src="/activity/snap-grid.js?v=20260815-author"></script>
+  <script src="/app.js?v=20260815-author"></script>
 </body>
 </html>

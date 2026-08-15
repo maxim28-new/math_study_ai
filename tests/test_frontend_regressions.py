@@ -69,10 +69,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function openTopicSheet(", app)
         self.assertNotIn("选好左边的主题", app)
 
-    def test_explore_kickoff_prefers_snap_grid(self):
+    def test_explore_kickoff_follows_author_card(self):
         tutor = read("server/tutor.py")
-        self.assertIn("第一问优先用可动手的 snap_grid", tutor)
-        self.assertIn('"type":"snap_grid"', tutor)
+        self.assertIn("EXPLORE_KICKOFF_WITH_CARD", tutor)
+        self.assertIn("不要所有主题都从 9 块摆正方形开始", tutor)
+        self.assertIn("有题卡时以题卡为准", tutor)
 
     def test_activity_state_js_rules(self):
         proc = subprocess.run(
@@ -168,7 +169,13 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-caption", html)
+        self.assertIn("v=20260815-author", html)
+        self.assertIn('id="authorSelect"', html)
+        self.assertIn("/api/author", app)
+        self.assertIn("function fetchAuthorCard(", app)
+        start = app[app.find("async function startPlay"):app.find("function placeMessages")]
+        self.assertIn("fetchAuthorCard", start)
+        self.assertNotIn("DEFAULT_SNAP_GRID", start)
         self.assertIn('location.replace("/gate.html")', app)
 
     def test_static_block_diagrams_use_rounded_squares(self):
