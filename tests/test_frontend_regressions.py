@@ -177,7 +177,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-author", html)
+        self.assertIn("v=20260815-layout", html)
         self.assertIn('id="authorSelect"', html)
         self.assertIn("/api/author", app)
         self.assertIn("function fetchAuthorCard(", app)
@@ -207,14 +207,17 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("tileRect(", stairs)
         self.assertNotIn("<circle", stairs)
 
-    def test_caption_shows_full_math_text(self):
+    def test_caption_preserves_full_math_text_when_expanded(self):
         css = read("web/styles.css")
         app = read("web/app.js")
         state_js = read("web/activity/state.js")
         self.assertIn("#tutorCaption", css)
         cap_css = css[css.find("#tutorCaption"):css.find("#tutorCaption .katex")]
         self.assertNotIn("7.4em", cap_css)
-        self.assertNotIn("max-height", cap_css)
+        self.assertIn("-webkit-line-clamp: 5", cap_css)
+        self.assertIn(".caption-bar.is-expanded #tutorCaption", cap_css)
+        self.assertIn("overflow: visible", cap_css)
+        self.assertIn("toggleCaptionExpansion", app)
         self.assertIn("el.innerHTML", app)
         self.assertIn("softenBareLatex", state_js)
         self.assertIn("function parseDiagramJson(", state_js)
