@@ -278,41 +278,6 @@ function setCaption(text) {
   el.innerHTML = html;
   const sheetBody = $("#captionSheetBody");
   if (sheetBody) sheetBody.innerHTML = html || "<p>小欧还没开始说话。</p>";
-  const btn = $("#captionExpandBtn");
-  if (btn) btn.setAttribute("aria-expanded", "false");
-  closeCaptionSheet();
-  requestAnimationFrame(syncCaptionDisclosure);
-}
-
-function syncCaptionDisclosure() {
-  const el = $("#tutorCaption");
-  const btn = $("#captionExpandBtn");
-  if (!el || !btn) return;
-  const sheet = $("#captionSheet");
-  const open = !!(sheet && sheet.classList.contains("open"));
-  const clipped = el.scrollHeight > el.clientHeight + 2;
-  btn.classList.toggle("hidden", !open && !clipped);
-}
-
-function openCaptionSheet() {
-  const sheet = $("#captionSheet");
-  const btn = $("#captionExpandBtn");
-  if (sheet) sheet.classList.add("open");
-  if (btn) btn.setAttribute("aria-expanded", "true");
-}
-
-function closeCaptionSheet() {
-  const sheet = $("#captionSheet");
-  const btn = $("#captionExpandBtn");
-  if (sheet) sheet.classList.remove("open");
-  if (btn) btn.setAttribute("aria-expanded", "false");
-  requestAnimationFrame(syncCaptionDisclosure);
-}
-
-function toggleCaptionExpansion() {
-  const sheet = $("#captionSheet");
-  if (sheet && sheet.classList.contains("open")) closeCaptionSheet();
-  else openCaptionSheet();
 }
 
 function showStartPlay() {
@@ -668,13 +633,8 @@ function closeHistorySheet() {
   const sheet = $("#historySheet");
   if (sheet) sheet.classList.remove("open");
 }
-function openHelpSheet() {
-  const sheet = $("#helpSheet");
-  if (sheet) sheet.classList.add("open");
-}
 function closeHelpSheet() {
-  const sheet = $("#helpSheet");
-  if (sheet) sheet.classList.remove("open");
+  closeAttachSheet();
 }
 
 function hydrateSnapGrids(bubble, interactive) {
@@ -1124,7 +1084,7 @@ async function loadConfig() {
       b.textContent = a.label;
       b.dataset.message = a.message;
       b.addEventListener("click", () => {
-        closeHelpSheet();
+        closeAttachSheet();
         sendMessage(a.message);
       });
       into.appendChild(b);
@@ -1207,9 +1167,6 @@ function applyModeUI() {
     if (startBtn) startBtn.disabled = true;
   }
 
-  const attach = $("#attachBtn");
-  if (attach) attach.classList.toggle("hidden", explore);
-
   const input = $("#input");
   if (input) input.placeholder = explore ? "说给你听，或打字…" : "拍题或打字告诉小欧…";
 
@@ -1226,12 +1183,16 @@ function applyModeUI() {
   if (modeSel) modeSel.value = state.mode;
 
   const started = explore && ($(".play-stage") && $(".play-stage").classList.contains("is-playing") || state.messages.length > 0);
-  const helpBtn = $("#helpBtn");
   const talkBtn = $("#talkBtn");
   const historyBtn = $("#historyBtn");
-  if (helpBtn) helpBtn.classList.toggle("hidden", !explore || !started);
   if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
   if (historyBtn) historyBtn.disabled = !explore;
+  const plusHelp = $("#plusHelpGroup");
+  if (plusHelp) plusHelp.hidden = !explore;
+  const drawBtn = $("#drawBtn");
+  if (drawBtn) drawBtn.hidden = explore;
+  const attach = $("#attachBtn");
+  if (attach) attach.textContent = explore ? "📷 拍一张给小欧看" : "📷 拍作业本";
 }
 
 function updatePhotoHint(cfg) {
@@ -1902,32 +1863,25 @@ function bindEvents() {
   $("#exploreBtn").addEventListener("click", () => startExplore());
   const startPlayBtn = $("#startPlayBtn");
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
-  const captionExpandBtn = $("#captionExpandBtn");
-  if (captionExpandBtn) captionExpandBtn.addEventListener("click", toggleCaptionExpansion);
-  const captionSheetClose = $("#captionSheetClose");
-  if (captionSheetClose) captionSheetClose.addEventListener("click", closeCaptionSheet);
-  const captionSheet = $("#captionSheet");
-  if (captionSheet) {
-    captionSheet.addEventListener("click", (e) => {
-      if (e.target === captionSheet) closeCaptionSheet();
+  const captionBar = $("#captionBar");
+  if (captionBar) {
+    captionBar.addEventListener("click", (e) => {
+      if (e.target.closest("#historyBtn")) return;
+      openHistorySheet();
+    });
+    captionBar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openHistorySheet();
+      }
     });
   }
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
-  const helpBtn = $("#helpBtn");
-  if (helpBtn) helpBtn.addEventListener("click", openHelpSheet);
-  const helpCancel = $("#helpCancel");
-  if (helpCancel) helpCancel.addEventListener("click", closeHelpSheet);
-  const helpSheet = $("#helpSheet");
-  if (helpSheet) {
-    helpSheet.addEventListener("click", (e) => {
-      if (e.target === helpSheet) closeHelpSheet();
-    });
-  }
   const newQuestionBtn = $("#newQuestionBtn");
   if (newQuestionBtn) {
     newQuestionBtn.addEventListener("click", () => {
-      closeHelpSheet();
+      closeAttachSheet();
       startExplore();
     });
   }
@@ -1951,13 +1905,6 @@ function bindEvents() {
   const expandStageBtn = $("#expandStageBtn");
   if (expandStageBtn) expandStageBtn.addEventListener("click", toggleStageExpand);
   syncExpandButton();
-  const homeworkBtn = $("#homeworkBtn");
-  if (homeworkBtn) {
-    homeworkBtn.addEventListener("click", () => {
-      closeAttachSheet();
-      switchMode("bring");
-    });
-  }
   const modeSelect = $("#modeSelect");
   if (modeSelect) {
     modeSelect.addEventListener("change", (e) => switchMode(e.target.value));
@@ -2001,7 +1948,6 @@ function bindEvents() {
     window.visualViewport.addEventListener("scroll", syncKeyboardInset);
     syncKeyboardInset();
   }
-  window.addEventListener("resize", syncCaptionDisclosure);
 
   $("#topicSelect").addEventListener("change", (e) => {
     state.topicKey = e.target.value;

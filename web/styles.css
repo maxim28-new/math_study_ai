@@ -594,20 +594,6 @@ button, input, select, textarea { font-family: inherit; }
   gap: 8px;
 }
 .child-dock:not(:has(button:not(.hidden))) { display: none; }
-.help-btn {
-  flex: 0 0 auto;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 12px 14px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  background: #fff;
-  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.help-btn.hidden { display: none !important; }
 .talk-btn {
   flex: 1 1 auto;
   width: auto;
@@ -713,6 +699,7 @@ button, input, select, textarea { font-family: inherit; }
   flex: 0 0 auto;
   min-height: 0;
   padding: 12px 78px 12px 14px;
+  cursor: pointer;
   background: #fffdf8;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -741,11 +728,10 @@ button, input, select, textarea { font-family: inherit; }
   gap: 6px;
   z-index: 2;
 }
-.caption-expand-btn,
 .history-btn {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, .94);
-  color: var(--ink-soft);
+  color: var(--primary);
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 13px;
@@ -753,10 +739,6 @@ button, input, select, textarea { font-family: inherit; }
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(62, 48, 24, .06);
 }
-.caption-expand-btn {
-  color: var(--primary);
-}
-.caption-expand-btn.hidden { display: none; }
 .caption-sheet-body {
   font-size: 17px;
   font-weight: 700;
@@ -764,6 +746,13 @@ button, input, select, textarea { font-family: inherit; }
   color: var(--ink);
 }
 .caption-sheet-body .katex { font-size: 1em; }
+.history-sheet .caption-sheet-body {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.plus-help-group .topic-list button {
+  width: 100%;
+}
 
 .play-stage {
   position: relative;
@@ -1026,11 +1015,11 @@ button, input, select, textarea { font-family: inherit; }
   z-index: 3;
   box-shadow: 0 -8px 24px rgba(62, 48, 24, .05);
 }
-.app.layout-bring .talk-btn,
-.app.layout-bring #helpBtn { display: none !important; }
+.app.layout-bring .talk-btn { display: none !important; }
 .app.layout-explore .chips,
 .app.layout-explore .quick-actions { display: none; }
-.app.layout-bring #homeworkBtn { display: none; }
+.app.layout-explore #drawBtn { display: none; }
+.app.layout-bring #plusHelpGroup { display: none; }
 
 .history-sheet {
   max-height: 88dvh;

@@ -161,14 +161,14 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="exploreStage"',
             'id="startPlayBtn"',
             'id="tutorCaption"',
-            'id="captionExpandBtn"',
-            'id="captionSheet"',
+            'id="captionBar"',
             'id="captionSheetBody"',
             'id="stageHost"',
             'id="talkBtn"',
-            'id="helpBtn"',
             'id="historySheet"',
-            'id="helpSheet"',
+            'id="attachSheet"',
+            'id="plusHelpGroup"',
+            'id="newQuestionBtn"',
             'id="modeSelect"',
             'id="undoTileBtn"',
             'id="expandStageBtn"',
@@ -177,6 +177,10 @@ class FrontendRegressionTests(unittest.TestCase):
         ):
             self.assertIn(token, html)
         self.assertNotIn('id="modeSwitch"', html)
+        self.assertNotIn('id="helpSheet"', html)
+        self.assertNotIn('id="homeworkBtn"', html)
+        self.assertNotIn("我有作业", html)
+        self.assertNotIn("打开画板", html)
         self.assertIn(".layout-explore", css)
         self.assertIn(".play-stage", css)
         self.assertIn(".play-stage.is-expanded", css)
@@ -188,13 +192,13 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".child-dock", css)
         self.assertIn("function remountStage(", app)
         self.assertIn("function toggleStageExpand(", app)
-        self.assertIn("function toggleCaptionExpansion(", app)
-        self.assertIn("function openCaptionSheet(", app)
+        self.assertIn("function openHistorySheet(", app)
+        self.assertIn("function closeAttachSheet(", app)
         self.assertIn('classList.toggle("stage-expanded"', app)
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-layout2", html)
+        self.assertIn("v=20260815-layout3", html)
         self.assertIn('id="authorSelect"', html)
         self.assertIn("/api/author", app)
         self.assertIn("function fetchAuthorCard(", app)
@@ -265,9 +269,9 @@ class FrontendRegressionTests(unittest.TestCase):
         cap_css = css[css.find("#tutorCaption"):css.find("#tutorCaption .katex")]
         self.assertNotIn("7.4em", cap_css)
         self.assertIn("-webkit-line-clamp: 3", cap_css)
-        self.assertIn("function openCaptionSheet(", app)
+        self.assertIn("function openHistorySheet(", app)
         self.assertIn("captionSheetBody", app)
-        self.assertIn("toggleCaptionExpansion", app)
+        self.assertIn("captionBar", app)
         self.assertIn("el.innerHTML", app)
         self.assertIn("softenBareLatex", state_js)
         self.assertIn("function parseDiagramJson(", state_js)
