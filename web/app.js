@@ -2083,20 +2083,6 @@ function bindEvents() {
   $("#exploreBtn").addEventListener("click", () => startExplore());
   const startPlayBtn = $("#startPlayBtn");
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
-  const captionBar = $("#captionBar");
-  if (captionBar) {
-    const zoomFromCaption = () => {
-      const play = $(".play-stage");
-      if (play && play.classList.contains("is-playing")) toggleStageExpand();
-    };
-    captionBar.addEventListener("click", zoomFromCaption);
-    captionBar.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        zoomFromCaption();
-      }
-    });
-  }
   const hintBtn = $("#hintBtn");
   if (hintBtn) {
     hintBtn.addEventListener("click", () => {
@@ -2108,6 +2094,8 @@ function bindEvents() {
   }
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
+  const talkCloseBtn = $("#talkCloseBtn");
+  if (talkCloseBtn) talkCloseBtn.addEventListener("click", () => setTalkOpen(false));
   const newQuestionBtn = $("#newQuestionBtn");
   if (newQuestionBtn) {
     newQuestionBtn.addEventListener("click", () => {

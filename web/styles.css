@@ -611,11 +611,25 @@ button, input, select, textarea { font-family: inherit; }
 .talk-btn.hidden { display: none !important; }
 
 .voice-dock {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   margin: 2px 0 12px;
 }
+.talk-close {
+  align-self: flex-end;
+  margin: 0 2px 6px;
+  border: none;
+  background: none;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.app.layout-explore:not(.talk-open) .talk-close,
+.app.layout-bring .talk-close { display: none; }
 .voice-talk-btn {
   width: 100%;
   border: 1px solid rgba(234, 223, 206, .95);
@@ -691,27 +705,17 @@ button, input, select, textarea { font-family: inherit; }
   overflow: hidden;
 }
 .app.layout-bring .explore-stage { display: none; }
-.app.layout-explore:not(.talk-open) > .messages { display: none; }
-.app.layout-explore.talk-open > .messages {
-  display: flex;
-  flex: 0 1 auto;
-  max-height: 26vh;
-  min-height: 0;
-  padding: 8px 12px 6px;
-}
-.app.layout-explore.talk-open .msg .bubble {
-  font-size: 14px;
-  line-height: 1.5;
-  padding: 8px 10px;
-}
+.app.layout-explore > .messages { display: none; }
 .app.layout-bring > .messages { display: flex; flex: 1; }
+.app.layout-explore.talk-open .child-dock { display: none; }
+.app.layout-explore.talk-open .voice-talk-btn { padding: 10px 12px 8px; }
+.app.layout-explore.talk-open .voice-orb { width: 56px; height: 56px; }
 
 .explore-stage .caption-bar {
   position: relative;
   flex: 0 0 auto;
   min-height: 0;
   padding: 10px 12px 8px;
-  cursor: pointer;
   background: #fffdf8;
   border: 1px solid var(--line);
   border-radius: 18px;

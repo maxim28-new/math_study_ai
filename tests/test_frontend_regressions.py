@@ -164,6 +164,7 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="captionBar"',
             'id="stageHost"',
             'id="talkBtn"',
+            'id="talkCloseBtn"',
             'id="attachSheet"',
             'id="hintBtn"',
             'id="newQuestionBtn"',
@@ -203,7 +204,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-layout5", html)
+        self.assertIn("v=20260815-layout6", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn("小提示", html)
@@ -212,6 +213,10 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn('id="historyBtn"', html)
         self.assertNotIn('id="historySheet"', html)
         self.assertNotIn("刚才的对话", html)
+        self.assertNotIn('aria-label="放大画板"', html)
+        self.assertNotIn('role="button"', html.split('id="captionBar"')[1][:80] if 'id="captionBar"' in html else "role=\"button\"")
+        self.assertIn(".app.layout-explore > .messages { display: none; }", css)
+        self.assertIn(".app.layout-explore.talk-open .child-dock { display: none; }", css)
         self.assertNotIn("captionSheetBody", html)
         self.assertNotIn("plusHelpGroup", html)
         self.assertNotIn("换种方法", html)
@@ -289,7 +294,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function toggleStageExpand(", app)
         self.assertNotIn("captionSheetBody", app)
         self.assertNotIn("openHistorySheet", app)
-        self.assertIn("captionBar", app)
+        self.assertNotIn("zoomFromCaption", app)
+        self.assertIn('id="captionBar"', read("web/index.html"))
+        self.assertIn("tutorCaption", app)
         self.assertIn("el.innerHTML", app)
         self.assertIn("softenBareLatex", state_js)
         self.assertIn("function parseDiagramJson(", state_js)
