@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260815-layout8" />
+  <link rel="stylesheet" href="/styles.css?v=20260815-workspace1" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -42,20 +42,30 @@
 
     <div id="banner" class="banner hidden"></div>
 
-    <section id="exploreStage" class="explore-stage">
-      <div class="caption-bar" id="captionBar" role="button" tabindex="0" aria-label="查看刚才的对话">
-        <p id="tutorCaption">点开始玩，把方块拖进格子</p>
-        <span class="caption-more">刚才的对话</span>
+    <section id="exploreStage" class="explore-stage solve-workspace">
+      <div class="caption-bar" id="captionBar">
+        <div class="workspace-head">
+          <strong>小欧在说</strong>
+          <button type="button" id="historyOpenBtn" class="workspace-history-btn">对话</button>
+        </div>
+        <div class="caption-scroll">
+          <p id="tutorCaption">点开始玩，把方块拖进格子</p>
+        </div>
       </div>
       <div class="play-stage">
+        <div id="boardModeBar" class="board-mode-bar">
+          <span>数学画板</span>
+          <div class="board-mode-actions">
+            <button type="button" id="boardInteractBtn" class="is-active" aria-pressed="true">操作</button>
+            <button type="button" id="boardDrawBtn" aria-pressed="false">画笔</button>
+          </div>
+        </div>
         <div id="startPlayWrap" class="start-play">
           <p class="start-kicker">点开始玩，小欧会先想一道题</p>
           <button type="button" id="startPlayBtn" class="start-play-btn">开始玩</button>
         </div>
         <div id="stageHost" class="stage-host"></div>
         <canvas id="doodleCanvas" class="doodle-canvas" aria-hidden="true"></canvas>
-        <button type="button" id="expandStageBtn" class="stage-expand-btn" aria-pressed="false">放大</button>
-        <button type="button" id="doodleSendBtn" class="doodle-send-btn hidden">发给小欧</button>
         <div id="doodleToolbar" class="doodle-toolbar hidden">
           <button type="button" class="doodle-color is-active" data-color="#2f4ab8" aria-label="蓝色"></button>
           <button type="button" class="doodle-color" data-color="#d94b4b" aria-label="红色"></button>
@@ -83,6 +93,7 @@
       </div>
       <div class="child-dock">
         <button type="button" id="talkBtn" class="talk-btn hidden">想跟小欧说</button>
+        <button type="button" id="doodleSendBtn" class="board-send-btn hidden" disabled>发画板</button>
       </div>
       <div id="imgPreview" class="img-preview hidden">
         <img id="imgPreviewThumb" alt="待发送的题目照片" />
@@ -244,11 +255,11 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260815-layout8"></script>
-  <script src="/activity/snap-grid.js?v=20260815-layout8"></script>
-  <script src="/board/state.js?v=20260815-layout8"></script>
-  <script src="/board/layer-pile.js?v=20260815-layout8"></script>
-  <script src="/board/path-board.js?v=20260815-layout8"></script>
-  <script src="/app.js?v=20260815-layout8"></script>
+  <script src="/activity/state.js?v=20260815-workspace1"></script>
+  <script src="/activity/snap-grid.js?v=20260815-workspace1"></script>
+  <script src="/board/state.js?v=20260815-workspace1"></script>
+  <script src="/board/layer-pile.js?v=20260815-workspace1"></script>
+  <script src="/board/path-board.js?v=20260815-workspace1"></script>
+  <script src="/app.js?v=20260815-workspace1"></script>
 </body>
 </html>

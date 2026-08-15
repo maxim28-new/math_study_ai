@@ -163,6 +163,7 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="tutorCaption"',
             'id="captionBar"',
             'id="stageHost"',
+            'id="historyOpenBtn"',
             'id="talkBtn"',
             'id="talkCloseBtn"',
             'id="historySheet"',
@@ -175,9 +176,10 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="doodleSendBtn"',
             'id="doodleEraserBtn"',
             'id="doodleResetBtn"',
+            'id="boardInteractBtn"',
+            'id="boardDrawBtn"',
             'id="modeSelect"',
             'id="undoTileBtn"',
-            'id="expandStageBtn"',
             'id="trayCount"',
             "开始玩",
         ):
@@ -188,25 +190,27 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("我有作业", html)
         self.assertNotIn("打开画板", html)
         self.assertIn(".layout-explore", css)
+        self.assertIn(".solve-workspace", html)
         self.assertIn(".play-stage", css)
-        self.assertIn(".play-stage.is-expanded", css)
-        self.assertIn(".app.stage-expanded .composer", css)
+        self.assertIn(".play-stage.is-drawing", css)
+        self.assertIn(".caption-scroll", css)
+        self.assertIn("flex: 4 1 0", css)
+        self.assertIn("flex: 6 1 0", css)
         self.assertIn(".stage-host .diagram figcaption { display: none; }", css)
         self.assertIn("flex: 1 1 0", css)
-        self.assertIn("-webkit-line-clamp: 5", css)
         self.assertIn(".doodle-canvas", css)
         self.assertIn(".doodle-toolbar", css)
         self.assertIn(".child-dock", css)
         self.assertIn("function remountStage(", app)
-        self.assertIn("function toggleStageExpand(", app)
+        self.assertIn("function setBoardMode(", app)
         self.assertIn("function captureBoardImage(", app)
         self.assertIn("function sendDoodleToTutor(", app)
         self.assertIn("function closeAttachSheet(", app)
-        self.assertIn('classList.toggle("stage-expanded"', app)
+        self.assertIn('classList.toggle("is-drawing"', app)
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-layout8", html)
+        self.assertIn("v=20260815-workspace1", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn("小提示", html)
@@ -219,7 +223,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function openHistorySheet(", app)
         self.assertNotIn("function toggleCaptionOpen(", app)
         self.assertIn(".app.layout-explore > .messages { display: none; }", css)
-        self.assertIn(".app.layout-explore.talk-open .child-dock { display: none; }", css)
+        self.assertIn(".app.layout-explore.talk-open .talk-btn { display: none; }", css)
+        self.assertNotIn('id="expandStageBtn"', html)
+        self.assertNotIn("function toggleStageExpand(", app)
         self.assertNotIn("captionSheetBody", html)
         self.assertNotIn("plusHelpGroup", html)
         self.assertNotIn("换种方法", html)
@@ -286,16 +292,17 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("tileRect(", stairs)
         self.assertNotIn("<circle", stairs)
 
-    def test_caption_preserves_full_math_text_when_expanded(self):
+    def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")
         app = read("web/app.js")
         state_js = read("web/activity/state.js")
         self.assertIn("#tutorCaption", css)
         cap_css = css[css.find("#tutorCaption"):css.find("#tutorCaption .katex")]
         self.assertNotIn("7.4em", cap_css)
-        self.assertIn("-webkit-line-clamp: 5", cap_css)
+        self.assertIn("white-space: normal", cap_css)
+        self.assertIn(".caption-scroll", css)
         self.assertIn("function openHistorySheet(", app)
-        self.assertIn("function toggleStageExpand(", app)
+        self.assertIn("function setBoardMode(", app)
         self.assertNotIn("captionSheetBody", app)
         self.assertNotIn("function toggleCaptionOpen(", app)
         self.assertNotIn("zoomFromCaption", app)
@@ -311,6 +318,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("undo:", src)
         self.assertIn("canUndo:", src)
         self.assertIn("Math.min(cellCap", src)
+        self.assertIn('classList.contains("is-playing")', src)
 
 
 if __name__ == "__main__":
