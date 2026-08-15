@@ -47,6 +47,17 @@
     return left <= 0 ? "方块用完了" : "还剩 " + left + " 块";
   };
 
+  A.softenBareLatex = function softenBareLatex(s) {
+    let t = String(s || "");
+    const symbols = [
+      ["\\times", "×"], ["\\div", "÷"], ["\\cdot", "·"],
+      ["\\leq", "≤"], ["\\le", "≤"], ["\\geq", "≥"], ["\\ge", "≥"],
+      ["\\neq", "≠"], ["\\approx", "≈"], ["\\pm", "±"],
+    ];
+    symbols.forEach((pair) => { t = t.split(pair[0]).join(pair[1]); });
+    return t;
+  };
+
   A.tutorCaption = function tutorCaption(markdown) {
     let s = String(markdown || "");
     s = s.replace(/```[\s\S]*?```/g, " ");
@@ -55,20 +66,12 @@
       const t = line.trim();
       return !(t.charAt(0) === "{" && t.indexOf('"type"') >= 0);
     }).join("\n");
-    s = s.replace(/[*_`#]/g, "");
+    s = s.replace(/\*\*/g, "").replace(/[*_`#]/g, "");
+    s = A.softenBareLatex(s);
+    s = s.replace(/\$\$/g, "").replace(/\$/g, "");
+    s = s.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "$1/$2");
     s = s.replace(/\s+/g, " ").trim();
-    if (!s) return "";
-    const sentences = s.match(/[^。！？]+[。！？]?/g);
-    if (sentences && sentences.length) {
-      let out = sentences[0].trim();
-      if (sentences[1] && (out + sentences[1]).length <= 90) {
-        out = (out + sentences[1]).trim();
-      }
-      if (out.length > 90) out = out.slice(0, 90).replace(/[,，、]\s*\S*$/, "") + "…";
-      return out;
-    }
-    if (s.length <= 90) return s;
-    return s.slice(0, 90).replace(/[,，、]\s*\S*$/, "") + "…";
+    return s;
   };
 
   A.parseSnapGrid = function parseSnapGrid(raw) {
@@ -161,7 +164,7 @@
     }
     const specJson = encodeURIComponent(JSON.stringify(spec));
     const cap = spec.caption
-      ? `<figcaption>${escapeHtml(spec.caption)}</figcaption>`
+      ? `<figcaption>${escapeHtml(A.softenBareLatex(spec.caption))}</figcaption>`
       : "";
     return (
       `<figure class="diagram snap-grid" data-snap-grid="1" data-spec="${specJson}">` +

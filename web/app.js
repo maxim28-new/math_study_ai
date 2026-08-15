@@ -80,7 +80,14 @@ function formatPlainText(s) {
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
+function softenBareLatex(s) {
+  if (window.XiaoouActivity && XiaoouActivity.softenBareLatex) {
+    return XiaoouActivity.softenBareLatex(s);
+  }
+  return String(s || "").replace(/\\times/g, "×").replace(/\\div/g, "÷");
+}
 function renderTextWithMath(s) {
+  s = softenBareLatex(s);
   MATH_RE.lastIndex = 0;
   let out = "", last = 0, m;
   while ((m = MATH_RE.exec(s)) !== null) {
@@ -213,7 +220,7 @@ function renderDiagram(jsonText) {
   else if (s.type === "numberline") inner = diagramNumberline(s);
   else if (s.type === "bars") inner = diagramBars(s);
   if (!inner) return "";
-  const cap = s.caption ? `<figcaption>${escapeHtml(String(s.caption))}</figcaption>` : "";
+  const cap = s.caption ? `<figcaption>${inlineFmt(String(s.caption))}</figcaption>` : "";
   return `<figure class="diagram">${inner}${cap}</figure>`;
 }
 
@@ -243,7 +250,8 @@ function clearActivitySession() {
 
 function setCaption(text) {
   const el = $("#tutorCaption");
-  if (el) el.textContent = text || "";
+  if (!el) return;
+  el.innerHTML = text ? inlineFmt(text) : "";
 }
 
 function showStartPlay() {
@@ -292,6 +300,31 @@ function showStageToast(text) {
     el.classList.add("hidden");
     state.toastTimer = null;
   }, 900);
+}
+
+function isStageExpanded() {
+  const play = $(".play-stage");
+  return !!(play && play.classList.contains("is-expanded"));
+}
+
+function syncExpandButton() {
+  const btn = $("#expandStageBtn");
+  if (!btn) return;
+  const on = isStageExpanded();
+  btn.textContent = on ? "收起" : "展开";
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+
+function toggleStageExpand() {
+  const play = $(".play-stage");
+  if (!play) return;
+  play.classList.toggle("is-expanded");
+  syncExpandButton();
+  if (state.stageSpec) {
+    const live = state.liveActivities[state.liveActivities.length - 1];
+    const occ = (live && live.getOccupancy) ? live.getOccupancy().occupied : [];
+    remountStage(state.stageSpec, occ);
+  }
 }
 
 function remountStage(spec, occupied) {
@@ -494,16 +527,22 @@ function clampInt(v, lo, hi, dflt) {
   if (isNaN(v)) return dflt;
   return Math.max(lo, Math.min(hi, v));
 }
+function tileRect(cx, cy, size, fill, opacity) {
+  const x = cx - size / 2, y = cy - size / 2;
+  const rx = Math.max(3, Math.round(size * 0.22));
+  const op = opacity == null ? "" : ` opacity="${opacity}"`;
+  return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="${rx}" fill="${fill}"${op}/>`;
+}
 function diagramDots(s) {
   const rows = clampInt(s.rows, 1, 10, 1), cols = clampInt(s.cols, 1, 10, 1);
-  const cell = 30, r = 10, pad = 14;
+  const cell = 30, size = 20, pad = 14;
   const w = cols * cell + pad * 2, h = rows * cell + pad * 2;
   let dots = `<rect x="0" y="0" width="${w}" height="${h}" rx="16" fill="#fffdf8"/>`;
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
       const cx = pad + j * cell + cell / 2, cy = pad + i * cell + cell / 2;
       const isNew = s.newLastRowCol && (i === rows - 1 || j === cols - 1);
-      dots += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isNew ? DIAG_GOLD : DIAG_BLUE}" />`;
+      dots += tileRect(cx, cy, size, isNew ? DIAG_GOLD : DIAG_BLUE);
     }
   }
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
@@ -514,13 +553,14 @@ function layerHighlight(raw, n) {
   return clampInt(raw, 1, n, n);
 }
 function drawSquareDots(n, ox, oy, cell, r, highlightLayer) {
+  const size = Math.max(10, Math.round((r || 7) * 2.1));
   let dots = "";
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
       const layer = n - Math.min(i, j, n - 1 - i, n - 1 - j);
       const cx = ox + j * cell + cell / 2, cy = oy + i * cell + cell / 2;
       const isHL = highlightLayer !== null && layer === highlightLayer;
-      dots += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isHL ? DIAG_GOLD : DIAG_BLUE}" opacity="${isHL ? 1 : 0.45 + layer * 0.08}"/>`;
+      dots += tileRect(cx, cy, size, isHL ? DIAG_GOLD : DIAG_BLUE, isHL ? 1 : 0.45 + layer * 0.08);
     }
   }
   return dots;
@@ -560,7 +600,7 @@ function diagramSquareSteps(s) {
         const layer = size - Math.min(i, j, size - 1 - i, size - 1 - j);
         const cx = x + j * cell + cell / 2, cy = pad + i * cell + cell / 2;
         const isHL = size === highlight && layer === size;
-        parts += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${isHL ? DIAG_GOLD : DIAG_BLUE}" opacity="${isHL ? 1 : 0.55 + layer * 0.07}"/>`;
+        parts += tileRect(cx, cy, Math.max(10, Math.round(r * 2.1)), isHL ? DIAG_GOLD : DIAG_BLUE, isHL ? 1 : 0.55 + layer * 0.07);
       }
     }
     parts += `<text x="${x + sqW / 2}" y="${pad + sqH + labelH}" font-size="11" text-anchor="middle" fill="#666">${size}×${size}</text>`;
@@ -1482,6 +1522,9 @@ function bindEvents() {
       if (live && live.undo) live.undo();
     });
   }
+  const expandStageBtn = $("#expandStageBtn");
+  if (expandStageBtn) expandStageBtn.addEventListener("click", toggleStageExpand);
+  syncExpandButton();
   const homeworkBtn = $("#homeworkBtn");
   if (homeworkBtn) {
     homeworkBtn.addEventListener("click", () => {
