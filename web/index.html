@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260815-layout4" />
+  <link rel="stylesheet" href="/styles.css?v=20260815-layout5" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -43,9 +43,8 @@
     <div id="banner" class="banner hidden"></div>
 
     <section id="exploreStage" class="explore-stage">
-      <div class="caption-bar" id="captionBar" role="button" tabindex="0" aria-label="查看刚才的对话">
+      <div class="caption-bar" id="captionBar" role="button" tabindex="0" aria-label="放大画板">
         <p id="tutorCaption">点开始玩，把方块拖进格子</p>
-        <span class="caption-more">刚才的对话</span>
       </div>
       <div class="play-stage">
         <div id="startPlayWrap" class="start-play">
@@ -55,7 +54,15 @@
         <div id="stageHost" class="stage-host"></div>
         <canvas id="doodleCanvas" class="doodle-canvas" aria-hidden="true"></canvas>
         <button type="button" id="expandStageBtn" class="stage-expand-btn" aria-pressed="false">放大</button>
-        <button type="button" id="doodleResetBtn" class="doodle-reset-btn hidden">重置</button>
+        <button type="button" id="doodleSendBtn" class="doodle-send-btn hidden">发给小欧</button>
+        <div id="doodleToolbar" class="doodle-toolbar hidden">
+          <button type="button" class="doodle-color is-active" data-color="#2f4ab8" aria-label="蓝色"></button>
+          <button type="button" class="doodle-color" data-color="#d94b4b" aria-label="红色"></button>
+          <button type="button" class="doodle-color" data-color="#2f9d6a" aria-label="绿色"></button>
+          <button type="button" class="doodle-color" data-color="#e09a2c" aria-label="橙色"></button>
+          <button type="button" id="doodleEraserBtn" class="doodle-eraser">橡皮</button>
+          <button type="button" id="doodleResetBtn" class="doodle-reset-btn">重置</button>
+        </div>
         <div id="stageToast" class="stage-toast hidden">摆好了</div>
       </div>
       <div id="stageTools" class="stage-tools hidden">
@@ -133,20 +140,6 @@
       <button type="button" id="attachBtn">拍给我</button>
       <button type="button" id="drawBtn">画给小欧看</button>
       <button type="button" class="sheet-cancel" id="attachCancel">取消</button>
-    </div>
-  </div>
-
-  <div class="sheet-mask" id="historySheet">
-    <div class="sheet history-sheet" role="dialog" aria-label="刚才的对话">
-      <div class="sheet-handle" aria-hidden="true"></div>
-      <div class="sheet-head">
-        <div>
-          <h2>刚才的对话</h2>
-          <p>画板还在上面，这里只看最近说过的话。</p>
-        </div>
-        <button class="sheet-close" id="historyClose" aria-label="完成">完成</button>
-      </div>
-      <div id="historyMount" class="history-mount"></div>
     </div>
   </div>
 
@@ -234,11 +227,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260815-layout4"></script>
-  <script src="/activity/snap-grid.js?v=20260815-layout4"></script>
-  <script src="/board/state.js?v=20260815-layout4"></script>
-  <script src="/board/layer-pile.js?v=20260815-layout4"></script>
-  <script src="/board/path-board.js?v=20260815-layout4"></script>
-  <script src="/app.js?v=20260815-layout4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
+  <script src="/activity/state.js?v=20260815-layout5"></script>
+  <script src="/activity/snap-grid.js?v=20260815-layout5"></script>
+  <script src="/board/state.js?v=20260815-layout5"></script>
+  <script src="/board/layer-pile.js?v=20260815-layout5"></script>
+  <script src="/board/path-board.js?v=20260815-layout5"></script>
+  <script src="/app.js?v=20260815-layout5"></script>
 </body>
 </html>

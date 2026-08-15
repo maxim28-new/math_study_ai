@@ -164,11 +164,13 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="captionBar"',
             'id="stageHost"',
             'id="talkBtn"',
-            'id="historySheet"',
             'id="attachSheet"',
             'id="hintBtn"',
             'id="newQuestionBtn"',
             'id="doodleCanvas"',
+            'id="doodleToolbar"',
+            'id="doodleSendBtn"',
+            'id="doodleEraserBtn"',
             'id="doodleResetBtn"',
             'id="modeSelect"',
             'id="undoTileBtn"',
@@ -189,22 +191,27 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".stage-host .diagram figcaption { display: none; }", css)
         self.assertIn("flex: 1 1 0", css)
         self.assertIn("-webkit-line-clamp: 3", css)
-        self.assertIn(".caption-more", css)
         self.assertIn(".doodle-canvas", css)
+        self.assertIn(".doodle-toolbar", css)
         self.assertIn(".child-dock", css)
         self.assertIn("function remountStage(", app)
         self.assertIn("function toggleStageExpand(", app)
-        self.assertIn("function openHistorySheet(", app)
+        self.assertIn("function captureBoardImage(", app)
+        self.assertIn("function sendDoodleToTutor(", app)
         self.assertIn("function closeAttachSheet(", app)
         self.assertIn('classList.toggle("stage-expanded"', app)
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-layout4", html)
+        self.assertIn("v=20260815-layout5", html)
+        self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn("小提示", html)
         self.assertIn("拍给我", html)
+        self.assertIn("发给小欧", html)
         self.assertNotIn('id="historyBtn"', html)
+        self.assertNotIn('id="historySheet"', html)
+        self.assertNotIn("刚才的对话", html)
         self.assertNotIn("captionSheetBody", html)
         self.assertNotIn("plusHelpGroup", html)
         self.assertNotIn("换种方法", html)
@@ -250,6 +257,7 @@ class FrontendRegressionTests(unittest.TestCase):
         author = read("server/author.py")
         self.assertIn("SEMANTIC_BOARD_GUIDE", tutor)
         self.assertIn("不要输出任何 xiaoou-draw", tutor)
+        self.assertIn("涂鸦直接发给你", tutor)
         self.assertIn("semantic_board.kind=layer_sum", author)
         self.assertIn("semantic_board.kind=path_count", author)
         self.assertNotIn("STAIR_HINTS", author)
@@ -278,9 +286,9 @@ class FrontendRegressionTests(unittest.TestCase):
         cap_css = css[css.find("#tutorCaption"):css.find("#tutorCaption .katex")]
         self.assertNotIn("7.4em", cap_css)
         self.assertIn("-webkit-line-clamp: 3", cap_css)
-        self.assertIn("function openHistorySheet(", app)
+        self.assertIn("function toggleStageExpand(", app)
         self.assertNotIn("captionSheetBody", app)
-        self.assertIn("historyMount", app)
+        self.assertNotIn("openHistorySheet", app)
         self.assertIn("captionBar", app)
         self.assertIn("el.innerHTML", app)
         self.assertIn("softenBareLatex", state_js)

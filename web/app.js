@@ -12,7 +12,8 @@ const state = {
   thinking: false, // API 深度思考（更慢）
   showReasoning: false, // 是否在界面展示思考过程（独立于 thinking）
   messages: [], // 发给模型的历史：{role:'user'|'assistant', content}（content 可能是字符串或多模态数组）
-  pendingImage: null, // 待发送的题目照片（dataURL）
+  pendingImage: null, // 待发送的题目照片或画板涂鸦（dataURL）
+  pendingImageKind: "", // photo | doodle | draw
   streaming: false,
   liveActivities: [],
   mountedActivities: [],
@@ -358,12 +359,31 @@ function toggleStageExpand() {
   }
 }
 
-const doodle = { strokes: [], cur: null, drawing: false };
+const doodle = {
+  strokes: [],
+  cur: null,
+  drawing: false,
+  color: "#2f4ab8",
+  erase: false,
+  dirty: false,
+};
 
 function doodlePoint(e, canvas) {
   const rect = canvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
   return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+}
+
+function hasDoodleInk() {
+  return doodle.strokes.some((stroke) => stroke.points && stroke.points.length > 1);
+}
+
+function syncDoodleTools() {
+  document.querySelectorAll(".doodle-color").forEach((btn) => {
+    btn.classList.toggle("is-active", !doodle.erase && btn.dataset.color === doodle.color);
+  });
+  const eraser = $("#doodleEraserBtn");
+  if (eraser) eraser.classList.toggle("is-active", doodle.erase);
 }
 
 function redrawDoodle() {
@@ -375,15 +395,17 @@ function redrawDoodle() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.strokeStyle = "rgba(47, 74, 184, .78)";
-  ctx.lineWidth = 3.4;
   doodle.strokes.forEach((stroke) => {
-    if (!stroke.length) return;
+    if (!stroke.points || !stroke.points.length) return;
+    ctx.globalCompositeOperation = stroke.erase ? "destination-out" : "source-over";
+    ctx.strokeStyle = stroke.color || "#2f4ab8";
+    ctx.lineWidth = stroke.width || (stroke.erase ? 20 : 3.6);
     ctx.beginPath();
-    ctx.moveTo(stroke[0].x, stroke[0].y);
-    for (let i = 1; i < stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
+    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+    for (let i = 1; i < stroke.points.length; i++) ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
     ctx.stroke();
   });
+  ctx.globalCompositeOperation = "source-over";
 }
 
 function sizeDoodleCanvas() {
@@ -403,20 +425,118 @@ function clearDoodle() {
   doodle.strokes = [];
   doodle.cur = null;
   doodle.drawing = false;
+  doodle.dirty = false;
   redrawDoodle();
 }
 
 function setDoodleActive(on) {
   const canvas = $("#doodleCanvas");
-  const reset = $("#doodleResetBtn");
+  const toolbar = $("#doodleToolbar");
+  const send = $("#doodleSendBtn");
   if (canvas) canvas.classList.toggle("is-active", !!on);
-  if (reset) reset.classList.toggle("hidden", !on);
+  if (toolbar) toolbar.classList.toggle("hidden", !on);
+  if (send) send.classList.toggle("hidden", !on);
   if (on) {
+    syncDoodleTools();
     requestAnimationFrame(() => {
       sizeDoodleCanvas();
       requestAnimationFrame(sizeDoodleCanvas);
     });
   }
+}
+
+function doodleIgnoreEl(el) {
+  if (!el || !el.closest) return false;
+  return !!(
+    el.closest("#expandStageBtn") ||
+    el.closest("#doodleSendBtn") ||
+    el.closest("#doodleToolbar") ||
+    el.closest("#stageToast")
+  );
+}
+
+function captureBoardFallback() {
+  const play = $(".play-stage");
+  const doodleCanvas = $("#doodleCanvas");
+  if (!play) return "";
+  const rect = play.getBoundingClientRect();
+  const scale = Math.min(2, window.devicePixelRatio || 1);
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(rect.width * scale));
+  out.height = Math.max(1, Math.round(rect.height * scale));
+  const ctx = out.getContext("2d");
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#fffaf2";
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  play.querySelectorAll("canvas").forEach((c) => {
+    if (c.id === "doodleCanvas") return;
+    const r = c.getBoundingClientRect();
+    try {
+      ctx.drawImage(c, r.left - rect.left, r.top - rect.top, r.width, r.height);
+    } catch (err) {}
+  });
+  if (doodleCanvas) ctx.drawImage(doodleCanvas, 0, 0, rect.width, rect.height);
+  return out.toDataURL("image/jpeg", 0.86);
+}
+
+async function shrinkDataUrl(dataUrl, maxDim = 1280, quality = 0.82) {
+  if (!dataUrl) return "";
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const scale = Math.min(1, maxDim / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function captureBoardImage() {
+  const play = $(".play-stage");
+  if (!play) return "";
+  if (typeof html2canvas === "function") {
+    try {
+      const canvas = await html2canvas(play, {
+        backgroundColor: "#fffaf2",
+        scale: Math.min(2, window.devicePixelRatio || 1),
+        logging: false,
+        useCORS: true,
+        ignoreElements: doodleIgnoreEl,
+      });
+      return shrinkDataUrl(canvas.toDataURL("image/jpeg", 0.88));
+    } catch (err) {}
+  }
+  return shrinkDataUrl(captureBoardFallback());
+}
+
+async function sendDoodleToTutor() {
+  if (state.streaming) return;
+  if (!hasDoodleInk()) {
+    showStageToast("先画一点再发给小欧");
+    return;
+  }
+  showStageToast("正在发给小欧…");
+  let dataUrl = "";
+  try {
+    dataUrl = await captureBoardImage();
+  } catch (err) {}
+  if (!dataUrl) {
+    showStageToast("这张画还没发出去，再试一次");
+    return;
+  }
+  setPendingImage(dataUrl, "doodle");
+  doodle.dirty = false;
+  if (isStageExpanded()) toggleStageExpand();
+  setTalkOpen(true);
+  await sendMessage("");
 }
 
 function initDoodle() {
@@ -429,14 +549,20 @@ function initDoodle() {
       try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     }
     doodle.drawing = true;
-    doodle.cur = [doodlePoint(e, canvas)];
+    doodle.cur = {
+      points: [doodlePoint(e, canvas)],
+      color: doodle.color,
+      erase: doodle.erase,
+      width: doodle.erase ? 20 : 3.6,
+    };
     doodle.strokes.push(doodle.cur);
+    doodle.dirty = true;
     redrawDoodle();
   };
   const move = (e) => {
     if (!doodle.drawing || !doodle.cur) return;
     e.preventDefault();
-    doodle.cur.push(doodlePoint(e, canvas));
+    doodle.cur.points.push(doodlePoint(e, canvas));
     redrawDoodle();
   };
   const end = () => { doodle.drawing = false; doodle.cur = null; };
@@ -444,8 +570,24 @@ function initDoodle() {
   canvas.addEventListener("pointermove", move);
   canvas.addEventListener("pointerup", end);
   canvas.addEventListener("pointercancel", end);
+  document.querySelectorAll(".doodle-color").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      doodle.color = btn.dataset.color || "#2f4ab8";
+      doodle.erase = false;
+      syncDoodleTools();
+    });
+  });
+  const eraser = $("#doodleEraserBtn");
+  if (eraser) {
+    eraser.addEventListener("click", () => {
+      doodle.erase = true;
+      syncDoodleTools();
+    });
+  }
   const reset = $("#doodleResetBtn");
   if (reset) reset.addEventListener("click", clearDoodle);
+  const send = $("#doodleSendBtn");
+  if (send) send.addEventListener("click", () => sendDoodleToTutor());
 }
 
 function remountStage(spec, occupied) {
@@ -695,12 +837,10 @@ async function startPlay() {
 
 function placeMessages() {
   const messages = $("#messages");
-  const historyMount = $("#historyMount");
   const app = $(".app");
   const composer = $(".composer");
-  if (!messages) return;
-  if (state.mode === "explore" && historyMount) historyMount.appendChild(messages);
-  else if (app && composer) app.insertBefore(messages, composer);
+  if (!messages || !app || !composer) return;
+  if (messages.parentElement !== app) app.insertBefore(messages, composer);
 }
 
 function setTalkOpen(on) {
@@ -713,16 +853,6 @@ function setTalkOpen(on) {
   else refreshVoiceAvailability();
 }
 
-function openHistorySheet() {
-  placeMessages();
-  const sheet = $("#historySheet");
-  if (sheet) sheet.classList.add("open");
-  scrollToBottom();
-}
-function closeHistorySheet() {
-  const sheet = $("#historySheet");
-  if (sheet) sheet.classList.remove("open");
-}
 function closeHelpSheet() {
   closeAttachSheet();
 }
@@ -1300,13 +1430,23 @@ function updateAxioms() {
 async function sendMessage(text) {
   if (state.streaming) return;
   const typed = (text || $("#input").value).trim();
-  const image = state.pendingImage;
+  let image = state.pendingImage;
+  let imageKind = state.pendingImageKind || (image ? "photo" : "");
+  if (!image && doodle.dirty && hasDoodleInk()) {
+    try {
+      image = await captureBoardImage();
+      imageKind = "doodle";
+      doodle.dirty = false;
+    } catch (err) {}
+  }
   if (!typed && !image) return;
 
   // 组装本条消息：有图片时用多模态数组，否则用纯文字。
   let content;
   if (image) {
-    const caption = typed || "这是我作业本上的题目，你先帮我看看。";
+    const caption = typed || (imageKind === "doodle"
+      ? "这是我在数学画板上画的，请直接看图里我画的内容。"
+      : "这是我作业本上的题目，你先帮我看看。");
     content = [
       { type: "text", text: caption },
       { type: "image_url", image_url: { url: image } },
@@ -1523,9 +1663,7 @@ async function onFileChosen(e) {
   e.target.value = ""; // 允许再次选同一张
   if (!file) return;
   try {
-    state.pendingImage = await resizeImage(file);
-    $("#imgPreviewThumb").src = state.pendingImage;
-    $("#imgPreview").classList.remove("hidden");
+    setPendingImage(await resizeImage(file), "photo");
     $("#input").focus();
   } catch (err) {
     alert("这张图片没能读进来，换一张试试看？");
@@ -1534,12 +1672,14 @@ async function onFileChosen(e) {
 
 function clearPendingImage() {
   state.pendingImage = null;
+  state.pendingImageKind = "";
   $("#imgPreviewThumb").removeAttribute("src");
   $("#imgPreview").classList.add("hidden");
 }
 
-function setPendingImage(dataUrl) {
+function setPendingImage(dataUrl, kind) {
   state.pendingImage = dataUrl;
+  state.pendingImageKind = kind || "photo";
   $("#imgPreviewThumb").src = dataUrl;
   $("#imgPreview").classList.remove("hidden");
 }
@@ -1827,7 +1967,7 @@ function initDraw() {
   $("#drawSend").addEventListener("click", () => {
     if (!strokes.length) { close(); return; }
     const dataUrl = canvas.toDataURL("image/png");
-    setPendingImage(dataUrl);
+    setPendingImage(dataUrl, "draw");
     close();
     $("#input").focus();
   });
@@ -1945,11 +2085,15 @@ function bindEvents() {
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
   const captionBar = $("#captionBar");
   if (captionBar) {
-    captionBar.addEventListener("click", () => openHistorySheet());
+    const zoomFromCaption = () => {
+      const play = $(".play-stage");
+      if (play && play.classList.contains("is-playing")) toggleStageExpand();
+    };
+    captionBar.addEventListener("click", zoomFromCaption);
     captionBar.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        openHistorySheet();
+        zoomFromCaption();
       }
     });
   }
@@ -1969,14 +2113,6 @@ function bindEvents() {
     newQuestionBtn.addEventListener("click", () => {
       closeAttachSheet();
       startExplore();
-    });
-  }
-  const historyClose = $("#historyClose");
-  if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
-  const historySheet = $("#historySheet");
-  if (historySheet) {
-    historySheet.addEventListener("click", (e) => {
-      if (e.target === historySheet) closeHistorySheet();
     });
   }
   const undoTileBtn = $("#undoTileBtn");
