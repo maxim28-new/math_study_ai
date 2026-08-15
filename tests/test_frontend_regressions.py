@@ -31,13 +31,17 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('if (!state.showReasoning) continue;', app)
         self.assertIn('removeReasoningBlocks();', app)
 
-    def test_web_voice_uses_manual_continuous_final_session(self):
+    def test_web_voice_uses_tap_to_talk_dock(self):
+        html = read("web/index.html")
+        css = read("web/styles.css")
         app = read("web/app.js")
-
-        self.assertIn("recognition.interimResults = false;", app)
-        self.assertIn("recognition.continuous = true;", app)
-        self.assertIn("voiceWanted", app)
-        self.assertIn("finishVoiceSession()", app)
+        self.assertIn('id="voiceDock"', html)
+        self.assertIn('id="voiceTalkBtn"', html)
+        self.assertIn(".voice-talk-btn", css)
+        self.assertIn("function initVoice(", app)
+        self.assertIn("MediaRecorder", app)
+        self.assertIn("/api/transcribe", app)
+        self.assertIn("点一下，跟小欧说", html)
 
     def test_web_is_kid_h5_chat_shell(self):
         html = read("web/index.html")
@@ -164,7 +168,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-stage", html)
+        self.assertIn("v=20260815-voice", html)
         self.assertIn('location.replace("/gate.html")', app)
 
     def test_static_block_diagrams_use_rounded_squares(self):
