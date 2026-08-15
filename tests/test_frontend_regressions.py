@@ -150,6 +150,7 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="exploreStage"',
             'id="startPlayBtn"',
             'id="tutorCaption"',
+            'id="captionExpandBtn"',
             'id="stageHost"',
             'id="talkBtn"',
             'id="historySheet"',
@@ -165,8 +166,14 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".layout-explore", css)
         self.assertIn(".play-stage", css)
         self.assertIn(".play-stage.is-expanded", css)
+        self.assertIn(".app.stage-expanded .composer", css)
+        self.assertIn(".stage-host .diagram figcaption { display: none; }", css)
+        self.assertIn("flex: 1 1 0", css)
+        self.assertIn("-webkit-line-clamp: 5", css)
         self.assertIn("function remountStage(", app)
         self.assertIn("function toggleStageExpand(", app)
+        self.assertIn("function toggleCaptionExpansion(", app)
+        self.assertIn('classList.toggle("stage-expanded"', app)
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))

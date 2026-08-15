@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260815-author3" />
+  <link rel="stylesheet" href="/styles.css?v=20260815-layout1" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -45,6 +45,7 @@
     <section id="exploreStage" class="explore-stage">
       <div class="caption-bar">
         <p id="tutorCaption">点开始玩，把方块拖进格子</p>
+        <button type="button" class="caption-expand-btn hidden" id="captionExpandBtn" aria-expanded="false">展开</button>
         <button type="button" class="history-btn" id="historyBtn">对话</button>
       </div>
       <div class="play-stage">
@@ -53,12 +54,12 @@
           <button type="button" id="startPlayBtn" class="start-play-btn">开始玩</button>
         </div>
         <div id="stageHost" class="stage-host"></div>
+        <button type="button" id="expandStageBtn" class="stage-expand-btn" aria-pressed="false">放大</button>
         <div id="stageToast" class="stage-toast hidden">摆好了</div>
       </div>
       <div id="stageTools" class="stage-tools hidden">
         <span id="trayCount">还剩 9 块</span>
         <div class="stage-tool-btns">
-          <button type="button" id="expandStageBtn" aria-pressed="false">展开</button>
           <button type="button" id="undoTileBtn">收回</button>
         </div>
       </div>
@@ -238,8 +239,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260815-author3"></script>
-  <script src="/activity/snap-grid.js?v=20260815-author3"></script>
-  <script src="/app.js?v=20260815-author3"></script>
+  <script src="/activity/state.js?v=20260815-layout1"></script>
+  <script src="/activity/snap-grid.js?v=20260815-layout1"></script>
+  <script src="/app.js?v=20260815-layout1"></script>
 </body>
 </html>

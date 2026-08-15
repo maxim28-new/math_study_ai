@@ -290,13 +290,46 @@ function setCaption(text) {
   const el = $("#tutorCaption");
   if (!el) return;
   el.innerHTML = text ? inlineFmt(text) : "";
+  const bar = el.closest(".caption-bar");
+  const btn = $("#captionExpandBtn");
+  if (bar) bar.classList.remove("is-expanded");
+  if (btn) {
+    btn.textContent = "展开";
+    btn.setAttribute("aria-expanded", "false");
+  }
+  requestAnimationFrame(syncCaptionDisclosure);
+}
+
+function syncCaptionDisclosure() {
+  const el = $("#tutorCaption");
+  const bar = el && el.closest(".caption-bar");
+  const btn = $("#captionExpandBtn");
+  if (!el || !bar || !btn) return;
+  const expanded = bar.classList.contains("is-expanded");
+  const clipped = el.scrollHeight > el.clientHeight + 2;
+  btn.classList.toggle("hidden", !expanded && !clipped);
+}
+
+function toggleCaptionExpansion() {
+  const el = $("#tutorCaption");
+  const bar = el && el.closest(".caption-bar");
+  const btn = $("#captionExpandBtn");
+  if (!bar || !btn) return;
+  const expanded = bar.classList.toggle("is-expanded");
+  btn.textContent = expanded ? "收起" : "展开";
+  btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+  if (!expanded) bar.scrollTop = 0;
+  requestAnimationFrame(syncCaptionDisclosure);
 }
 
 function showStartPlay() {
   const wrap = $("#startPlayWrap");
   const play = $(".play-stage");
   if (wrap) wrap.classList.remove("hidden");
-  if (play) play.classList.remove("is-playing");
+  if (play) play.classList.remove("is-playing", "is-expanded");
+  const app = $(".app");
+  if (app) app.classList.remove("stage-expanded");
+  syncExpandButton();
   const tools = $("#stageTools");
   if (tools) tools.classList.add("hidden");
 }
@@ -349,7 +382,7 @@ function syncExpandButton() {
   const btn = $("#expandStageBtn");
   if (!btn) return;
   const on = isStageExpanded();
-  btn.textContent = on ? "收起" : "展开";
+  btn.textContent = on ? "退出放大" : "放大";
   btn.setAttribute("aria-pressed", on ? "true" : "false");
 }
 
@@ -357,6 +390,8 @@ function toggleStageExpand() {
   const play = $(".play-stage");
   if (!play) return;
   play.classList.toggle("is-expanded");
+  const app = $(".app");
+  if (app) app.classList.toggle("stage-expanded", isStageExpanded());
   syncExpandButton();
   if (state.stageSpec) {
     const live = state.liveActivities[state.liveActivities.length - 1];
@@ -1818,6 +1853,8 @@ function bindEvents() {
   $("#exploreBtn").addEventListener("click", () => startExplore());
   const startPlayBtn = $("#startPlayBtn");
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
+  const captionExpandBtn = $("#captionExpandBtn");
+  if (captionExpandBtn) captionExpandBtn.addEventListener("click", toggleCaptionExpansion);
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
   const helpBtn = $("#helpBtn");
@@ -1907,6 +1944,7 @@ function bindEvents() {
     window.visualViewport.addEventListener("scroll", syncKeyboardInset);
     syncKeyboardInset();
   }
+  window.addEventListener("resize", syncCaptionDisclosure);
 
   $("#topicSelect").addEventListener("change", (e) => {
     state.topicKey = e.target.value;

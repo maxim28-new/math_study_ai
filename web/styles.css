@@ -38,13 +38,16 @@ button, input, select, textarea { font-family: inherit; }
   flex-direction: column;
   width: 100%;
   max-width: 430px;
-  height: 100dvh;
+  height: 100vh;
   height: 100svh;
   margin: 0 auto;
   background:
     linear-gradient(180deg, rgba(255,250,242,.96) 0%, rgba(243,236,224,.98) 140px, #f3ece0 100%);
   overflow: hidden;
   padding-bottom: var(--kb);
+}
+@supports (height: 100dvh) {
+  .app { height: 100dvh; }
 }
 
 .topbar {
@@ -671,10 +674,12 @@ button, input, select, textarea { font-family: inherit; }
 }
 .app.layout-explore .explore-stage {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   flex-direction: column;
-  padding: 8px 12px 0;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow: hidden;
 }
 .app.layout-bring .explore-stage { display: none; }
 .app.layout-explore > .messages { display: none; }
@@ -684,7 +689,9 @@ button, input, select, textarea { font-family: inherit; }
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin-bottom: 8px;
+  flex: 0 0 auto;
+  max-height: min(25svh, 128px);
+  overflow: hidden;
 }
 #tutorCaption {
   flex: 1;
@@ -694,8 +701,21 @@ button, input, select, textarea { font-family: inherit; }
   font-weight: 700;
   line-height: 1.45;
   color: var(--ink);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+.caption-bar.is-expanded {
+  max-height: min(48svh, 360px);
+  overflow-y: auto;
+}
+.caption-bar.is-expanded #tutorCaption {
+  display: block;
+  overflow: visible;
 }
 #tutorCaption .katex { font-size: 1em; }
+.caption-expand-btn,
 .history-btn {
   flex: 0 0 auto;
   border: 1px solid var(--line);
@@ -707,12 +727,17 @@ button, input, select, textarea { font-family: inherit; }
   font-weight: 650;
   cursor: pointer;
 }
+.caption-expand-btn {
+  color: var(--primary);
+  padding-inline: 8px;
+}
+.caption-expand-btn.hidden { display: none; }
 
 .play-stage {
   position: relative;
-  flex: 0 1 auto;
-  min-height: 168px;
-  max-height: 46dvh;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #fff, #fbf7ef);
@@ -722,14 +747,20 @@ button, input, select, textarea { font-family: inherit; }
   overflow: hidden;
 }
 .play-stage:not(.is-playing) {
-  flex: 1;
-  max-height: none;
-  min-height: 200px;
+  min-height: 0;
 }
 .play-stage.is-expanded {
   flex: 1;
   max-height: none;
   min-height: 0;
+}
+.app.stage-expanded .caption-bar,
+.app.stage-expanded .composer,
+.app.stage-expanded .stage-tools {
+  display: none;
+}
+.app.stage-expanded .explore-stage {
+  padding-top: 8px;
 }
 .start-play {
   flex: 1;
@@ -761,24 +792,24 @@ button, input, select, textarea { font-family: inherit; }
 .start-play-btn:disabled { opacity: .5; }
 
 .stage-host {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   width: 100%;
   display: none;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 10px 8px 8px;
+  padding: 12px 8px;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .play-stage.is-playing .stage-host { display: flex; }
-.play-stage.is-expanded .stage-host {
-  flex: 1;
-}
 .stage-host .snap-grid,
 .stage-host .diagram {
-  width: auto;
+  width: min(100%, 320px);
   max-width: 100%;
-  margin: 0 auto;
+  max-height: 100%;
+  margin: auto;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -786,11 +817,15 @@ button, input, select, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
+.stage-host .diagram { height: 100%; }
+.stage-host .diagram figcaption { display: none; }
 .stage-host .diagram svg {
-  width: min(100%, 320px);
+  display: block;
+  width: 100%;
   max-width: 100%;
-  max-height: 280px;
+  max-height: 100%;
   height: auto;
 }
 .stage-host .snap-grid-stage {
@@ -814,6 +849,24 @@ button, input, select, textarea { font-family: inherit; }
 }
 .stage-toast.hidden { display: none; }
 
+.stage-expand-btn {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 2;
+  border: 1px solid rgba(234, 223, 206, .95);
+  border-radius: 999px;
+  padding: 6px 11px;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, .9);
+  box-shadow: 0 4px 12px rgba(62, 48, 24, .08);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.play-stage:not(.is-playing) .stage-expand-btn { display: none; }
+
 .stage-tools {
   display: flex;
   align-items: center;
@@ -825,7 +878,6 @@ button, input, select, textarea { font-family: inherit; }
 }
 .stage-tools.hidden { display: none; }
 .stage-tool-btns { display: flex; gap: 8px; }
-#expandStageBtn,
 #undoTileBtn {
   border: 1px solid var(--line);
   background: #fff;
@@ -840,6 +892,11 @@ button, input, select, textarea { font-family: inherit; }
 
 .app.layout-explore:not(.talk-open) #inputRow,
 .app.layout-explore:not(.talk-open) #imgPreview { display: none; }
+.app.layout-explore .composer {
+  position: relative;
+  z-index: 3;
+  box-shadow: 0 -8px 24px rgba(62, 48, 24, .05);
+}
 .app.layout-bring .talk-btn,
 .app.layout-bring #helpBtn { display: none !important; }
 .app.layout-explore .quick-actions { display: none; }
