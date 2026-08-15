@@ -50,21 +50,35 @@
     const interactive = !!options.interactive;
     const stageHost = host.querySelector(".snap-grid-stage") || host;
     const fallback = host.querySelector(".snap-grid-fallback");
-    const width = Math.max(220, stageHost.clientWidth || host.clientWidth || 280);
+    const play = host.closest ? host.closest(".play-stage") : null;
+    const expanded = !!(play && play.classList.contains("is-expanded"));
+    const hostW = Math.max(200, stageHost.clientWidth || host.clientWidth || 280);
+    const hostH = Math.max(0, stageHost.clientHeight || 0);
     const gap = 6;
     const pad = 10;
+    const cellCap = expanded ? 72 : 56;
     const cell = Math.max(
       CELL_MIN,
-      Math.min(72, Math.floor((width - pad * 2 - gap * (spec.cols - 1)) / spec.cols))
+      Math.min(cellCap, Math.floor((hostW - pad * 2 - gap * (spec.cols - 1)) / spec.cols))
     );
+    const gridW = spec.cols * cell + (spec.cols - 1) * gap;
     const gridH = spec.rows * cell + (spec.rows - 1) * gap;
-    const trayTop = pad + gridH + 18;
-    const perRow = Math.max(1, Math.floor((width - pad * 2 + gap) / (cell + gap)));
+    const trayTop = pad + gridH + 16;
+    const perRow = spec.cols;
     const trayRows = Math.max(1, Math.ceil(Math.max(spec.tray, 1) / perRow));
-    const height = trayTop + trayRows * (cell + gap) + pad;
+    let width = pad * 2 + gridW;
+    let height = trayTop + trayRows * (cell + gap) + pad;
 
     stageHost.innerHTML = "";
     const stage = new Konva.Stage({ container: stageHost, width: width, height: height });
+    if (expanded && hostH > height + 8) {
+      const scale = Math.min(hostW / width, hostH / height);
+      if (scale > 1.02) {
+        stage.scale({ x: scale, y: scale });
+        stage.width(Math.round(width * scale));
+        stage.height(Math.round(height * scale));
+      }
+    }
     const layer = new Konva.Layer();
     stage.add(layer);
 

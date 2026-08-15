@@ -280,7 +280,7 @@ DRAWING_GUIDE = """\
 ```
 
 ## 图形类型
-- 点阵（矩形格子、乘法表）：{"type":"dots","rows":3,"cols":4,"newLastRowCol":false,"caption":"简短说明"}
+- 点阵（矩形格子、乘法表；会画成圆角方块，不要写成圆点）：{"type":"dots","rows":3,"cols":4,"newLastRowCol":false,"caption":"简短说明"}
   newLastRowCol 为 true 时，最后一行和最后一列标金色，适合"在外面再包一圈"。
 - 单层正方形（强调某一层）：{"type":"square_layers","size":4,"highlight":4,"caption":"金色是最外圈，数数有几块？"}
   highlight 填层号（1=最外圈）强调该层；填 "none" 则全部蓝色（问「一共几块」时用）。

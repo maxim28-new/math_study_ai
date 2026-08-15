@@ -91,4 +91,9 @@ assert.ok(A.tutorCaption("先数一数。\n{\"type\":\"bars\",\"items\":[]}\n再
 assert.strictEqual(A.tutorCaption("```xiaoou-draw\n{\"type\":\"snap_grid\"}"), "");
 assert.ok(A.tutorCaption("**你好**，我们来摆方块。").includes("你好"));
 
+const longCap = "哇，摆得真整齐！你看，横着数是 3 块，竖着数也是 3 块。那我们来算算看，这个正方形里一共有多少块积木呢？";
+assert.ok(A.tutorCaption(longCap).includes("一共有多少块积木"));
+assert.strictEqual(A.tutorCaption("这是一个 $3 \\times 3$ 的正方形"), "这是一个 3 × 3 的正方形");
+assert.strictEqual(A.tutorCaption("这是一个 3\\times3 的正方形"), "这是一个 3×3 的正方形");
+
 console.log("activity_state_test.js ok");

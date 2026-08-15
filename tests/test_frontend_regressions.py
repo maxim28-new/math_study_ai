@@ -150,6 +150,7 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="helpSheet"',
             'id="modeSelect"',
             'id="undoTileBtn"',
+            'id="expandStageBtn"',
             'id="trayCount"',
             "开始玩",
         ):
@@ -157,18 +158,39 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn('id="modeSwitch"', html)
         self.assertIn(".layout-explore", css)
         self.assertIn(".play-stage", css)
+        self.assertIn(".play-stage.is-expanded", css)
         self.assertIn("function remountStage(", app)
+        self.assertIn("function toggleStageExpand(", app)
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260814-gate", html)
+        self.assertIn("v=20260815-stage", html)
         self.assertIn('location.replace("/gate.html")', app)
+
+    def test_static_block_diagrams_use_rounded_squares(self):
+        app = read("web/app.js")
+        dots = app[app.find("function diagramDots"):app.find("function layerHighlight")]
+        layers = app[app.find("function drawSquareDots"):app.find("function diagramSquareLayers")]
+        self.assertIn("<rect", dots)
+        self.assertNotIn("<circle", dots)
+        self.assertIn("tileRect(", layers)
+        self.assertNotIn("<circle", layers)
+        self.assertIn("function softenBareLatex(", app)
+        self.assertIn("function tileRect(", app)
+
+    def test_caption_shows_full_math_text(self):
+        css = read("web/styles.css")
+        app = read("web/app.js")
+        self.assertIn("#tutorCaption", css)
+        self.assertIn("overflow-y: auto", css)
+        self.assertIn("el.innerHTML", app)
+        self.assertIn("softenBareLatex", read("web/activity/state.js"))
 
     def test_snap_grid_undo_api(self):
         src = read("web/activity/snap-grid.js")
         self.assertIn("undo:", src)
         self.assertIn("canUndo:", src)
-        self.assertIn("Math.min(72", src)
+        self.assertIn("Math.min(cellCap", src)
 
 
 if __name__ == "__main__":
