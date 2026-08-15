@@ -233,7 +233,8 @@ EXPLORE_GUIDANCE = """\
 出题与引导要求：
 - 结合下面的"出题灵感"，出**一道**贴合孩子年龄、具体又好玩的探索题或小谜题。可以从一个生活场景、一个小数字的实验、或一个"你猜猜看"的问题开始。
 - **一次只抛出一个问题**，简短、口语化。出完题先让孩子想、让孩子猜，不要自己往下讲解。
-- 若题目涉及图形、积木、点阵、排列、平方数，**每一轮回复都必须**用 ```xiaoou-draw 画一张图（见上面的画图说明）；能让孩子动手摆时优先 snap_grid，不要只用静态条形图。
+- 若系统提示里有「本堂课的题卡」，你只教那张卡：用它的第一问开场，用它指定的学具，不要另出题。
+- 若题目涉及图形、积木、点阵、排列、比多少，**每一轮回复都必须**用 ```xiaoou-draw 画一张图（见上面的画图说明）。学具以题卡为准；没有题卡时，按主题选图，不要所有主题都从 9 块摆正方形开始。
 - 始终守住核心规则：**绝不直接给答案**，用追问和最小提示引导；鼓励先试小例子、找规律、再想"为什么"。
 - 让题目能自然地追溯回上面那几条公理；孩子有发现时，帮他连回公理。
 - 一个探索告一段落，再问孩子"想不想再来一个"，可以稍微进一阶，形成层层递进。
@@ -291,17 +292,14 @@ DRAWING_GUIDE = """\
 - 可动手吸附格子（请孩子自己摆时必须用这个，不要用点阵 SVG 代替）：{"type":"snap_grid","cols":3,"rows":3,"tray":9,"caption":"把方块放进格子里试试"}
   cols/rows 为格子行列（1–8），tray 为托盘里的方块数（可多于或少于格子）。孩子能拖方块；你看不到拖的过程，只会在她明显摆完时收到一条「孩子在学具上摆完了一步」的消息，内含已放/空格/托盘剩余/节点（board_full 或 tiles_exhausted）。
 
-## 积木平方数探索 —— 每一步用什么图（照此更新参数）
-| 当前在聊什么 | 用什么图 |
-| 第一问「这 9 块能不能摆成正方形？」 | snap_grid cols:3 rows:3 tray:9 |
-| 她摆满后，问「再包一圈会怎样」 | 新的 snap_grid 4×4 tray:7（只给新的一圈）或静态 square_compare from:3 to:4 |
-| 只需要看、不要拖时 | 仍用 square_layers / square_steps / square_compare |
-| 确认「对了，$3\\times 3=9$」 | square_layers size:3 highlight:"none" |
-| 问「外面再包一圈变 $4\\times 4$，新加几块？」 | square_compare from:3 to:4 或 square_layers size:4 highlight:4 |
-| 问「$4\\times 4$ 一共几块？」 | square_layers size:4 highlight:"none" |
-| 问「从 9 块到 16 块，差几块？」 | square_compare from:3 to:4 |
-| 总结 $1+3+5+7=16$ 规律 | square_steps max:4 highlight:4 |
-| 猜 $5\\times 5$ 外面再加几层 | square_layers size:5 highlight:5 |
+## 按主题选第一张图（有题卡时以题卡为准）
+- 算术：snap_grid / dots / numberline，不要默认 3×3 九块正方形。
+- 应用题：bars 线段图。
+- 几何：拼、围、折；不要平方数包一圈。
+- 逻辑：规律、反例。
+- 分数：先切成一样大的份。
+- 代数：天平 / 猜数。
+若这堂课的道理就是「连续奇数相加得平方数」，再用 snap_grid 和 square_layers / square_compare / square_steps 往下长。
 
 ## 学具回传（你会当普通 user 消息收到）
 若消息以「（孩子在学具上摆完了一步，这不是她打的字）」开头，那是前端根据盘面发的，不是孩子打的字。
@@ -322,7 +320,11 @@ DRAWING_GUIDE = """\
 
 
 def build_system_prompt(
-    topic_key: str, level: str, child_name: str = "", mode: str = DEFAULT_MODE
+    topic_key: str,
+    level: str,
+    child_name: str = "",
+    mode: str = DEFAULT_MODE,
+    card: dict | None = None,
 ) -> str:
     topic = TOPICS_BY_KEY.get(topic_key, TOPICS_BY_KEY[DEFAULT_TOPIC_KEY])
     level_desc = LEVELS.get(level, LEVELS[DEFAULT_LEVEL])
@@ -339,6 +341,11 @@ def build_system_prompt(
     else:
         mode_block = BRING_GUIDANCE
 
+    card_block = ""
+    if mode == "explore" and isinstance(card, dict) and card:
+        from .author import card_guidance
+        card_block = "\n" + card_guidance(card) + "\n"
+
     return f"""{CORE_PHILOSOPHY}
 
 # 本次学习的设置
@@ -349,7 +356,7 @@ def build_system_prompt(
 在这个主题里，你和孩子约定：下面这几条是"不用再问为什么、大家都认可的出发点"，
 其他所有结论都要能从它们一步步推出来。当孩子用到某个方法时，试着带他追溯回这些公理。
 {axioms_block}
-
+{card_block}
 {DRAWING_GUIDE}
 
 {mode_block}
@@ -360,10 +367,14 @@ def build_system_prompt(
 EXPLORE_KICKOFF = (
     "（请你现在出一道新的探索题：结合本主题的公理和出题灵感，出一个贴合孩子年龄、具体好玩的问题，"
     "一次只抛一个引导问题，绝不直接给答案。"
-    "请刻意变换花样：换不同的切入点、场景和数字，不要每次都用同一道经典题；"
-    "如果前面已经探索过某个点，就换一个新角度或稍微进一阶。"
-    "算术、找规律、平方数：第一问优先用可动手的 snap_grid（例如 9 块摆正方形），不要一上来就画 bars 糖果条；比多少、应用题才用 bars。"
+    "请刻意变换花样：换不同的切入点、场景、数字和学具，不要每次都用同一道经典题，"
+    "尤其不要所有主题都从 9 块摆正方形开始。"
     "**每一轮回复都必须带一张 ```xiaoou-draw 图**，对应当前这一步在聊什么，不要只在第一句画一次。）"
+)
+
+EXPLORE_KICKOFF_WITH_CARD = (
+    "（请按照系统提示里的题卡开始：先问第一问，画题卡指定的那张图。"
+    "不要另出一道题，不要改终点。一次只问一个问题，绝不直接给答案。）"
 )
 
 

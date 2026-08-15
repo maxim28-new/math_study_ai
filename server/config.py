@@ -37,6 +37,15 @@ class Settings:
     access_code: str
     # 语音听写模型。留空或 off 则关闭语音。
     asr_model: str
+    # 出题作者（强模型）。deepseek | glm
+    author_engine: str
+    author_reasoning_effort: str
+    deepseek_api_key: str
+    deepseek_base_url: str
+    deepseek_model: str
+    zhipu_api_key: str
+    zhipu_base_url: str
+    zhipu_model: str
 
     @property
     def gate_enabled(self) -> bool:
@@ -129,7 +138,34 @@ def load_settings() -> Settings:
         port=int(os.getenv("PORT", "8000")),
         access_code=_load_access_code(),
         asr_model=_load_asr_model(),
+        author_engine=_load_author_engine(),
+        author_reasoning_effort=_load_author_effort(),
+        deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", "").strip(),
+        deepseek_base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").strip()
+        or "https://api.deepseek.com",
+        deepseek_model=os.getenv("DEEPSEEK_AUTHOR_MODEL", "deepseek-v4-pro").strip()
+        or "deepseek-v4-pro",
+        zhipu_api_key=(os.getenv("ZHIPU_API_KEY") or os.getenv("GLM_API_KEY") or "").strip(),
+        zhipu_base_url=os.getenv(
+            "ZHIPU_BASE_URL", "https://api.z.ai/api/coding/paas/v4"
+        ).strip()
+        or "https://api.z.ai/api/coding/paas/v4",
+        zhipu_model=os.getenv("ZHIPU_AUTHOR_MODEL", "glm-5.3").strip() or "glm-5.3",
     )
+
+
+def _load_author_engine() -> str:
+    raw = os.getenv("LLM_AUTHOR", "glm").strip().lower()
+    if raw in ("deepseek", "ds", "v4-pro"):
+        return "deepseek"
+    return "glm"
+
+
+def _load_author_effort() -> str:
+    raw = os.getenv("LLM_AUTHOR_REASONING_EFFORT", "high").strip().lower()
+    if raw not in ("low", "high", "max"):
+        return "high"
+    return raw
 
 
 def _load_asr_model() -> str:
@@ -170,11 +206,15 @@ def thinking_request_extras(
     u = (base_url or "").lower()
     m = (model or "").lower()
     is_deepseek = "deepseek.com" in u or m.startswith("deepseek-")
+    is_glm = "z.ai" in u or "bigmodel" in u or m.startswith("glm-")
     is_qwen = (
         "dashscope" in u
         or "aliyuncs" in u
         or m.startswith("qwen")
     )
+    if is_glm:
+        effort = reasoning_effort if reasoning_effort in ("low", "high", "max") else "high"
+        return {"thinking": {"type": "enabled"}, "reasoning_effort": effort}
     if is_deepseek:
         if thinking_enabled:
             return {"thinking": {"type": "enabled"}, "reasoning_effort": reasoning_effort}

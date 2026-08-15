@@ -23,6 +23,10 @@ const state = {
   stageSpec: null,
   talkOpen: false,
   toastTimer: null,
+  authorEngine: "glm",
+  problemCard: null,
+  authorPromise: null,
+  recentHooks: [],
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -47,6 +51,8 @@ function saveSession() {
     showReasoning: state.showReasoning,
     messages: sanitizeForStore(state.messages),
     boards: collectBoards(),
+    authorEngine: state.authorEngine,
+    recentHooks: state.recentHooks || [],
   };
   try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch (e) {}
 }
@@ -413,15 +419,83 @@ function restoreStageFromHistory() {
   syncStageFromTutor(lastAsst.content);
 }
 
+function mountFromCard(card) {
+  if (!card) return;
+  hideStartPlay();
+  const diagram = card.diagram;
+  if (card.representation === "snap_grid" && diagram && window.XiaoouActivity) {
+    const spec = XiaoouActivity.parseSnapGrid(diagram);
+    if (spec) {
+      remountStage(spec, []);
+      return;
+    }
+  }
+  freezeLiveActivities();
+  state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
+  state.mountedActivities = [];
+  state.stageSpec = null;
+  const host = $("#stageHost");
+  const tools = $("#stageTools");
+  if (tools) tools.classList.add("hidden");
+  if (host) host.innerHTML = diagram ? renderDiagram(JSON.stringify(diagram)) : "";
+}
+
+async function fetchAuthorCard(force) {
+  if (!force && state.problemCard && state.problemCard.topic === state.topicKey) {
+    return state.problemCard;
+  }
+  const res = await fetch("/api/author", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      topic: state.topicKey,
+      level: state.level,
+      engine: state.authorEngine,
+      recent: state.recentHooks || [],
+    }),
+  });
+  if (res.status === 401) {
+    window.location.replace("/gate.html");
+    return null;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.card) {
+    throw new Error(data.error || "出题大脑这会儿有点忙，再试一次。");
+  }
+  state.problemCard = data.card;
+  if (data.card.hook) {
+    state.recentHooks = (state.recentHooks || []).concat(data.card.hook).slice(-8);
+  }
+  return data.card;
+}
+
+function prefetchAuthor() {
+  if (state.mode !== "explore") return;
+  if (state.config && !state.config.configured) return;
+  state.authorPromise = fetchAuthorCard(true).catch(() => null);
+}
+
 async function startPlay() {
   if (state.streaming) return;
   if (state.config && !state.config.configured) return;
   hideStartPlay();
-  const spec = window.XiaoouActivity
-    ? XiaoouActivity.parseSnapGrid(XiaoouActivity.DEFAULT_SNAP_GRID)
-    : null;
-  if (spec) remountStage(spec, []);
-  setCaption("先随便摆摆，小欧马上出题。");
+  setCaption("小欧在想一道有意思的题…");
+  let card = null;
+  try {
+    if (state.authorPromise) card = await state.authorPromise;
+    if (!card || card.topic !== state.topicKey) card = await fetchAuthorCard(true);
+  } catch (e) {
+    setCaption((e && e.message) || "这道题再想一会儿，点开始玩再试。");
+    showStartPlay();
+    return;
+  }
+  if (!card) {
+    setCaption("出题大脑还没接上。家长先在设置里看看出题模型。");
+    showStartPlay();
+    return;
+  }
+  mountFromCard(card);
+  if (card.first_question) setCaption(card.first_question);
   applyModeUI();
   await streamAssistant(true);
 }
@@ -829,6 +903,8 @@ async function loadConfig() {
     : !!cfg.show_reasoning;
   state.messages = (saved && saved.messages) || [];
   state.boards = (saved && Array.isArray(saved.boards)) ? saved.boards : [];
+  state.authorEngine = cfg.default_author || (saved && saved.authorEngine) || "glm";
+  state.recentHooks = (saved && Array.isArray(saved.recentHooks)) ? saved.recentHooks : [];
 
   // 主题下拉
   const topicSel = $("#topicSelect");
@@ -855,6 +931,17 @@ async function loadConfig() {
 
   $("#thinkingSelect").value = state.thinking ? "on" : "off";
   $("#showReasoningSelect").value = state.showReasoning ? "on" : "off";
+  const authorSel = $("#authorSelect");
+  if (authorSel && Array.isArray(cfg.author_engines)) {
+    authorSel.innerHTML = "";
+    cfg.author_engines.forEach((eng) => {
+      const o = document.createElement("option");
+      o.value = eng.key;
+      o.textContent = eng.ready ? eng.name : eng.name + "（还没接密钥）";
+      authorSel.appendChild(o);
+    });
+    authorSel.value = state.authorEngine;
+  }
   syncReasoningUi();
   setReasoningVisibility(state.showReasoning);
 
@@ -917,6 +1004,7 @@ async function loadConfig() {
   applyModeUI();
   renderHistory();
   refreshVoiceAvailability();
+  prefetchAuthor();
 }
 
 // 思考模式关闭时，展示思考的选项不可用。
@@ -1045,6 +1133,17 @@ async function sendMessage(text) {
 // 探索模式：点"出个新题"，让小欧出题（不显示孩子气泡）。
 async function startExplore() {
   if (state.streaming) return;
+  setCaption("小欧在想一道有意思的题…");
+  try {
+    const card = await fetchAuthorCard(true);
+    if (card) {
+      mountFromCard(card);
+      if (card.first_question) setCaption(card.first_question);
+    }
+  } catch (e) {
+    setCaption((e && e.message) || "这道再想一会儿。");
+    return;
+  }
   await streamAssistant(true);
 }
 
@@ -1069,6 +1168,7 @@ async function streamAssistant(kickoff) {
         kickoff: !!kickoff,
         thinking: state.thinking,
         show_reasoning: state.showReasoning,
+        card: state.problemCard || null,
       }),
     });
     if (res.status === 401) {
@@ -1595,6 +1695,8 @@ function chooseTopic(key) {
   updateAxioms();
   saveSession();
   renderHistory();
+  state.problemCard = null;
+  prefetchAuthor();
 }
 function openAttachSheet() {
   const sheet = $("#attachSheet");
@@ -1734,6 +1836,15 @@ function bindEvents() {
     syncReasoningUi();
     saveSession();
   });
+  const authorSel = $("#authorSelect");
+  if (authorSel) {
+    authorSel.addEventListener("change", (e) => {
+      state.authorEngine = e.target.value;
+      state.problemCard = null;
+      saveSession();
+      prefetchAuthor();
+    });
+  }
   $("#showReasoningSelect").addEventListener("change", (e) => {
     state.showReasoning = e.target.value === "on";
     setReasoningVisibility(state.showReasoning);

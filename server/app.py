@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import asr
+from . import author
 from . import config as teaching_config
 from .config import WEB_DIR, settings
 from . import gate
@@ -81,6 +82,7 @@ class ChatRequest(BaseModel):
     # 思考模式：前端可按请求覆盖 .env 默认值（None=沿用默认）。
     thinking: Optional[bool] = None
     show_reasoning: Optional[bool] = None
+    card: Optional[dict[str, Any]] = None
 
 
 class UnlockRequest(BaseModel):
@@ -141,6 +143,8 @@ def get_config() -> dict:
         "thinking_enabled": settings.thinking_enabled,
         "show_reasoning": settings.show_reasoning,
         "voice_enabled": settings.voice_enabled,
+        "author_engines": author.engine_payloads(),
+        "default_author": settings.author_engine,
     }
 
 
@@ -253,7 +257,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         return
 
     system_prompt = tutor.build_system_prompt(
-        req.topic, req.level, req.child_name, req.mode
+        req.topic, req.level, req.child_name, req.mode, req.card
     )
     text_headers = {
         "Authorization": f"Bearer {settings.api_key}",
@@ -292,8 +296,9 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
 
             # 探索模式点"出个新题"：临时追加一条出题指令（不进入前端展示的历史）。
             if req.kickoff and req.mode == "explore":
+                kickoff = tutor.EXPLORE_KICKOFF_WITH_CARD if req.card else tutor.EXPLORE_KICKOFF
                 teaching_messages = teaching_messages + [
-                    {"role": "user", "content": tutor.EXPLORE_KICKOFF}
+                    {"role": "user", "content": kickoff}
                 ]
 
             payload = {
@@ -322,6 +327,24 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         yield _sse({"error": f"连接大模型时出错：{exc}"})
 
     yield _sse({"done": True})
+
+
+class AuthorRequest(BaseModel):
+    topic: str = tutor.DEFAULT_TOPIC_KEY
+    level: str = tutor.DEFAULT_LEVEL
+    engine: str = ""
+    recent: list[str] = Field(default_factory=list)
+
+
+@app.post("/api/author")
+async def author_card(req: AuthorRequest) -> JSONResponse:
+    try:
+        card = await author.author_problem(req.topic, req.level, req.recent, req.engine or None)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    except httpx.HTTPError:
+        return JSONResponse({"ok": False, "error": "出题大脑这会儿有点忙，再试一次。"}, status_code=502)
+    return JSONResponse({"ok": True, "card": card})
 
 
 class TranscribeRequest(BaseModel):
