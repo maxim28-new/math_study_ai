@@ -274,10 +274,7 @@ function clearActivitySession() {
 function setCaption(text) {
   const el = $("#tutorCaption");
   if (!el) return;
-  const html = text ? inlineFmt(text) : "";
-  el.innerHTML = html;
-  const sheetBody = $("#captionSheetBody");
-  if (sheetBody) sheetBody.innerHTML = html || "<p>小欧还没开始说话。</p>";
+  el.innerHTML = text ? inlineFmt(text) : "";
 }
 
 function showStartPlay() {
@@ -288,6 +285,8 @@ function showStartPlay() {
   const app = $(".app");
   if (app) app.classList.remove("stage-expanded");
   syncExpandButton();
+  setDoodleActive(false);
+  clearDoodle();
   const tools = $("#stageTools");
   if (tools) tools.classList.add("hidden");
 }
@@ -351,11 +350,102 @@ function toggleStageExpand() {
   const app = $(".app");
   if (app) app.classList.toggle("stage-expanded", isStageExpanded());
   syncExpandButton();
+  setDoodleActive(isStageExpanded());
   if (state.stageSpec) {
     const live = state.liveActivities[state.liveActivities.length - 1];
     const occ = (live && live.getOccupancy) ? live.getOccupancy().occupied : [];
     remountStage(state.stageSpec, occ);
   }
+}
+
+const doodle = { strokes: [], cur: null, drawing: false };
+
+function doodlePoint(e, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+}
+
+function redrawDoodle() {
+  const canvas = $("#doodleCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(47, 74, 184, .78)";
+  ctx.lineWidth = 3.4;
+  doodle.strokes.forEach((stroke) => {
+    if (!stroke.length) return;
+    ctx.beginPath();
+    ctx.moveTo(stroke[0].x, stroke[0].y);
+    for (let i = 1; i < stroke.length; i++) ctx.lineTo(stroke[i].x, stroke[i].y);
+    ctx.stroke();
+  });
+}
+
+function sizeDoodleCanvas() {
+  const canvas = $("#doodleCanvas");
+  const play = $(".play-stage");
+  if (!canvas || !play) return;
+  const rect = play.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(rect.width * dpr));
+  canvas.height = Math.max(1, Math.round(rect.height * dpr));
+  canvas.style.width = rect.width + "px";
+  canvas.style.height = rect.height + "px";
+  redrawDoodle();
+}
+
+function clearDoodle() {
+  doodle.strokes = [];
+  doodle.cur = null;
+  doodle.drawing = false;
+  redrawDoodle();
+}
+
+function setDoodleActive(on) {
+  const canvas = $("#doodleCanvas");
+  const reset = $("#doodleResetBtn");
+  if (canvas) canvas.classList.toggle("is-active", !!on);
+  if (reset) reset.classList.toggle("hidden", !on);
+  if (on) {
+    requestAnimationFrame(() => {
+      sizeDoodleCanvas();
+      requestAnimationFrame(sizeDoodleCanvas);
+    });
+  }
+}
+
+function initDoodle() {
+  const canvas = $("#doodleCanvas");
+  if (!canvas) return;
+  const start = (e) => {
+    if (!canvas.classList.contains("is-active")) return;
+    e.preventDefault();
+    if (canvas.setPointerCapture && e.pointerId != null) {
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    doodle.drawing = true;
+    doodle.cur = [doodlePoint(e, canvas)];
+    doodle.strokes.push(doodle.cur);
+    redrawDoodle();
+  };
+  const move = (e) => {
+    if (!doodle.drawing || !doodle.cur) return;
+    e.preventDefault();
+    doodle.cur.push(doodlePoint(e, canvas));
+    redrawDoodle();
+  };
+  const end = () => { doodle.drawing = false; doodle.cur = null; };
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+  const reset = $("#doodleResetBtn");
+  if (reset) reset.addEventListener("click", clearDoodle);
 }
 
 function remountStage(spec, occupied) {
@@ -1071,26 +1161,16 @@ async function loadConfig() {
 
   $("#childName").value = state.childName;
 
-  // 快捷按钮
+  // 快捷按钮（带题模式仍用横条；探索模式只保留加号里的「小提示」）
   const qa = $("#quickActions");
   qa.innerHTML = "";
-  const help = $("#helpActions");
-  if (help) help.innerHTML = "";
   cfg.quick_actions.forEach((a) => {
-    const make = (into) => {
-      if (!into) return;
-      const b = document.createElement("button");
-      b.type = "button";
-      b.textContent = a.label;
-      b.dataset.message = a.message;
-      b.addEventListener("click", () => {
-        closeAttachSheet();
-        sendMessage(a.message);
-      });
-      into.appendChild(b);
-    };
-    make(qa);
-    make(help);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = a.label;
+    b.dataset.message = a.message;
+    b.addEventListener("click", () => sendMessage(a.message));
+    qa.appendChild(b);
   });
 
   const modeSel = $("#modeSelect");
@@ -1184,15 +1264,15 @@ function applyModeUI() {
 
   const started = explore && ($(".play-stage") && $(".play-stage").classList.contains("is-playing") || state.messages.length > 0);
   const talkBtn = $("#talkBtn");
-  const historyBtn = $("#historyBtn");
   if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
-  if (historyBtn) historyBtn.disabled = !explore;
-  const plusHelp = $("#plusHelpGroup");
-  if (plusHelp) plusHelp.hidden = !explore;
+  const hintBtn = $("#hintBtn");
+  if (hintBtn) hintBtn.hidden = !explore;
+  const newQ = $("#newQuestionBtn");
+  if (newQ) newQ.hidden = !explore;
   const drawBtn = $("#drawBtn");
   if (drawBtn) drawBtn.hidden = explore;
   const attach = $("#attachBtn");
-  if (attach) attach.textContent = explore ? "📷 拍一张给小欧看" : "📷 拍作业本";
+  if (attach) attach.textContent = explore ? "拍给我" : "拍作业本";
 }
 
 function updatePhotoHint(cfg) {
@@ -1391,7 +1471,7 @@ function setStreaming(on) {
   if (startBtn && state.config && state.config.configured) startBtn.disabled = on;
   const newQ = $("#newQuestionBtn");
   if (newQ) newQ.disabled = on;
-  document.querySelectorAll(".quick-actions button, #helpActions button").forEach((b) => (b.disabled = on));
+  document.querySelectorAll(".quick-actions button, #hintBtn").forEach((b) => (b.disabled = on));
 }
 
 // 切换探究模式。切换会清空当前对话（因为教学设定不同）。
@@ -1865,15 +1945,21 @@ function bindEvents() {
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
   const captionBar = $("#captionBar");
   if (captionBar) {
-    captionBar.addEventListener("click", (e) => {
-      if (e.target.closest("#historyBtn")) return;
-      openHistorySheet();
-    });
+    captionBar.addEventListener("click", () => openHistorySheet());
     captionBar.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         openHistorySheet();
       }
+    });
+  }
+  const hintBtn = $("#hintBtn");
+  if (hintBtn) {
+    hintBtn.addEventListener("click", () => {
+      closeAttachSheet();
+      const actions = (state.config && state.config.quick_actions) || [];
+      const stuck = actions.find((a) => a.id === "stuck") || actions[0];
+      sendMessage(stuck ? stuck.message : "我卡住了，给我一点点小提示就好，请不要直接告诉我答案。");
     });
   }
   const talkBtn = $("#talkBtn");
@@ -1885,8 +1971,6 @@ function bindEvents() {
       startExplore();
     });
   }
-  const historyBtn = $("#historyBtn");
-  if (historyBtn) historyBtn.addEventListener("click", openHistorySheet);
   const historyClose = $("#historyClose");
   if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
   const historySheet = $("#historySheet");
@@ -1905,6 +1989,7 @@ function bindEvents() {
   const expandStageBtn = $("#expandStageBtn");
   if (expandStageBtn) expandStageBtn.addEventListener("click", toggleStageExpand);
   syncExpandButton();
+  initDoodle();
   const modeSelect = $("#modeSelect");
   if (modeSelect) {
     modeSelect.addEventListener("change", (e) => switchMode(e.target.value));
@@ -1948,6 +2033,9 @@ function bindEvents() {
     window.visualViewport.addEventListener("scroll", syncKeyboardInset);
     syncKeyboardInset();
   }
+  window.addEventListener("resize", () => {
+    if (isStageExpanded()) sizeDoodleCanvas();
+  });
 
   $("#topicSelect").addEventListener("change", (e) => {
     state.topicKey = e.target.value;

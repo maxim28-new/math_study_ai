@@ -162,13 +162,14 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="startPlayBtn"',
             'id="tutorCaption"',
             'id="captionBar"',
-            'id="captionSheetBody"',
             'id="stageHost"',
             'id="talkBtn"',
             'id="historySheet"',
             'id="attachSheet"',
-            'id="plusHelpGroup"',
+            'id="hintBtn"',
             'id="newQuestionBtn"',
+            'id="doodleCanvas"',
+            'id="doodleResetBtn"',
             'id="modeSelect"',
             'id="undoTileBtn"',
             'id="expandStageBtn"',
@@ -188,7 +189,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".stage-host .diagram figcaption { display: none; }", css)
         self.assertIn("flex: 1 1 0", css)
         self.assertIn("-webkit-line-clamp: 3", css)
-        self.assertIn(".caption-actions", css)
+        self.assertIn(".caption-more", css)
+        self.assertIn(".doodle-canvas", css)
         self.assertIn(".child-dock", css)
         self.assertIn("function remountStage(", app)
         self.assertIn("function toggleStageExpand(", app)
@@ -198,7 +200,14 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-layout3", html)
+        self.assertIn("v=20260815-layout4", html)
+        self.assertIn("function initDoodle(", app)
+        self.assertIn("小提示", html)
+        self.assertIn("拍给我", html)
+        self.assertNotIn('id="historyBtn"', html)
+        self.assertNotIn("captionSheetBody", html)
+        self.assertNotIn("plusHelpGroup", html)
+        self.assertNotIn("换种方法", html)
         self.assertIn('id="authorSelect"', html)
         self.assertIn("/api/author", app)
         self.assertIn("function fetchAuthorCard(", app)
@@ -270,7 +279,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("7.4em", cap_css)
         self.assertIn("-webkit-line-clamp: 3", cap_css)
         self.assertIn("function openHistorySheet(", app)
-        self.assertIn("captionSheetBody", app)
+        self.assertNotIn("captionSheetBody", app)
+        self.assertIn("historyMount", app)
         self.assertIn("captionBar", app)
         self.assertIn("el.innerHTML", app)
         self.assertIn("softenBareLatex", state_js)
