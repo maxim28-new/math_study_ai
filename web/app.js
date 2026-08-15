@@ -274,37 +274,45 @@ function clearActivitySession() {
 function setCaption(text) {
   const el = $("#tutorCaption");
   if (!el) return;
-  el.innerHTML = text ? inlineFmt(text) : "";
-  const bar = el.closest(".caption-bar");
+  const html = text ? inlineFmt(text) : "";
+  el.innerHTML = html;
+  const sheetBody = $("#captionSheetBody");
+  if (sheetBody) sheetBody.innerHTML = html || "<p>小欧还没开始说话。</p>";
   const btn = $("#captionExpandBtn");
-  if (bar) bar.classList.remove("is-expanded");
-  if (btn) {
-    btn.textContent = "展开";
-    btn.setAttribute("aria-expanded", "false");
-  }
+  if (btn) btn.setAttribute("aria-expanded", "false");
+  closeCaptionSheet();
   requestAnimationFrame(syncCaptionDisclosure);
 }
 
 function syncCaptionDisclosure() {
   const el = $("#tutorCaption");
-  const bar = el && el.closest(".caption-bar");
   const btn = $("#captionExpandBtn");
-  if (!el || !bar || !btn) return;
-  const expanded = bar.classList.contains("is-expanded");
+  if (!el || !btn) return;
+  const sheet = $("#captionSheet");
+  const open = !!(sheet && sheet.classList.contains("open"));
   const clipped = el.scrollHeight > el.clientHeight + 2;
-  btn.classList.toggle("hidden", !expanded && !clipped);
+  btn.classList.toggle("hidden", !open && !clipped);
+}
+
+function openCaptionSheet() {
+  const sheet = $("#captionSheet");
+  const btn = $("#captionExpandBtn");
+  if (sheet) sheet.classList.add("open");
+  if (btn) btn.setAttribute("aria-expanded", "true");
+}
+
+function closeCaptionSheet() {
+  const sheet = $("#captionSheet");
+  const btn = $("#captionExpandBtn");
+  if (sheet) sheet.classList.remove("open");
+  if (btn) btn.setAttribute("aria-expanded", "false");
+  requestAnimationFrame(syncCaptionDisclosure);
 }
 
 function toggleCaptionExpansion() {
-  const el = $("#tutorCaption");
-  const bar = el && el.closest(".caption-bar");
-  const btn = $("#captionExpandBtn");
-  if (!bar || !btn) return;
-  const expanded = bar.classList.toggle("is-expanded");
-  btn.textContent = expanded ? "收起" : "展开";
-  btn.setAttribute("aria-expanded", expanded ? "true" : "false");
-  if (!expanded) bar.scrollTop = 0;
-  requestAnimationFrame(syncCaptionDisclosure);
+  const sheet = $("#captionSheet");
+  if (sheet && sheet.classList.contains("open")) closeCaptionSheet();
+  else openCaptionSheet();
 }
 
 function showStartPlay() {
@@ -1896,6 +1904,14 @@ function bindEvents() {
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
   const captionExpandBtn = $("#captionExpandBtn");
   if (captionExpandBtn) captionExpandBtn.addEventListener("click", toggleCaptionExpansion);
+  const captionSheetClose = $("#captionSheetClose");
+  if (captionSheetClose) captionSheetClose.addEventListener("click", closeCaptionSheet);
+  const captionSheet = $("#captionSheet");
+  if (captionSheet) {
+    captionSheet.addEventListener("click", (e) => {
+      if (e.target === captionSheet) closeCaptionSheet();
+    });
+  }
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
   const helpBtn = $("#helpBtn");

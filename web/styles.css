@@ -437,6 +437,7 @@ button, input, select, textarea { font-family: inherit; }
   margin-bottom: 8px;
   min-height: 0;
 }
+.app.layout-explore .composer .chips { margin-bottom: 0; }
 .chip {
   flex: 0 0 auto;
   border: none;
@@ -587,9 +588,31 @@ button, input, select, textarea { font-family: inherit; }
   box-shadow: 0 1px 0 rgba(255,255,255,.9) inset;
   border: 1px solid var(--line);
 }
+.child-dock {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.child-dock:not(:has(button:not(.hidden))) { display: none; }
+.help-btn {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,.9) inset;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.help-btn.hidden { display: none !important; }
 .talk-btn {
-  width: 100%;
-  margin-bottom: 8px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  margin: 0;
   border: none;
   border-radius: 16px;
   padding: 12px 16px;
@@ -686,16 +709,17 @@ button, input, select, textarea { font-family: inherit; }
 .app.layout-bring > .messages { display: flex; flex: 1; }
 
 .explore-stage .caption-bar {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  position: relative;
   flex: 0 0 auto;
-  max-height: min(25svh, 128px);
+  min-height: 0;
+  padding: 12px 78px 12px 14px;
+  background: #fffdf8;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 8px 18px rgba(62, 48, 24, .05);
   overflow: hidden;
 }
 #tutorCaption {
-  flex: 1;
-  min-width: 0;
   margin: 0;
   font-size: 16px;
   font-weight: 700;
@@ -703,35 +727,43 @@ button, input, select, textarea { font-family: inherit; }
   color: var(--ink);
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
+  -webkit-line-clamp: 3;
   overflow: hidden;
 }
-.caption-bar.is-expanded {
-  max-height: min(48svh, 360px);
-  overflow-y: auto;
-}
-.caption-bar.is-expanded #tutorCaption {
-  display: block;
-  overflow: visible;
-}
 #tutorCaption .katex { font-size: 1em; }
+.caption-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  z-index: 2;
+}
 .caption-expand-btn,
 .history-btn {
-  flex: 0 0 auto;
   border: 1px solid var(--line);
-  background: #fff;
+  background: rgba(255, 255, 255, .94);
   color: var(--ink-soft);
   border-radius: 999px;
   padding: 6px 10px;
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
+  box-shadow: 0 4px 10px rgba(62, 48, 24, .06);
 }
 .caption-expand-btn {
   color: var(--primary);
-  padding-inline: 8px;
 }
 .caption-expand-btn.hidden { display: none; }
+.caption-sheet-body {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.caption-sheet-body .katex { font-size: 1em; }
 
 .play-stage {
   position: relative;
@@ -947,8 +979,9 @@ button, input, select, textarea { font-family: inherit; }
 
 .stage-expand-btn {
   position: absolute;
-  right: 10px;
+  left: 10px;
   top: 10px;
+  right: auto;
   z-index: 2;
   border: 1px solid rgba(234, 223, 206, .95);
   border-radius: 999px;
@@ -995,6 +1028,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 .app.layout-bring .talk-btn,
 .app.layout-bring #helpBtn { display: none !important; }
+.app.layout-explore .chips,
 .app.layout-explore .quick-actions { display: none; }
 .app.layout-bring #homeworkBtn { display: none; }
 

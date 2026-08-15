@@ -162,8 +162,11 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="startPlayBtn"',
             'id="tutorCaption"',
             'id="captionExpandBtn"',
+            'id="captionSheet"',
+            'id="captionSheetBody"',
             'id="stageHost"',
             'id="talkBtn"',
+            'id="helpBtn"',
             'id="historySheet"',
             'id="helpSheet"',
             'id="modeSelect"',
@@ -180,15 +183,18 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".app.stage-expanded .composer", css)
         self.assertIn(".stage-host .diagram figcaption { display: none; }", css)
         self.assertIn("flex: 1 1 0", css)
-        self.assertIn("-webkit-line-clamp: 5", css)
+        self.assertIn("-webkit-line-clamp: 3", css)
+        self.assertIn(".caption-actions", css)
+        self.assertIn(".child-dock", css)
         self.assertIn("function remountStage(", app)
         self.assertIn("function toggleStageExpand(", app)
         self.assertIn("function toggleCaptionExpansion(", app)
+        self.assertIn("function openCaptionSheet(", app)
         self.assertIn('classList.toggle("stage-expanded"', app)
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-board2", html)
+        self.assertIn("v=20260815-layout2", html)
         self.assertIn('id="authorSelect"', html)
         self.assertIn("/api/author", app)
         self.assertIn("function fetchAuthorCard(", app)
@@ -258,9 +264,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("#tutorCaption", css)
         cap_css = css[css.find("#tutorCaption"):css.find("#tutorCaption .katex")]
         self.assertNotIn("7.4em", cap_css)
-        self.assertIn("-webkit-line-clamp: 5", cap_css)
-        self.assertIn(".caption-bar.is-expanded #tutorCaption", cap_css)
-        self.assertIn("overflow: visible", cap_css)
+        self.assertIn("-webkit-line-clamp: 3", cap_css)
+        self.assertIn("function openCaptionSheet(", app)
+        self.assertIn("captionSheetBody", app)
         self.assertIn("toggleCaptionExpansion", app)
         self.assertIn("el.innerHTML", app)
         self.assertIn("softenBareLatex", state_js)
