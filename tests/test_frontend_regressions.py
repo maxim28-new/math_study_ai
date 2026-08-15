@@ -165,6 +165,8 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="stageHost"',
             'id="talkBtn"',
             'id="talkCloseBtn"',
+            'id="historySheet"',
+            'id="historyMount"',
             'id="attachSheet"',
             'id="hintBtn"',
             'id="newQuestionBtn"',
@@ -191,7 +193,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".app.stage-expanded .composer", css)
         self.assertIn(".stage-host .diagram figcaption { display: none; }", css)
         self.assertIn("flex: 1 1 0", css)
-        self.assertIn("-webkit-line-clamp: 8", css)
+        self.assertIn("-webkit-line-clamp: 5", css)
         self.assertIn(".doodle-canvas", css)
         self.assertIn(".doodle-toolbar", css)
         self.assertIn(".child-dock", css)
@@ -204,18 +206,18 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-layout7", html)
+        self.assertIn("v=20260815-layout8", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn("小提示", html)
         self.assertIn("拍给我", html)
         self.assertIn("发给小欧", html)
         self.assertNotIn('id="historyBtn"', html)
-        self.assertNotIn('id="historySheet"', html)
-        self.assertNotIn("刚才的对话", html)
+        self.assertIn("刚才的对话", html)
         self.assertNotIn('aria-label="放大画板"', html)
-        self.assertIn("展开全文", html)
-        self.assertIn("function toggleCaptionOpen(", app)
+        self.assertNotIn("展开全文", html)
+        self.assertIn("function openHistorySheet(", app)
+        self.assertNotIn("function toggleCaptionOpen(", app)
         self.assertIn(".app.layout-explore > .messages { display: none; }", css)
         self.assertIn(".app.layout-explore.talk-open .child-dock { display: none; }", css)
         self.assertNotIn("captionSheetBody", html)
@@ -291,11 +293,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("#tutorCaption", css)
         cap_css = css[css.find("#tutorCaption"):css.find("#tutorCaption .katex")]
         self.assertNotIn("7.4em", cap_css)
-        self.assertIn("-webkit-line-clamp: 8", cap_css)
-        self.assertIn("function toggleCaptionOpen(", app)
+        self.assertIn("-webkit-line-clamp: 5", cap_css)
+        self.assertIn("function openHistorySheet(", app)
         self.assertIn("function toggleStageExpand(", app)
         self.assertNotIn("captionSheetBody", app)
-        self.assertNotIn("openHistorySheet", app)
+        self.assertNotIn("function toggleCaptionOpen(", app)
         self.assertNotIn("zoomFromCaption", app)
         self.assertIn('id="captionBar"', read("web/index.html"))
         self.assertIn("tutorCaption", app)

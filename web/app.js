@@ -276,31 +276,6 @@ function setCaption(text) {
   const el = $("#tutorCaption");
   if (!el) return;
   el.innerHTML = text ? inlineFmt(text) : "";
-  const bar = $("#captionBar");
-  if (bar) bar.classList.remove("is-open");
-  requestAnimationFrame(syncCaptionOverflow);
-}
-
-function syncCaptionOverflow() {
-  const el = $("#tutorCaption");
-  const bar = $("#captionBar");
-  const more = $(".caption-more");
-  if (!el || !bar) return;
-  const open = bar.classList.contains("is-open");
-  const overflowing = el.scrollHeight > el.clientHeight + 4;
-  bar.classList.toggle("can-expand", overflowing || open);
-  bar.setAttribute("aria-expanded", open ? "true" : "false");
-  if (more) {
-    more.hidden = !(open || overflowing);
-    more.textContent = open ? "收起" : "展开全文";
-  }
-}
-
-function toggleCaptionOpen() {
-  const bar = $("#captionBar");
-  if (!bar) return;
-  bar.classList.toggle("is-open");
-  syncCaptionOverflow();
 }
 
 function showStartPlay() {
@@ -862,10 +837,23 @@ async function startPlay() {
 
 function placeMessages() {
   const messages = $("#messages");
+  const historyMount = $("#historyMount");
   const app = $(".app");
   const composer = $(".composer");
-  if (!messages || !app || !composer) return;
-  if (messages.parentElement !== app) app.insertBefore(messages, composer);
+  if (!messages) return;
+  if (state.mode === "explore" && historyMount) historyMount.appendChild(messages);
+  else if (app && composer) app.insertBefore(messages, composer);
+}
+
+function openHistorySheet() {
+  placeMessages();
+  const sheet = $("#historySheet");
+  if (sheet) sheet.classList.add("open");
+  scrollToBottom();
+}
+function closeHistorySheet() {
+  const sheet = $("#historySheet");
+  if (sheet) sheet.classList.remove("open");
 }
 
 function setTalkOpen(on) {
@@ -2110,11 +2098,11 @@ function bindEvents() {
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
   const captionBar = $("#captionBar");
   if (captionBar) {
-    captionBar.addEventListener("click", toggleCaptionOpen);
+    captionBar.addEventListener("click", openHistorySheet);
     captionBar.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        toggleCaptionOpen();
+        openHistorySheet();
       }
     });
   }
@@ -2131,6 +2119,14 @@ function bindEvents() {
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
   const talkCloseBtn = $("#talkCloseBtn");
   if (talkCloseBtn) talkCloseBtn.addEventListener("click", () => setTalkOpen(false));
+  const historyClose = $("#historyClose");
+  if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
+  const historySheet = $("#historySheet");
+  if (historySheet) {
+    historySheet.addEventListener("click", (e) => {
+      if (e.target === historySheet) closeHistorySheet();
+    });
+  }
   const newQuestionBtn = $("#newQuestionBtn");
   if (newQuestionBtn) {
     newQuestionBtn.addEventListener("click", () => {
@@ -2194,7 +2190,6 @@ function bindEvents() {
   }
   window.addEventListener("resize", () => {
     if (isStageExpanded()) sizeDoodleCanvas();
-    syncCaptionOverflow();
   });
 
   $("#topicSelect").addEventListener("change", (e) => {
