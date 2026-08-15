@@ -314,6 +314,14 @@ DRAWING_GUIDE = """\
 - 数值小一点（size、行列各不超过 8）。
 - 需要孩子动手摆、数、试铺满时，用 snap_grid；只看对比/数轴/线段图时用原来的静态类型。禁止输出 SVG/Konva 代码。caption 仍然不得泄露答案。"""
 
+SEMANTIC_BOARD_GUIDE = """\
+# 语义画板已由程序控制
+题卡带有 semantic_board，孩子面前已经挂好与本题同源的专用画板。
+- 不要输出任何 xiaoou-draw、SVG、Canvas、Konva、HTML 或画图 JSON。
+- 不要因为题目里出现「台阶」「小山」等词而另选图形。
+- 只围绕题卡的数学模型提问；孩子操作画板后，你会收到一条标明「语义画板盘面」的系统说明。
+- 画板没有展示的路线或总数，不要提前在文字里补出来。"""
+
 
 # ------------------------------------------------------------------
 #  六、组装最终的系统提示词
@@ -346,6 +354,11 @@ def build_system_prompt(
     if mode == "explore" and isinstance(card, dict) and card:
         from .author import card_guidance
         card_block = "\n" + card_guidance(card) + "\n"
+    drawing_guide = (
+        SEMANTIC_BOARD_GUIDE
+        if isinstance(card, dict) and isinstance(card.get("semantic_board"), dict)
+        else DRAWING_GUIDE
+    )
 
     return f"""{CORE_PHILOSOPHY}
 
@@ -358,7 +371,7 @@ def build_system_prompt(
 其他所有结论都要能从它们一步步推出来。当孩子用到某个方法时，试着带他追溯回这些公理。
 {axioms_block}
 {card_block}
-{DRAWING_GUIDE}
+{drawing_guide}
 
 {mode_block}
 """
@@ -374,7 +387,8 @@ EXPLORE_KICKOFF = (
 )
 
 EXPLORE_KICKOFF_WITH_CARD = (
-    "（请按照系统提示里的题卡开始：先问第一问，画题卡指定的那张图。"
+    "（请按照系统提示里的题卡开始：先问第一问。题卡如果带 semantic_board，前端已经显示画板，"
+    "不要再输出画图代码；旧题卡才画题卡指定的图。"
     "不要另出一道题，不要改终点。一次只问一个问题，绝不直接给答案。）"
 )
 

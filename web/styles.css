@@ -834,6 +834,102 @@ button, input, select, textarea { font-family: inherit; }
   justify-content: center;
 }
 
+.semantic-board {
+  width: min(100%, 380px);
+  min-height: 100%;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  color: var(--ink);
+}
+.board-safe-fallback {
+  margin: auto;
+  padding: 16px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  text-align: center;
+}
+.layer-pile-board { padding: 10px 6px; }
+.layer-pile {
+  display: grid;
+  gap: clamp(5px, 1.2vh, 9px);
+  align-content: center;
+}
+.layer-pile-row {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: clamp(2px, .8vw, 6px);
+}
+.layer-pile-item {
+  flex: 0 1 30px;
+  width: 30px;
+  aspect-ratio: 1;
+  min-width: 10px;
+  border-radius: 26%;
+  background: linear-gradient(145deg, #6b7ef0, #3651cc);
+  box-shadow: 0 4px 8px rgba(63, 91, 214, .18);
+}
+.path-board {
+  min-height: 260px;
+  gap: 7px;
+  padding: 6px 2px 2px;
+}
+.path-board-canvas {
+  flex: 1 1 180px;
+  width: 100%;
+  min-height: 180px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fbfcff, #fffaf2);
+}
+.path-board-status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+}
+.path-board-found {
+  min-height: 24px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.path-found-chip {
+  border-radius: 999px;
+  padding: 3px 9px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 13px;
+  font-weight: 750;
+}
+.path-board-controls {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.path-board-controls button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 13px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.path-board-controls .path-move-btn {
+  border-color: rgba(63, 91, 214, .24);
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.path-board-controls button:disabled { opacity: .42; }
+
 .stage-toast {
   position: absolute;
   left: 50%;

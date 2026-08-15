@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from . import config as teaching_config
+from . import board as semantic_board
 from .config import settings
 from . import tutor
 
@@ -24,12 +25,9 @@ REPRESENTATIONS = {
     "square_layers",
     "square_steps",
     "square_compare",
+    "semantic_board",
     "none",
 }
-
-STAIR_HINTS = ("台阶", "小山", "金字塔", "一层一层", "一层层", "罐子山", "罐山", "三角小山", "三角形山", "像台阶")
-SQUARE_HINTS = ("正方形", "方阵", "九宫", "包一圈")
-COERCE_TO_STAIRS = ("dots", "square_layers", "square_steps", "square_compare")
 
 AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看不到你。你只输出一张 JSON 题卡，不要讲解、不要 Markdown 前言。
 
@@ -48,16 +46,25 @@ AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看�
 {inspirations_block}
 - 最近出过、请避开的钩子：{recent_block}
 
-# 学具约束
-- 算术：snap_grid / dots / numberline / stairs，不要默认 3×3 九块。
-- 罐子小山、一层一层往下加、像台阶的三角形堆：必须用 stairs，禁止用矩形 dots 假装台阶。
+# 语义画板 v2（数学含义与画法必须分开）
+- 如果研究「每层有不同数量的物体，问几层合计」，必须给 semantic_board.kind=layer_sum。
+- 如果研究「从起点按允许步长到终点有几种走法」，必须给 semantic_board.kind=path_count。
+- 不能因为故事里出现「台阶」「小山」就选择画法；先判断是在数分层物体，还是在枚举移动路径。
+- semantic_board 不适用时填 null，才使用下面的旧学具。
+
+# 旧学具约束
+- 算术：snap_grid / dots / numberline，不要默认 3×3 九块。
 - 应用题：bars（线段图）。
 - 几何：拼、围、折；不要平方数包一圈。
 - 逻辑：规律、反例、判断。
 - 分数：先切成一样大的份（bars 或 dots）。
 - 代数：天平/猜数（bars 或 numberline）。
 diagram 必须是小欧能画的 xiaoou-draw JSON（type 与 representation 一致）。representation 为 none 时 diagram 为 null。
-stairs 示例：{{"type":"stairs","rows":5,"caption":"像台阶一样的小山"}}
+有 semantic_board 时 representation 写 semantic_board，diagram 必须为 null。
+
+semantic_board 只允许下面两种严格结构：
+- 分层合计：{{"schema":2,"kind":"layer_sum","layers":[1,2,3,4,5],"item":"罐","ask":"total","purpose":"count_layers","reveal":"items_without_total"}}
+- 路径计数：{{"schema":2,"kind":"path_count","start":0,"target":2,"moves":[1,2],"ask":"number_of_paths","purpose":"explore_choices","reveal":"rules_only"}}
 
 # 只输出这个 JSON
 {{
@@ -65,7 +72,8 @@ stairs 示例：{{"type":"stairs","rows":5,"caption":"像台阶一样的小山"}
   "hook": "一句具体情景",
   "insight": "孩子最后要自己发现的那一个道理",
   "axiom": "对准的一条公理",
-  "representation": "snap_grid|bars|dots|numberline|stairs|square_layers|square_steps|square_compare|none",
+  "representation": "semantic_board|snap_grid|bars|dots|numberline|square_layers|square_steps|square_compare|none",
+  "semantic_board": null,
   "diagram": {{"type":"..."}},
   "first_question": "只有一句，口语，不泄底",
   "ladder": [
@@ -109,56 +117,6 @@ def is_nine_square(card: dict[str, Any]) -> bool:
     return cols == 3 and rows == 3 and tray == 9
 
 
-def _clamp_rows(value: Any, default: int = 5) -> int:
-    try:
-        n = int(value)
-    except (TypeError, ValueError):
-        n = default
-    return max(1, min(10, n))
-
-
-def _card_text(card: dict[str, Any]) -> str:
-    parts = [str(card.get(k) or "") for k in ("hook", "insight", "first_question", "axiom")]
-    diagram = card.get("diagram") if isinstance(card.get("diagram"), dict) else {}
-    parts.append(str(diagram.get("caption") or ""))
-    return " ".join(parts)
-
-
-def looks_like_stairs(card: dict[str, Any]) -> bool:
-    blob = _card_text(card)
-    if any(h in blob for h in SQUARE_HINTS) and not any(
-        h in blob for h in ("台阶", "小山", "金字塔", "三角小山", "三角形山")
-    ):
-        return False
-    return any(h in blob for h in STAIR_HINTS)
-
-
-def coerce_stairs_diagram(card: dict[str, Any]) -> dict[str, Any]:
-    diagram = card.get("diagram") if isinstance(card.get("diagram"), dict) else None
-    if diagram and diagram.get("type") == "stairs":
-        rows = _clamp_rows(diagram.get("rows") or diagram.get("layers") or diagram.get("cols"), 5)
-        caption = str(diagram.get("caption") or "像台阶一样的小山").strip()
-        card["representation"] = "stairs"
-        card["diagram"] = {"type": "stairs", "rows": rows, "caption": caption}
-        return card
-    if not looks_like_stairs(card):
-        return card
-    if diagram and diagram.get("type") not in COERCE_TO_STAIRS:
-        return card
-    rows = 5
-    caption = ""
-    if diagram:
-        rows = _clamp_rows(diagram.get("rows") or diagram.get("layers") or 5, 5)
-        caption = str(diagram.get("caption") or "").strip()
-    card["representation"] = "stairs"
-    card["diagram"] = {
-        "type": "stairs",
-        "rows": rows,
-        "caption": caption or "像台阶一样的小山",
-    }
-    return card
-
-
 def _allows_nine_square(card: dict[str, Any], topic: str) -> bool:
     if topic != "arithmetic":
         return False
@@ -180,6 +138,13 @@ def validate_card(card: dict[str, Any], topic: str) -> str | None:
         return "台阶不够三层"
     if card.get("representation") not in REPRESENTATIONS:
         return "学具类型不对"
+    semantic = card.get("semantic_board")
+    if semantic is not None and semantic_board.validate_semantic_board(semantic):
+        return "语义画板不合格"
+    if card.get("representation") == "semantic_board" and semantic is None:
+        return "语义画板缺失"
+    if semantic is not None and card.get("diagram") is not None:
+        return "语义画板不能混用旧图"
     if is_nine_square(card) and not _allows_nine_square(card, topic):
         return "不要用 9 块摆正方形当第一问"
     return None
@@ -199,11 +164,20 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
                         "ask": str(row.get("ask") or "").strip(),
                     }
                 )
+    raw_semantic = data.get("semantic_board")
+    semantic = semantic_board.normalize_semantic_board(raw_semantic)
+    if raw_semantic is not None and semantic is None:
+        return None
     representation = str(data.get("representation") or "none").strip()
     if representation not in REPRESENTATIONS:
         representation = "none"
     diagram = data.get("diagram")
-    if representation == "none":
+    if semantic is not None:
+        representation = "semantic_board"
+        diagram = None
+    elif representation == "semantic_board":
+        return None
+    elif representation == "none":
         diagram = None
     elif not isinstance(diagram, dict):
         diagram = None
@@ -213,6 +187,7 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
         "insight": str(data.get("insight") or "").strip(),
         "axiom": str(data.get("axiom") or "").strip(),
         "representation": representation,
+        "semantic_board": semantic,
         "diagram": diagram,
         "first_question": str(data.get("first_question") or "").strip(),
         "ladder": ladder,
@@ -222,7 +197,6 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
             if str(x).strip()
         ][:4],
     }
-    coerce_stairs_diagram(card)
     if validate_card(card, topic):
         return None
     return card
@@ -325,6 +299,7 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
     card = {
         "topic": topic if topic in seeds else "arithmetic",
         "misconceptions": ["只看表面数字，没先画出来"],
+        "semantic_board": None,
         **base,
     }
     if topic not in seeds:
@@ -351,18 +326,30 @@ def card_guidance(card: dict[str, Any]) -> str:
         f"  - {row.get('rung')}: {row.get('ask')}" for row in ladder if isinstance(row, dict)
     )
     misses = "、".join(card.get("misconceptions") or []) or "（未列出）"
+    semantic = card.get("semantic_board")
+    if isinstance(semantic, dict):
+        board_line = json.dumps(semantic, ensure_ascii=False, separators=(",", ":"))
+        board_rule = (
+            f"- 语义画板：{board_line}\n"
+            "- 画板已经由程序按这份数学模型挂好。不要输出 xiaoou-draw，不要另选 dots/stairs 等图形，"
+            "也不要在文字里提前列完答案；根据孩子在画板上的操作继续追问。"
+        )
+        opening_rule = "现在先用第一问开场；不要重复描述画法，画板已经在孩子面前。"
+    else:
+        board_rule = f"- 学具：{card.get('representation')}"
+        opening_rule = "现在先用第一问开场，并画题卡里的那张图。"
     return f"""# 本堂课的题卡（孩子看不到）
 你只教下面这张卡。不要另出一道题，不要把课拖回「9 块摆正方形」，除非这张卡的道理就是平方数/奇数包一圈。
 - 钩子：{card.get("hook")}
 - 要发现的道理：{card.get("insight")}
 - 对准的公理：{card.get("axiom")}
-- 学具：{card.get("representation")}
+{board_rule}
 - 第一问：{card.get("first_question")}
 - 三层台阶：
 {steps}
 - 孩子可能的误会（不要直接说破）：{misses}
 
-现在先用第一问开场，并画题卡里的那张图。孩子还在手上这一层，就还问手上的事；他自己跨上去了，再走下一层。"""
+{opening_rule}孩子还在手上这一层，就还问手上的事；他自己跨上去了，再走下一层。"""
 
 
 def resolve_engine(requested: str | None) -> str:

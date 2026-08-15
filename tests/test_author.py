@@ -50,7 +50,7 @@ class AuthorCardTests(unittest.TestCase):
         card["insight"] = "连续奇数相加会得到平方数"
         self.assertIsNone(author.validate_card(card, "arithmetic"))
 
-    def test_coerce_mountain_dots_to_stairs(self):
+    def test_layer_sum_semantic_board_overrides_legacy_diagram(self):
         raw = {
             "topic": "arithmetic",
             "hook": "仓库里的罐子堆成三角小山",
@@ -58,6 +58,15 @@ class AuthorCardTests(unittest.TestCase):
             "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
             "representation": "dots",
             "diagram": {"type": "dots", "rows": 5, "cols": 5, "caption": "前5层的小山，像台阶"},
+            "semantic_board": {
+                "schema": 2,
+                "kind": "layer_sum",
+                "layers": [1, 2, 3, 4, 5],
+                "item": "罐",
+                "ask": "total",
+                "purpose": "count_layers",
+                "reveal": "items_without_total",
+            },
             "first_question": "前5层一共多少罐？",
             "ladder": [
                 {"rung": "do", "ask": "先数最上面一层有几罐。"},
@@ -67,18 +76,19 @@ class AuthorCardTests(unittest.TestCase):
         }
         card = author.normalize_card(raw, "arithmetic")
         self.assertIsNotNone(card)
-        self.assertEqual(card["representation"], "stairs")
-        self.assertEqual(card["diagram"]["type"], "stairs")
-        self.assertEqual(card["diagram"]["rows"], 5)
+        self.assertEqual(card["representation"], "semantic_board")
+        self.assertIsNone(card["diagram"])
+        self.assertEqual(card["semantic_board"]["kind"], "layer_sum")
+        self.assertEqual(card["semantic_board"]["layers"], [1, 2, 3, 4, 5])
 
-    def test_stairs_passthrough(self):
+    def test_keyword_does_not_rewrite_legacy_diagram(self):
         raw = {
             "topic": "arithmetic",
             "hook": "罐子小山",
             "insight": "一层比一层多 1",
             "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
-            "representation": "stairs",
-            "diagram": {"type": "stairs", "rows": 4, "caption": "4 层台阶"},
+            "representation": "dots",
+            "diagram": {"type": "dots", "rows": 4, "cols": 4, "caption": "4 层台阶"},
             "first_question": "这 4 层一共多少罐？",
             "ladder": [
                 {"rung": "do", "ask": "先数第一层。"},
@@ -87,8 +97,35 @@ class AuthorCardTests(unittest.TestCase):
             ],
         }
         card = author.normalize_card(raw, "arithmetic")
-        self.assertEqual(card["diagram"]["type"], "stairs")
-        self.assertEqual(card["diagram"]["rows"], 4)
+        self.assertEqual(card["diagram"]["type"], "dots")
+        self.assertEqual(card["representation"], "dots")
+        self.assertIsNone(card["semantic_board"])
+
+    def test_invalid_semantic_board_rejects_card_instead_of_guessing(self):
+        raw = {
+            "topic": "reasoning",
+            "hook": "青蛙跳台阶",
+            "insight": "把所有走法不重不漏地列出来",
+            "axiom": "先列举，再检查。",
+            "representation": "stairs",
+            "semantic_board": {
+                "schema": 2,
+                "kind": "path_count",
+                "start": 0,
+                "target": 2,
+                "moves": [0, 2],
+                "ask": "number_of_paths",
+                "reveal": "rules_only",
+            },
+            "diagram": {"type": "stairs", "rows": 2},
+            "first_question": "一共有几种走法？",
+            "ladder": [
+                {"rung": "do", "ask": "先走一次。"},
+                {"rung": "see", "ask": "还有别的走法吗？"},
+                {"rung": "why", "ask": "怎样保证不漏？"},
+            ],
+        }
+        self.assertIsNone(author.normalize_card(raw, "reasoning"))
 
     def test_square_dots_stay_square(self):
         raw = {

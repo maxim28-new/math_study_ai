@@ -85,6 +85,16 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("activity_state_test.js ok", proc.stdout)
 
+    def test_semantic_board_state_js_rules(self):
+        proc = subprocess.run(
+            ["node", str(ROOT / "tests" / "semantic_board_test.js")],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("semantic_board_test.js ok", proc.stdout)
+
     def test_activity_state_js_has_no_konva(self):
         src = read("web/activity/state.js")
         self.assertNotIn("Konva", src)
@@ -140,6 +150,7 @@ class FrontendRegressionTests(unittest.TestCase):
     def test_app_js_appends_board_note_on_typed_send(self):
         app = read("web/app.js")
         self.assertIn("当前学具盘面", app)
+        self.assertIn("XiaoouSemanticBoard.formatSnapshot", app)
         self.assertIn("contentForModel", app)
 
     def test_explore_stage_shell(self):
@@ -177,7 +188,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-layout", html)
+        self.assertIn("v=20260815-board2", html)
         self.assertIn('id="authorSelect"', html)
         self.assertIn("/api/author", app)
         self.assertIn("function fetchAuthorCard(", app)
@@ -190,6 +201,39 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("DEFAULT_SNAP_GRID", start)
         self.assertIn('location.replace("/gate.html")', app)
         self.assertNotIn("Load failed", start)
+
+    def test_semantic_board_v2_assets_and_renderers(self):
+        html = read("web/index.html")
+        app = read("web/app.js")
+        css = read("web/styles.css")
+        board_state = read("web/board/state.js")
+        layer_pile = read("web/board/layer-pile.js")
+        path_board = read("web/board/path-board.js")
+        self.assertIn("/board/state.js", html)
+        self.assertIn("/board/layer-pile.js", html)
+        self.assertIn("/board/path-board.js", html)
+        self.assertLess(html.find("/board/state.js"), html.find("/board/layer-pile.js"))
+        self.assertLess(html.find("/board/layer-pile.js"), html.find("/board/path-board.js"))
+        self.assertLess(html.find("/board/path-board.js"), html.find("/app.js"))
+        self.assertIn("function mountSemanticBoard(", app)
+        self.assertIn("card.semantic_board", app)
+        self.assertNotIn("function coerceStairsSpec(", app)
+        self.assertIn("layer_sum", board_state)
+        self.assertIn("path_count", board_state)
+        self.assertIn("document.createElement", layer_pile)
+        self.assertNotIn("<svg", layer_pile)
+        self.assertIn("new Konva.Stage", path_board)
+        self.assertIn(".layer-pile-item", css)
+        self.assertIn(".path-board-canvas", css)
+
+    def test_semantic_cards_disable_model_draw_commands(self):
+        tutor = read("server/tutor.py")
+        author = read("server/author.py")
+        self.assertIn("SEMANTIC_BOARD_GUIDE", tutor)
+        self.assertIn("不要输出任何 xiaoou-draw", tutor)
+        self.assertIn("semantic_board.kind=layer_sum", author)
+        self.assertIn("semantic_board.kind=path_count", author)
+        self.assertNotIn("STAIR_HINTS", author)
 
     def test_static_block_diagrams_use_rounded_squares(self):
         app = read("web/app.js")

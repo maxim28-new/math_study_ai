@@ -16,6 +16,8 @@ const state = {
   streaming: false,
   liveActivities: [],
   mountedActivities: [],
+  semanticBoardHandle: null,
+  semanticBoardSnapshot: null,
   boards: [],
   milestoneTimer: null,
   pendingMilestone: null,
@@ -51,6 +53,7 @@ function saveSession() {
     showReasoning: state.showReasoning,
     messages: sanitizeForStore(state.messages),
     boards: collectBoards(),
+    problemCard: state.problemCard,
     authorEngine: state.authorEngine,
     recentHooks: state.recentHooks || [],
   };
@@ -112,32 +115,6 @@ function inlineFmt(s) {
 }
 
 const DIAGRAM_TYPES = new Set(["dots", "stairs", "square_layers", "square_steps", "square_compare", "numberline", "bars", "snap_grid"]);
-const STAIR_HINT_RE = /台阶|小山|金字塔|一层一层|一层层|罐子山|罐山|三角小山|三角形山|像台阶/;
-const SQUARE_HINT_RE = /正方形|方阵|九宫|包一圈/;
-
-function looksLikeStairsSpec(spec) {
-  const blob = String((spec && spec.caption) || "");
-  if (SQUARE_HINT_RE.test(blob) && !/台阶|小山|金字塔|三角小山|三角形山/.test(blob)) return false;
-  return STAIR_HINT_RE.test(blob);
-}
-
-function coerceStairsSpec(s) {
-  if (!s || typeof s !== "object") return s;
-  if (s.type === "stairs") {
-    return Object.assign({}, s, {
-      type: "stairs",
-      rows: clampInt(s.rows || s.layers || s.cols, 1, 10, 5),
-    });
-  }
-  if ((s.type === "dots" || s.type === "square_layers") && looksLikeStairsSpec(s)) {
-    return {
-      type: "stairs",
-      rows: clampInt(s.rows || s.layers || 5, 1, 10, 5),
-      caption: s.caption,
-    };
-  }
-  return s;
-}
 
 /** 识别 xiaoou-draw JSON（模型有时用 ```json 或裸 JSON，也要能画图） */
 function tryParseDiagramSpec(text) {
@@ -241,7 +218,6 @@ function renderDiagram(jsonText) {
   if (!s) {
     try { s = JSON.parse(jsonText); } catch (e) { return ""; }
   }
-  s = coerceStairsSpec(s);
   if (s.type === "snap_grid") {
     const parsed = (window.XiaoouActivity && XiaoouActivity.parseSnapGrid)
       ? XiaoouActivity.parseSnapGrid(s)
@@ -271,8 +247,17 @@ function freezeLiveActivities() {
   state.pendingMilestone = null;
 }
 
+function destroySemanticBoard() {
+  if (state.semanticBoardHandle) {
+    try { state.semanticBoardHandle.destroy(); } catch (e) {}
+    state.semanticBoardHandle = null;
+  }
+  state.semanticBoardSnapshot = null;
+}
+
 function destroyMountedActivities() {
   freezeLiveActivities();
+  destroySemanticBoard();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
 }
@@ -402,6 +387,7 @@ function toggleStageExpand() {
 
 function remountStage(spec, occupied) {
   if (!spec || !window.XiaoouActivity) return;
+  destroySemanticBoard();
   freezeLiveActivities();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
@@ -455,6 +441,7 @@ function syncStageFromTutor(text) {
   }
   const html = lastStaticDiagramHtml(text);
   if (!html) return;
+  destroySemanticBoard();
   freezeLiveActivities();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
@@ -482,9 +469,48 @@ function restoreStageFromHistory() {
   syncStageFromTutor(lastAsst.content);
 }
 
+function mountSemanticBoard(raw) {
+  hideStartPlay();
+  destroyMountedActivities();
+  state.stageSpec = null;
+  const host = $("#stageHost");
+  const tools = $("#stageTools");
+  if (tools) tools.classList.add("hidden");
+  if (!host) return;
+  host.innerHTML = "";
+  const engine = window.XiaoouSemanticBoard;
+  const spec = engine && engine.normalize ? engine.normalize(raw) : null;
+  if (!spec || !engine || !engine.mount) {
+    const note = document.createElement("p");
+    note.className = "board-safe-fallback";
+    note.textContent = "这张画板还没准备好，先听小欧问问题。";
+    host.appendChild(note);
+    return;
+  }
+  const handle = engine.mount(host, spec, {
+    onChange(snapshot, eventName) {
+      if (eventName === "path_found") showStageToast("找到一种走法");
+      state.semanticBoardSnapshot = snapshot;
+    },
+  });
+  if (!handle) {
+    const note = document.createElement("p");
+    note.className = "board-safe-fallback";
+    note.textContent = "这张画板还没准备好，先听小欧问问题。";
+    host.appendChild(note);
+    return;
+  }
+  state.semanticBoardHandle = handle;
+  state.semanticBoardSnapshot = handle.getSnapshot ? handle.getSnapshot() : null;
+}
+
 function mountFromCard(card) {
   if (!card) return;
   hideStartPlay();
+  if (card.semantic_board) {
+    mountSemanticBoard(card.semantic_board);
+    return;
+  }
   const diagram = card.diagram;
   if (card.representation === "snap_grid" && diagram && window.XiaoouActivity) {
     const spec = XiaoouActivity.parseSnapGrid(diagram);
@@ -493,6 +519,7 @@ function mountFromCard(card) {
       return;
     }
   }
+  destroySemanticBoard();
   freezeLiveActivities();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
@@ -998,7 +1025,12 @@ function renderHistory() {
     renderContentInto(bubble, m.content);
     if (m.role === "assistant") hydrateSnapGrids(bubble, false);
   }
-  if (state.mode === "explore") restoreStageFromHistory();
+  if (state.mode === "explore") {
+    if (state.problemCard && state.problemCard.semantic_board) {
+      mountSemanticBoard(state.problemCard.semantic_board);
+    }
+    restoreStageFromHistory();
+  }
   applyModeUI();
 }
 
@@ -1024,6 +1056,9 @@ async function loadConfig() {
     : !!cfg.show_reasoning;
   state.messages = (saved && saved.messages) || [];
   state.boards = (saved && Array.isArray(saved.boards)) ? saved.boards : [];
+  state.problemCard = (
+    saved && saved.problemCard && saved.problemCard.topic === state.topicKey
+  ) ? saved.problemCard : null;
   state.authorEngine = cfg.default_author || (saved && saved.authorEngine) || "glm";
   state.recentHooks = (saved && Array.isArray(saved.recentHooks)) ? saved.recentHooks : [];
 
@@ -1234,10 +1269,16 @@ async function sendMessage(text) {
   // 显示孩子的消息
   let contentForModel = content;
   if (!image && typeof content === "string") {
-    const live = state.liveActivities[state.liveActivities.length - 1];
-    if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
-      const note = XiaoouActivity.formatBoardNote(live.getSnapshot(), null);
-      contentForModel = typed + "\n\n" + note;
+    const semantic = state.semanticBoardHandle;
+    if (semantic && semantic.getSnapshot && window.XiaoouSemanticBoard && XiaoouSemanticBoard.formatSnapshot) {
+      const note = XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot());
+      contentForModel = note ? typed + "\n\n" + note : typed;
+    } else {
+      const live = state.liveActivities[state.liveActivities.length - 1];
+      if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
+        const note = XiaoouActivity.formatBoardNote(live.getSnapshot(), null);
+        contentForModel = typed + "\n\n" + note;
+      }
     }
   }
   state.messages.push({ role: "user", content: image ? content : contentForModel });
