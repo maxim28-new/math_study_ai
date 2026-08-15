@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import asr
 from . import config as teaching_config
 from .config import WEB_DIR, settings
 from . import gate
@@ -139,6 +140,7 @@ def get_config() -> dict:
         "vision_enabled": settings.photo_enabled,
         "thinking_enabled": settings.thinking_enabled,
         "show_reasoning": settings.show_reasoning,
+        "voice_enabled": settings.voice_enabled,
     }
 
 
@@ -320,6 +322,31 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         yield _sse({"error": f"连接大模型时出错：{exc}"})
 
     yield _sse({"done": True})
+
+
+class TranscribeRequest(BaseModel):
+    audio: str = ""
+    mime: str = "audio/webm"
+
+
+@app.post("/api/transcribe")
+async def transcribe_voice(req: TranscribeRequest) -> JSONResponse:
+    raw = asr.decode_audio_payload(req.audio)
+    if not raw:
+        return JSONResponse({"ok": False, "error": "没有听到声音，再说一次吧。"}, status_code=400)
+    if len(raw) > asr.MAX_AUDIO_BYTES:
+        return JSONResponse({"ok": False, "error": "这段话有点长，分开说给小欧听吧。"}, status_code=413)
+    if not settings.voice_enabled:
+        return JSONResponse({"ok": False, "error": "小欧这边还没接上耳朵。"}, status_code=400)
+    try:
+        text = await asr.transcribe_audio(raw, req.mime or "audio/webm")
+    except httpx.HTTPError:
+        return JSONResponse({"ok": False, "error": "小欧没听清，稍后再试一次。"}, status_code=502)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+    if not text:
+        return JSONResponse({"ok": False, "error": "刚才没听清，再说一次吧。"}, status_code=400)
+    return JSONResponse({"ok": True, "text": text})
 
 
 @app.post("/api/chat")

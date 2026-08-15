@@ -438,6 +438,8 @@ function setTalkOpen(on) {
   if (app) app.classList.toggle("talk-open", state.talkOpen);
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.textContent = state.talkOpen ? "收起" : "想跟小欧说";
+  if (!state.talkOpen) stopVoiceTalk({ discard: true });
+  else refreshVoiceAvailability();
 }
 
 function openHistorySheet() {
@@ -910,6 +912,7 @@ async function loadConfig() {
   updatePhotoHint(cfg);
   applyModeUI();
   renderHistory();
+  refreshVoiceAvailability();
 }
 
 // 思考模式关闭时，展示思考的选项不可用。
@@ -1226,92 +1229,229 @@ function setPendingImage(dataUrl) {
   $("#imgPreview").classList.remove("hidden");
 }
 
-// ---------------- 语音输入（浏览器 Web Speech API） ----------------
-let recognition = null;
-let recognizing = false;
-let voiceWanted = false;
-let voiceBaseText = "";
-let voiceFinalParts = [];
-let voiceRestartTimer = null;
+// ---------------- 语音输入（点一下说话 → 服务端听写） ----------------
+const voiceSession = {
+  rec: null,
+  stream: null,
+  chunks: [],
+  listening: false,
+  busy: false,
+  discard: false,
+  timer: null,
+  startedAt: 0,
+};
 
-function startRecognitionSafely() {
-  if (!voiceWanted || !recognition) return;
-  try {
-    recognition.start();
-  } catch (e) {
-    // Some browsers throw if start() is called while a previous session is closing.
+function voiceHttpsHost() {
+  const host = location.hostname;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return host + ".sslip.io";
+  return host || "8.211.182.149.sslip.io";
+}
+
+function voiceBlockReason() {
+  if (!window.isSecureContext) {
+    return "手机录音需要安全连接。请用 https://" + voiceHttpsHost() + " 打开，并允许麦克风。";
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+    return "这个浏览器还不能录音，换 Safari 或 Chrome 试试。";
+  }
+  if (state.config && state.config.voice_enabled === false) {
+    return "小欧这边还没接上耳朵。";
+  }
+  return "";
+}
+
+function setVoiceUi(mode, message) {
+  const btn = $("#voiceTalkBtn");
+  const hint = $("#voiceHint");
+  const label = btn ? btn.querySelector(".voice-label") : null;
+  const micBtn = $("#micBtn");
+  if (btn) {
+    btn.classList.toggle("is-listening", mode === "listening");
+    btn.classList.toggle("is-busy", mode === "busy");
+    btn.classList.toggle("is-blocked", mode === "blocked");
+    btn.setAttribute("aria-pressed", mode === "listening" ? "true" : "false");
+  }
+  if (micBtn) {
+    micBtn.classList.toggle("recording", mode === "listening");
+    micBtn.disabled = mode === "blocked" || mode === "busy";
+  }
+  const copy = {
+    idle: ["点一下，跟小欧说", "说完再点一下，小欧帮你写成字"],
+    listening: ["正在听…", message || "说完再点一下"],
+    busy: ["小欧在听写…", "马上写成字"],
+    blocked: ["现在还不能发语音", message || ""],
+    error: ["再试一次", message || "刚才没听清"],
+  };
+  const pair = copy[mode] || copy.idle;
+  if (label) label.textContent = pair[0];
+  if (hint) hint.textContent = pair[1];
+}
+
+function refreshVoiceAvailability() {
+  if (voiceSession.listening || voiceSession.busy) return;
+  const reason = voiceBlockReason();
+  if (reason) setVoiceUi("blocked", reason);
+  else setVoiceUi("idle");
+}
+
+function pickRecorderMime() {
+  const types = ["audio/mp4", "audio/aac", "audio/webm;codecs=opus", "audio/webm"];
+  if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return types[0];
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) return type;
+  }
+  return "";
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      const idx = text.indexOf(",");
+      resolve(idx >= 0 ? text.slice(idx + 1) : text);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function formatVoiceClock(ms) {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  return "0:" + String(sec).padStart(2, "0");
+}
+
+function clearVoiceTimer() {
+  if (voiceSession.timer) {
+    clearInterval(voiceSession.timer);
+    voiceSession.timer = null;
   }
 }
 
-function finishVoiceSession() {
-  voiceWanted = false;
-  if (voiceRestartTimer) {
-    clearTimeout(voiceRestartTimer);
-    voiceRestartTimer = null;
+function stopVoiceTracks() {
+  if (voiceSession.stream) {
+    voiceSession.stream.getTracks().forEach((track) => track.stop());
+    voiceSession.stream = null;
   }
-  const micBtn = $("#micBtn");
-  micBtn.classList.remove("recording");
-  micBtn.title = "点一下开始说话，再点一下结束识别";
-  const transcript = voiceFinalParts.join("").trim();
-  if (transcript) {
+}
+
+function stopVoiceTalk(opts) {
+  const discard = !!(opts && opts.discard);
+  voiceSession.discard = discard;
+  clearVoiceTimer();
+  if (voiceSession.rec && voiceSession.listening) {
+    try { voiceSession.rec.stop(); } catch (e) { stopVoiceTracks(); }
+    return;
+  }
+  stopVoiceTracks();
+  voiceSession.listening = false;
+  if (!voiceSession.busy) refreshVoiceAvailability();
+}
+
+async function transcribeVoiceBlob(blob) {
+  voiceSession.busy = true;
+  setVoiceUi("busy");
+  try {
+    if (!blob || blob.size < 400) {
+      setVoiceUi("error", "再说长一点点，小欧才听得清。");
+      return;
+    }
+    const audio = await blobToBase64(blob);
+    const res = await fetch("/api/transcribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio, mime: blob.type || "audio/webm" }),
+    });
+    if (res.status === 401) {
+      window.location.replace("/gate.html");
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.text) {
+      setVoiceUi("error", data.error || "刚才没听清，再说一次吧。");
+      return;
+    }
     const input = $("#input");
-    input.value = (voiceBaseText ? voiceBaseText + " " : "") + transcript;
-    autoGrow(input);
-    input.focus();
+    const prefix = input && input.value.trim() ? input.value.trim() + " " : "";
+    if (input) {
+      input.value = prefix + data.text.trim();
+      autoGrow(input);
+      input.focus();
+    }
+    setVoiceUi("idle");
+    const hint = $("#voiceHint");
+    if (hint) hint.textContent = "听好了，可以改几个字再发给小欧";
+  } catch (e) {
+    setVoiceUi("error", "刚才没听清，再说一次吧。");
+  } finally {
+    voiceSession.busy = false;
+  }
+}
+
+async function startVoiceTalk() {
+  const reason = voiceBlockReason();
+  if (reason) {
+    setVoiceUi("blocked", reason);
+    return;
+  }
+  const mime = pickRecorderMime();
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+  voiceSession.rec = rec;
+  voiceSession.stream = stream;
+  voiceSession.chunks = [];
+  voiceSession.discard = false;
+  voiceSession.listening = true;
+  voiceSession.startedAt = Date.now();
+  rec.ondataavailable = (e) => {
+    if (e.data && e.data.size) voiceSession.chunks.push(e.data);
+  };
+  rec.onstop = async () => {
+    voiceSession.listening = false;
+    stopVoiceTracks();
+    clearVoiceTimer();
+    const chunks = voiceSession.chunks;
+    voiceSession.chunks = [];
+    voiceSession.rec = null;
+    if (voiceSession.discard) {
+      voiceSession.discard = false;
+      refreshVoiceAvailability();
+      return;
+    }
+    const blob = new Blob(chunks, { type: rec.mimeType || mime || "audio/webm" });
+    await transcribeVoiceBlob(blob);
+  };
+  rec.start(250);
+  setVoiceUi("listening", "0:00 · 说完再点一下");
+  voiceSession.timer = setInterval(() => {
+    const elapsed = Date.now() - voiceSession.startedAt;
+    setVoiceUi("listening", formatVoiceClock(elapsed) + " · 说完再点一下");
+    if (elapsed >= 45000) stopVoiceTalk();
+  }, 250);
+}
+
+async function toggleVoiceTalk() {
+  if (voiceSession.busy) return;
+  if (voiceSession.listening) {
+    stopVoiceTalk();
+    return;
+  }
+  try {
+    await startVoiceTalk();
+  } catch (e) {
+    stopVoiceTracks();
+    voiceSession.listening = false;
+    const denied = e && (e.name === "NotAllowedError" || e.name === "PermissionDeniedError");
+    setVoiceUi("error", denied ? "请允许麦克风，才能跟小欧说话。" : "这个浏览器还不能录音。");
   }
 }
 
 function initVoice() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  refreshVoiceAvailability();
+  const talkBtn = $("#voiceTalkBtn");
+  if (talkBtn) talkBtn.addEventListener("click", toggleVoiceTalk);
   const micBtn = $("#micBtn");
-  if (!SR) {
-    micBtn.disabled = true;
-    micBtn.title = "这个浏览器不支持语音输入（试试 Chrome/Edge/Safari）";
-    return;
-  }
-  recognition = new SR();
-  recognition.lang = "zh-CN";
-  recognition.interimResults = false;
-  recognition.continuous = true;
-  recognition.onstart = () => {
-    recognizing = true;
-    micBtn.classList.add("recording");
-    micBtn.title = "正在听你说话，再点一下结束识别";
-  };
-  recognition.onend = () => {
-    recognizing = false;
-    if (voiceWanted) {
-      voiceRestartTimer = setTimeout(startRecognitionSafely, 200);
-      return;
-    }
-    finishVoiceSession();
-  };
-  recognition.onerror = (e) => {
-    recognizing = false;
-    if (voiceWanted && (e.error === "no-speech" || e.error === "network")) {
-      voiceRestartTimer = setTimeout(startRecognitionSafely, 300);
-      return;
-    }
-    if (e.error !== "aborted") finishVoiceSession();
-  };
-  recognition.onresult = (e) => {
-    for (let i = e.resultIndex || 0; i < e.results.length; i++) {
-      if (e.results[i].isFinal && e.results[i][0] && e.results[i][0].transcript) {
-        voiceFinalParts.push(e.results[i][0].transcript);
-      }
-    }
-  };
-  micBtn.addEventListener("click", () => {
-    if (voiceWanted || recognizing) {
-      voiceWanted = false;
-      try { recognition.stop(); } catch (e) { finishVoiceSession(); }
-      return;
-    }
-    voiceBaseText = $("#input").value.trim();
-    voiceFinalParts = [];
-    voiceWanted = true;
-    startRecognitionSafely();
-  });
+  if (micBtn) micBtn.addEventListener("click", toggleVoiceTalk);
 }
 
 // ---------------- 画板输入 ----------------

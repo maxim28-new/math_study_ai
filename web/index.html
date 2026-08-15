@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260815-stage" />
+  <link rel="stylesheet" href="/styles.css?v=20260815-voice" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -78,6 +78,19 @@
         <span class="img-hint">拍好了，点发送给小欧。</span>
         <button id="imgRemoveBtn" class="img-remove" aria-label="移除照片">×</button>
       </div>
+      <div id="voiceDock" class="voice-dock">
+        <button type="button" id="voiceTalkBtn" class="voice-talk-btn" aria-pressed="false">
+          <span class="voice-orb" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+              <path d="M5 10a7 7 0 0 0 14 0"></path>
+              <path d="M12 17v5"></path>
+            </svg>
+          </span>
+          <span class="voice-label">点一下，跟小欧说</span>
+          <span class="voice-hint" id="voiceHint">说完再点一下，小欧帮你写成字</span>
+        </button>
+      </div>
       <div class="input-row" id="inputRow">
         <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
         <button id="plusBtn" class="icon-btn" aria-label="更多" title="拍照或画图">
@@ -85,8 +98,8 @@
             <path d="M12 5v14M5 12h14"></path>
           </svg>
         </button>
-        <textarea id="input" rows="1" placeholder="说给你听，或打字…" enterkeyhint="send"></textarea>
-        <button id="micBtn" class="icon-btn" aria-label="语音输入" title="点一下开始说话，再点一下结束">
+        <textarea id="input" rows="1" placeholder="想打字也可以写在这里…" enterkeyhint="send"></textarea>
+        <button id="micBtn" class="icon-btn" aria-label="语音输入" title="点一下，跟小欧说">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0"></path><path d="M12 17v5"></path>
           </svg>
@@ -218,8 +231,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260815-stage"></script>
-  <script src="/activity/snap-grid.js?v=20260815-stage"></script>
-  <script src="/app.js?v=20260815-stage"></script>
+  <script src="/activity/state.js?v=20260815-voice"></script>
+  <script src="/activity/snap-grid.js?v=20260815-voice"></script>
+  <script src="/app.js?v=20260815-voice"></script>
 </body>
 </html>

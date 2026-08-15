@@ -35,6 +35,8 @@ class Settings:
     port: int
     # 公网访问验证码。默认 maxim；设为 off/disabled/none 则关闭门禁。
     access_code: str
+    # 语音听写模型。留空或 off 则关闭语音。
+    asr_model: str
 
     @property
     def gate_enabled(self) -> bool:
@@ -44,6 +46,11 @@ class Settings:
     def is_configured(self) -> bool:
         """文字模型是否已配置（教学功能的前提）。"""
         return bool(self.api_key.strip())
+
+    @property
+    def voice_enabled(self) -> bool:
+        """是否开放语音听写（需要密钥 + 听写模型）。"""
+        return self.is_configured and bool(self.asr_model)
 
     @property
     def is_vision_configured(self) -> bool:
@@ -121,7 +128,18 @@ def load_settings() -> Settings:
         host=os.getenv("HOST", "0.0.0.0").strip(),
         port=int(os.getenv("PORT", "8000")),
         access_code=_load_access_code(),
+        asr_model=_load_asr_model(),
     )
+
+
+def _load_asr_model() -> str:
+    raw = os.getenv("LLM_ASR_MODEL")
+    if raw is None or raw.strip() == "":
+        return "qwen3-asr-flash"
+    model = raw.strip()
+    if model.lower() in ("off", "disabled", "none"):
+        return ""
+    return model
 
 
 def _load_access_code() -> str:
