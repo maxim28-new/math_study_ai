@@ -23,7 +23,7 @@ const state = {
   stageSpec: null,
   talkOpen: false,
   toastTimer: null,
-  authorEngine: "deepseek",
+  authorEngine: "glm",
   problemCard: null,
   authorPromise: null,
   recentHooks: [],
@@ -903,7 +903,7 @@ async function loadConfig() {
     : !!cfg.show_reasoning;
   state.messages = (saved && saved.messages) || [];
   state.boards = (saved && Array.isArray(saved.boards)) ? saved.boards : [];
-  state.authorEngine = (saved && saved.authorEngine) || cfg.default_author || "deepseek";
+  state.authorEngine = cfg.default_author || (saved && saved.authorEngine) || "glm";
   state.recentHooks = (saved && Array.isArray(saved.recentHooks)) ? saved.recentHooks : [];
 
   // 主题下拉

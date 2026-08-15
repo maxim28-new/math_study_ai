@@ -308,9 +308,9 @@ def card_guidance(card: dict[str, Any]) -> str:
 
 
 def resolve_engine(requested: str | None) -> str:
-    engine = (requested or settings.author_engine or "deepseek").strip().lower()
+    engine = (requested or settings.author_engine or "glm").strip().lower()
     if engine not in AUTHOR_ENGINES:
-        engine = "deepseek"
+        engine = "glm"
     return engine
 
 
@@ -322,8 +322,8 @@ def engine_ready(engine: str) -> bool:
 
 def engine_payloads() -> list[dict[str, Any]]:
     return [
-        {"key": "deepseek", "name": "DeepSeek V4 Pro", "ready": engine_ready("deepseek")},
         {"key": "glm", "name": "GLM-5.3", "ready": engine_ready("glm")},
+        {"key": "deepseek", "name": "DeepSeek V4 Pro", "ready": engine_ready("deepseek")},
     ]
 
 

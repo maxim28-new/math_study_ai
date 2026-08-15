@@ -7,8 +7,8 @@
 ## 1. 决定
 
 - 出题和陪练拆成两次调用。出题产出一张孩子看不见的题卡；小欧只教这张卡。
-- 出题默认 **DeepSeek V4 Pro**（`deepseek-v4-pro`），思考开启、`reasoning_effort=high`。
-- 第二路 **GLM-5.3**（`glm-5.3`），走 z.ai Coding Plan 的 OpenAI Chat Completions：`https://api.z.ai/api/coding/paas/v4`。思考强制开。
+- 出题默认 **GLM-5.3**（`glm-5.3`），走 z.ai Coding Plan：`https://api.z.ai/api/coding/paas/v4`。思考强制开。
+- 第二路 **DeepSeek V4 Pro**（`deepseek-v4-pro`），思考开启、`reasoning_effort=high`。
 - 陪练仍用现有 `qwen3.7-plus`，思考默认关。
 - 深度按 C：换主题必须换学具和故事；同一道理有手上 / 眼里 / 嘴里三层台阶。
 - 「开始玩」不再先挂 3×3。选主题时预取题卡；卡没好就显示「小欧在想一道有意思的题…」。

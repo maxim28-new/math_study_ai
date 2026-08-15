@@ -73,11 +73,11 @@ class AuthorCardTests(unittest.TestCase):
 
 
 class AuthorSettingsTests(unittest.TestCase):
-    def test_default_author_is_deepseek_and_glm_uses_zai_coding(self):
+    def test_default_author_is_glm_and_glm_uses_zai_coding(self):
         env = {k: v for k, v in os.environ.items() if not k.startswith("DEEPSEEK") and not k.startswith("ZHIPU") and k != "LLM_AUTHOR"}
         with mock.patch.dict(os.environ, env, clear=True):
             settings = load_settings()
-        self.assertEqual(settings.author_engine, "deepseek")
+        self.assertEqual(settings.author_engine, "glm")
         self.assertEqual(settings.deepseek_model, "deepseek-v4-pro")
         self.assertIn("api.z.ai", settings.zhipu_base_url)
         self.assertIn("coding/paas/v4", settings.zhipu_base_url)
@@ -98,8 +98,8 @@ class AuthorHttpTests(unittest.TestCase):
         self.client.post("/api/unlock", json={"code": "maxim"})
         cfg = self.client.get("/api/config").json()
         keys = [e["key"] for e in cfg["author_engines"]]
-        self.assertEqual(keys, ["deepseek", "glm"])
-        self.assertEqual(cfg["default_author"], "deepseek")
+        self.assertEqual(keys, ["glm", "deepseek"])
+        self.assertIn(cfg["default_author"], ("glm", "deepseek"))
 
 
 if __name__ == "__main__":

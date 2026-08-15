@@ -155,10 +155,10 @@ def load_settings() -> Settings:
 
 
 def _load_author_engine() -> str:
-    raw = os.getenv("LLM_AUTHOR", "deepseek").strip().lower()
-    if raw in ("glm", "glm-5.3", "zhipu", "zai"):
-        return "glm"
-    return "deepseek"
+    raw = os.getenv("LLM_AUTHOR", "glm").strip().lower()
+    if raw in ("deepseek", "ds", "v4-pro"):
+        return "deepseek"
+    return "glm"
 
 
 def _load_author_effort() -> str:
