@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260815-workspace1" />
+  <link rel="stylesheet" href="/styles.css?v=20260815-workspace2" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -45,7 +45,7 @@
     <section id="exploreStage" class="explore-stage solve-workspace">
       <div class="caption-bar" id="captionBar">
         <div class="workspace-head">
-          <strong>小欧在说</strong>
+          <strong>小欧说</strong>
           <button type="button" id="historyOpenBtn" class="workspace-history-btn">对话</button>
         </div>
         <div class="caption-scroll">
@@ -91,48 +91,49 @@
         <button id="exploreBtn" class="chip chip-primary hidden">✨ 出个新题</button>
         <div id="quickActions" class="quick-actions"></div>
       </div>
-      <div class="child-dock">
-        <button type="button" id="talkBtn" class="talk-btn hidden">想跟小欧说</button>
-        <button type="button" id="doodleSendBtn" class="board-send-btn hidden" disabled>发画板</button>
-      </div>
-      <div id="imgPreview" class="img-preview hidden">
-        <img id="imgPreviewThumb" alt="待发送的题目照片" />
-        <span class="img-hint">拍好了，点发送给小欧。</span>
-        <button id="imgRemoveBtn" class="img-remove" aria-label="移除照片">×</button>
-      </div>
-      <div id="voiceDock" class="voice-dock">
-        <button type="button" id="talkCloseBtn" class="talk-close">收起</button>
-        <button type="button" id="voiceTalkBtn" class="voice-talk-btn" aria-pressed="false">
-          <span class="voice-orb" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="2" width="6" height="12" rx="3"></rect>
-              <path d="M5 10a7 7 0 0 0 14 0"></path>
-              <path d="M12 17v5"></path>
+      <div class="say-panel">
+        <div class="child-dock">
+          <button type="button" id="talkBtn" class="talk-btn hidden" aria-pressed="false">我想说</button>
+          <button type="button" id="doodleSendBtn" class="board-send-btn hidden" disabled>发画板</button>
+        </div>
+        <div id="imgPreview" class="img-preview hidden">
+          <img id="imgPreviewThumb" alt="待发送的题目照片" />
+          <span class="img-hint">拍好了，点发送给小欧。</span>
+          <button id="imgRemoveBtn" class="img-remove" aria-label="移除照片">×</button>
+        </div>
+        <div id="voiceDock" class="voice-dock">
+          <button type="button" id="voiceTalkBtn" class="voice-talk-btn" aria-pressed="false">
+            <span class="voice-orb" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+                <path d="M5 10a7 7 0 0 0 14 0"></path>
+                <path d="M12 17v5"></path>
+              </svg>
+            </span>
+            <span class="voice-label">点一下，跟小欧说</span>
+            <span class="voice-hint" id="voiceHint">说完再点一下，小欧帮你写成字</span>
+          </button>
+        </div>
+        <div class="input-row" id="inputRow">
+          <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
+          <button id="plusBtn" class="icon-btn" aria-label="还可以这样" title="小提示、换一题或拍照">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <path d="M12 5v14M5 12h14"></path>
             </svg>
-          </span>
-          <span class="voice-label">点一下，跟小欧说</span>
-          <span class="voice-hint" id="voiceHint">说完再点一下，小欧帮你写成字</span>
-        </button>
-      </div>
-      <div class="input-row" id="inputRow">
-        <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
-        <button id="plusBtn" class="icon-btn" aria-label="还可以这样" title="小提示、换一题或拍照">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-            <path d="M12 5v14M5 12h14"></path>
-          </svg>
-        </button>
-        <textarea id="input" rows="1" placeholder="想打字也可以写在这里…" enterkeyhint="send"></textarea>
-        <button id="micBtn" class="icon-btn" aria-label="语音输入" title="点一下，跟小欧说">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0"></path><path d="M12 17v5"></path>
-          </svg>
-        </button>
-        <button id="sendBtn" class="send-btn" aria-label="发送">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 2 11 13"></path>
-            <path d="M22 2 15 22 11 13 2 9 22 2z"></path>
-          </svg>
-        </button>
+          </button>
+          <textarea id="input" rows="1" placeholder="想打字也可以写在这里…" enterkeyhint="send"></textarea>
+          <button id="micBtn" class="icon-btn" aria-label="语音输入" title="点一下，跟小欧说">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0"></path><path d="M12 17v5"></path>
+            </svg>
+          </button>
+          <button id="sendBtn" class="send-btn" aria-label="发送">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 2 11 13"></path>
+              <path d="M22 2 15 22 11 13 2 9 22 2z"></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </footer>
   </div>
@@ -255,11 +256,11 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260815-workspace1"></script>
-  <script src="/activity/snap-grid.js?v=20260815-workspace1"></script>
-  <script src="/board/state.js?v=20260815-workspace1"></script>
-  <script src="/board/layer-pile.js?v=20260815-workspace1"></script>
-  <script src="/board/path-board.js?v=20260815-workspace1"></script>
-  <script src="/app.js?v=20260815-workspace1"></script>
+  <script src="/activity/state.js?v=20260815-workspace2"></script>
+  <script src="/activity/snap-grid.js?v=20260815-workspace2"></script>
+  <script src="/board/state.js?v=20260815-workspace2"></script>
+  <script src="/board/layer-pile.js?v=20260815-workspace2"></script>
+  <script src="/board/path-board.js?v=20260815-workspace2"></script>
+  <script src="/app.js?v=20260815-workspace2"></script>
 </body>
 </html>

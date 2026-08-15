@@ -165,7 +165,6 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="stageHost"',
             'id="historyOpenBtn"',
             'id="talkBtn"',
-            'id="talkCloseBtn"',
             'id="historySheet"',
             'id="historyMount"',
             'id="attachSheet"',
@@ -194,8 +193,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".play-stage", css)
         self.assertIn(".play-stage.is-drawing", css)
         self.assertIn(".caption-scroll", css)
-        self.assertIn("flex: 4 1 0", css)
-        self.assertIn("flex: 6 1 0", css)
+        self.assertIn("flex: 3 1 0", css)
+        self.assertIn("flex: 7 1 0", css)
+        self.assertIn("#tutorCaption {\n  margin: 0;\n  font-size: 13px;", css)
         self.assertIn(".stage-host .diagram figcaption { display: none; }", css)
         self.assertIn("flex: 1 1 0", css)
         self.assertIn(".doodle-canvas", css)
@@ -210,7 +210,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-workspace1", html)
+        self.assertIn("v=20260815-workspace2", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn("小提示", html)
@@ -223,7 +223,14 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function openHistorySheet(", app)
         self.assertNotIn("function toggleCaptionOpen(", app)
         self.assertIn(".app.layout-explore > .messages { display: none; }", css)
-        self.assertIn(".app.layout-explore.talk-open .talk-btn { display: none; }", css)
+        self.assertIn(".say-panel", css)
+        self.assertIn("小欧说", html)
+        self.assertIn("我想说", html)
+        self.assertIn("发画板", html)
+        self.assertNotIn("小欧在说", html)
+        self.assertNotIn("想跟小欧说", html)
+        self.assertNotIn('id="talkCloseBtn"', html)
+        self.assertNotIn(".app.layout-explore.talk-open .talk-btn { display: none; }", css)
         self.assertNotIn('id="expandStageBtn"', html)
         self.assertNotIn("function toggleStageExpand(", app)
         self.assertNotIn("captionSheetBody", html)

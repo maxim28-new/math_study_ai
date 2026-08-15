@@ -855,7 +855,11 @@ function setTalkOpen(on) {
   const app = $(".app");
   if (app) app.classList.toggle("talk-open", state.talkOpen);
   const talkBtn = $("#talkBtn");
-  if (talkBtn) talkBtn.textContent = state.talkOpen ? "收起" : "想跟小欧说";
+  if (talkBtn) {
+    talkBtn.textContent = "我想说";
+    talkBtn.classList.toggle("is-active", state.talkOpen);
+    talkBtn.setAttribute("aria-pressed", state.talkOpen ? "true" : "false");
+  }
   if (!state.talkOpen) stopVoiceTalk({ discard: true });
   else refreshVoiceAvailability();
 }
@@ -2102,8 +2106,6 @@ function bindEvents() {
   }
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
-  const talkCloseBtn = $("#talkCloseBtn");
-  if (talkCloseBtn) talkCloseBtn.addEventListener("click", () => setTalkOpen(false));
   const historyClose = $("#historyClose");
   if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
   const historySheet = $("#historySheet");
