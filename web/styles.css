@@ -694,9 +694,6 @@ button, input, select, textarea { font-family: inherit; }
   font-weight: 700;
   line-height: 1.45;
   color: var(--ink);
-  max-height: 7.4em;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 #tutorCaption .katex { font-size: 1em; }
 .history-btn {

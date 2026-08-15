@@ -168,7 +168,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260815-voice", html)
+        self.assertIn("v=20260815-caption", html)
         self.assertIn('location.replace("/gate.html")', app)
 
     def test_static_block_diagrams_use_rounded_squares(self):
@@ -185,10 +185,15 @@ class FrontendRegressionTests(unittest.TestCase):
     def test_caption_shows_full_math_text(self):
         css = read("web/styles.css")
         app = read("web/app.js")
+        state_js = read("web/activity/state.js")
         self.assertIn("#tutorCaption", css)
-        self.assertIn("overflow-y: auto", css)
+        cap_css = css[css.find("#tutorCaption"):css.find("#tutorCaption .katex")]
+        self.assertNotIn("7.4em", cap_css)
+        self.assertNotIn("max-height", cap_css)
         self.assertIn("el.innerHTML", app)
-        self.assertIn("softenBareLatex", read("web/activity/state.js"))
+        self.assertIn("softenBareLatex", state_js)
+        self.assertIn("function parseDiagramJson(", state_js)
+        self.assertIn("parseDiagramJson", app)
 
     def test_snap_grid_undo_api(self):
         src = read("web/activity/snap-grid.js")

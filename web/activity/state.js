@@ -50,22 +50,59 @@
   A.softenBareLatex = function softenBareLatex(s) {
     let t = String(s || "");
     const symbols = [
-      ["\\times", "×"], ["\\div", "÷"], ["\\cdot", "·"],
+      // JSON.parse 会把 \times / \neq 收成制表符、换行，先修再换正规 LaTeX。
+      ["\times", "×"], ["\\times", "×"],
+      ["\\div", "÷"], ["\\cdot", "·"],
       ["\\leq", "≤"], ["\\le", "≤"], ["\\geq", "≥"], ["\\ge", "≥"],
-      ["\\neq", "≠"], ["\\approx", "≈"], ["\\pm", "±"],
+      ["\neq", "≠"], ["\\neq", "≠"],
+      ["\\approx", "≈"], ["\\pm", "±"],
     ];
     symbols.forEach((pair) => { t = t.split(pair[0]).join(pair[1]); });
     return t;
   };
 
+  A.repairDiagramJson = function repairDiagramJson(text) {
+    return String(text || "").replace(/(^|[^\\])\\(times|frac|neq)(?![A-Za-z])/g, "$1\\\\$2");
+  };
+
+  A.parseDiagramJson = function parseDiagramJson(text) {
+    if (text && typeof text === "object") return text;
+    try {
+      return JSON.parse(A.repairDiagramJson(text));
+    } catch (e) {
+      return null;
+    }
+  };
+
+  function takeDiagramCaption(raw) {
+    const spec = A.parseDiagramJson(String(raw || "").trim());
+    if (!spec || typeof spec !== "object") return "";
+    return spec.caption == null ? "" : String(spec.caption);
+  }
+
   A.tutorCaption = function tutorCaption(markdown) {
     let s = String(markdown || "");
-    s = s.replace(/```[\s\S]*?```/g, " ");
+    const extras = [];
+    s = s.replace(/```[\s\S]*?```/g, (block) => {
+      const body = block.replace(/^```[a-zA-Z0-9_-]*\s*/, "").replace(/```$/, "");
+      const cap = takeDiagramCaption(body);
+      if (cap) extras.push(cap);
+      return " ";
+    });
     s = s.replace(/```[\s\S]*$/g, " ");
     s = s.split("\n").filter((line) => {
       const t = line.trim();
-      return !(t.charAt(0) === "{" && t.indexOf('"type"') >= 0);
+      if (t.charAt(0) === "{" && t.indexOf('"type"') >= 0) {
+        const cap = takeDiagramCaption(t);
+        if (cap) extras.push(cap);
+        return false;
+      }
+      return true;
     }).join("\n");
+    extras.forEach((cap) => {
+      const soft = A.softenBareLatex(cap);
+      if (soft && s.indexOf(soft) < 0 && s.indexOf(cap) < 0) s += " " + cap;
+    });
     s = s.replace(/\*\*/g, "").replace(/[*_`#]/g, "");
     s = A.softenBareLatex(s);
     s = s.replace(/\$\$/g, "").replace(/\$/g, "");
@@ -77,7 +114,8 @@
   A.parseSnapGrid = function parseSnapGrid(raw) {
     let s = raw;
     if (typeof raw === "string") {
-      try { s = JSON.parse(raw); } catch (e) { return null; }
+      s = A.parseDiagramJson(raw);
+      if (!s) return null;
     }
     if (!s || typeof s !== "object" || s.type !== "snap_grid") return null;
     const cols = parseDim(s.cols, 3);
