@@ -276,6 +276,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("new Konva.Stage", path_board)
         self.assertIn("mountGeometryCompass", geometry_board)
         self.assertIn("equilateral_triangle", geometry_board)
+        self.assertIn("next.hidden = step === 3", geometry_board)
+        self.assertIn("reset.hidden = step === 0", geometry_board)
         self.assertIn(".layer-pile-item", css)
         self.assertIn(".path-board-canvas", css)
         self.assertIn(".geometry-compass-canvas", css)

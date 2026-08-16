@@ -117,7 +117,9 @@
       ];
       status.textContent = messages[step];
       next.textContent = labelsByStep[step];
+      next.hidden = step === 3;
       next.disabled = frozen || step === 3;
+      reset.hidden = step === 0;
       reset.disabled = frozen || step === 0;
     }
 
