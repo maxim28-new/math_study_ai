@@ -278,11 +278,15 @@ class AuthorCardTests(unittest.TestCase):
         self.assertIn("已经点开看过", seen)
 
     def test_seed_card_matches_topic_and_is_not_nine_square(self):
-        for topic in ("wordproblems", "geometry", "reasoning", "fractions", "algebra"):
+        for topic in ("arithmetic", "wordproblems", "geometry", "reasoning", "fractions", "algebra"):
             card = author.seed_card(topic, "middle")
             self.assertEqual(card["topic"], topic)
             self.assertIsNone(author.validate_card(card, topic))
             self.assertFalse(author.is_nine_square(card))
+        arithmetic = author.seed_card("arithmetic", "middle")
+        self.assertEqual(arithmetic["board"]["kind"], "layer_sum")
+        self.assertEqual(arithmetic["board"]["model"]["layers"], [1, 3, 5])
+        self.assertNotEqual(arithmetic["board"]["kind"], "static_diagram")
 
     def test_glm_thinking_cannot_be_disabled(self):
         extras = thinking_request_extras(

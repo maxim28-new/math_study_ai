@@ -33,9 +33,12 @@ const state = {
   topicWorkspaces: {},
   caption: "",
   seenTerms: [],
+  authorGen: 0,
 };
 
 const STORE_KEY = "xiaoou.session.v1";
+const START_CAPTION = "点开始玩，把方块拖进格子";
+const THINKING_CAPTION = "小欧在想一道有意思的题…";
 
 // ---------------- 本地存储 ----------------
 // 图片是很大的 base64，存进 localStorage 会撑爆配额，所以持久化时把图片换成占位文字。
@@ -66,13 +69,55 @@ function lastTutorCaption() {
     for (let i = msgs.length - 1; i >= 0; i -= 1) {
       if (msgs[i].role !== "assistant") continue;
       const cap = XiaoouActivity.tutorCaption(messagePlainText(msgs[i]));
-      if (cap) return cap;
+      if (cap && !isIdleCaption(cap)) return cap;
     }
   }
   if (state.problemCard && state.problemCard.first_question) {
-    return String(state.problemCard.first_question);
+    const q = String(state.problemCard.first_question).trim();
+    if (q && !isIdleCaption(q)) return q;
   }
   return "";
+}
+
+function isIdleCaption(text) {
+  const s = String(text || "").trim();
+  return !s || s === START_CAPTION || s === THINKING_CAPTION;
+}
+
+function liveCaption() {
+  const saved = String(state.caption || "").trim();
+  if (!isIdleCaption(saved)) return saved;
+  return lastTutorCaption();
+}
+
+function upgradeLegacyArithmeticSeed(card) {
+  if (!card || card.topic !== "arithmetic") return card;
+  const diagram = (card.board && card.board.kind === "static_diagram" && card.board.model)
+    ? card.board.model.diagram
+    : card.diagram;
+  if (!diagram || diagram.type !== "numberline") return card;
+  if (Number(diagram.from) !== 1 || Number(diagram.to) !== 10) return card;
+  const hook = String(card.hook || "");
+  const cap = String(diagram.caption || "");
+  if (hook !== "1 加到 10 有点慢" && cap !== "1 和 10 能凑成一对吗？") return card;
+  return Object.assign({}, card, {
+    representation: "board_v3",
+    diagram: null,
+    semantic_board: null,
+    board: {
+      schema: 3,
+      kind: "layer_sum",
+      model: { layers: [1, 3, 5], item: "积木" },
+      task: { action: "count", ask: "total", prompt: "先数前两层，再想它们拼成了什么。" },
+      view: { reveal: "items_without_total" },
+    },
+  });
+}
+
+function topicCard(card) {
+  if (!card || typeof card !== "object") return null;
+  if (card.topic && card.topic !== state.topicKey) return null;
+  return upgradeLegacyArithmeticSeed(card);
 }
 
 function snapshotWorkspace() {
@@ -80,7 +125,7 @@ function snapshotWorkspace() {
     messages: sanitizeForStore(state.messages || []),
     problemCard: state.problemCard,
     boards: collectBoards(),
-    caption: state.caption || lastTutorCaption(),
+    caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
   };
 }
@@ -88,9 +133,10 @@ function snapshotWorkspace() {
 function applyWorkspace(ws) {
   const next = ws || emptyWorkspace();
   state.messages = Array.isArray(next.messages) ? next.messages.slice() : [];
-  state.problemCard = next.problemCard || null;
+  state.problemCard = topicCard(next.problemCard);
   state.boards = Array.isArray(next.boards) ? next.boards.slice() : [];
-  state.caption = String(next.caption || "").trim() || lastTutorCaption();
+  const savedCap = String(next.caption || "").trim();
+  state.caption = isIdleCaption(savedCap) ? lastTutorCaption() : savedCap;
   state.seenTerms = Array.isArray(next.seenTerms) ? next.seenTerms.slice() : [];
 }
 
@@ -112,7 +158,7 @@ function saveSession() {
     messages: sanitizeForStore(state.messages),
     boards: collectBoards(),
     problemCard: state.problemCard,
-    caption: state.caption || lastTutorCaption(),
+    caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
     topics: state.topicWorkspaces || {},
     authorEngine: state.authorEngine,
@@ -341,11 +387,22 @@ function destroySemanticBoard() {
   state.semanticBoardSnapshot = null;
 }
 
+function clearStageHost() {
+  const host = $("#stageHost");
+  if (host) host.innerHTML = "";
+}
+
 function destroyMountedActivities() {
   freezeLiveActivities();
   destroySemanticBoard();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
+  clearStageHost();
+}
+
+function bumpAuthorGen() {
+  state.authorGen = (state.authorGen || 0) + 1;
+  state.authorPromise = null;
 }
 
 function clearActivitySession() {
@@ -391,8 +448,14 @@ function setCaption(text) {
 }
 
 function restoreExploreCaption() {
-  const cap = String(state.caption || "").trim() || lastTutorCaption();
-  setCaption(cap);
+  const cap = liveCaption();
+  if (cap) {
+    setCaption(cap);
+    return;
+  }
+  if (!state.problemCard && !(state.messages || []).length) {
+    setCaption(START_CAPTION);
+  }
 }
 
 function showStartPlay() {
@@ -416,9 +479,7 @@ function hideStartPlay() {
 function resetExploreEmpty() {
   destroyMountedActivities();
   state.stageSpec = null;
-  const host = $("#stageHost");
-  if (host) host.innerHTML = "";
-  setCaption("点开始玩，把方块拖进格子");
+  setCaption(START_CAPTION);
   showStartPlay();
 }
 
@@ -1212,20 +1273,30 @@ async function fetchAuthorOnce(body, timeoutMs) {
   }
 }
 
-function rememberAuthorCard(card) {
+function rememberAuthorCard(card, meta) {
+  const gen = meta && meta.gen != null ? meta.gen : state.authorGen;
+  const force = !!(meta && meta.force);
+  if (!card) return null;
+  if (gen !== state.authorGen) return null;
+  if (!topicCard(card)) return null;
+  if (!force && state.problemCard && topicCard(state.problemCard) && state.messages.length) {
+    return state.problemCard;
+  }
   state.problemCard = card;
-  if (card && card.hook) {
+  if (card.hook) {
     state.recentHooks = (state.recentHooks || []).concat(card.hook).slice(-8);
   }
   return card;
 }
 
 async function fetchAuthorCard(force) {
-  if (!force && state.problemCard && state.problemCard.topic === state.topicKey) {
+  const gen = state.authorGen;
+  const topic = state.topicKey;
+  if (!force && state.problemCard && state.problemCard.topic === topic) {
     return state.problemCard;
   }
   const body = {
-    topic: state.topicKey,
+    topic,
     level: state.level,
     engine: state.authorEngine,
     recent: state.recentHooks || [],
@@ -1234,13 +1305,16 @@ async function fetchAuthorCard(force) {
   try {
     const card = await fetchAuthorOnce(body, 45000);
     if (!card) return null;
-    return rememberAuthorCard(card);
+    if (gen !== state.authorGen || state.topicKey !== topic) return null;
+    return rememberAuthorCard(card, { force, gen });
   } catch (err) {
     lastErr = err;
   }
   try {
     const card = await fetchAuthorOnce(Object.assign({}, body, { seed_only: true }), 8000);
-    if (card) return rememberAuthorCard(card);
+    if (!card) return null;
+    if (gen !== state.authorGen || state.topicKey !== topic) return null;
+    return rememberAuthorCard(card, { force, gen });
   } catch (err) {
     lastErr = lastErr || err;
   }
@@ -1251,21 +1325,23 @@ function prefetchAuthor() {
   if (state.mode !== "explore") return;
   if (state.config && !state.config.configured) return;
   if (state.problemCard && state.problemCard.topic === state.topicKey) return;
-  state.authorPromise = fetchAuthorCard(false).catch(() => null);
+  const gen = state.authorGen;
+  const topic = state.topicKey;
+  state.authorPromise = fetchAuthorCard(false).then((card) => {
+    if (gen !== state.authorGen || state.topicKey !== topic) return null;
+    return card;
+  }).catch(() => null);
 }
 
 async function startPlay() {
   if (state.streaming) return;
   if (state.config && !state.config.configured) return;
   hideStartPlay();
-  setCaption("小欧在想一道有意思的题…");
-  let card = (state.problemCard && state.problemCard.topic === state.topicKey)
-    ? state.problemCard
-    : null;
+  setCaption(THINKING_CAPTION);
+  let card = topicCard(state.problemCard);
   try {
     if (!card && state.authorPromise) {
-      card = await state.authorPromise;
-      if (card && card.topic !== state.topicKey) card = null;
+      card = topicCard(await state.authorPromise);
     }
     if (!card) card = await fetchAuthorCard(false);
   } catch (e) {
@@ -1673,7 +1749,8 @@ function renderHistory() {
   destroyMountedActivities();
   state.stageSpec = null;
   $("#messages").innerHTML = "";
-  if (state.mode === "explore" && state.problemCard) {
+  const card = topicCard(state.problemCard);
+  if (state.mode === "explore" && card && state.messages.length) {
     hideStartPlay();
     for (const m of state.messages) {
       const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
@@ -1681,7 +1758,7 @@ function renderHistory() {
       renderContentInto(bubble, content);
       if (m.role === "assistant") hydrateSnapGrids(bubble, false);
     }
-    mountFromCard(state.problemCard);
+    mountFromCard(card);
     restoreExploreCaption();
     applyModeUI();
     return;
@@ -1704,6 +1781,7 @@ function renderHistory() {
     renderContentInto(bubble, content);
     if (m.role === "assistant") hydrateSnapGrids(bubble, false);
   }
+  if (state.mode === "explore") restoreExploreCaption();
   applyModeUI();
 }
 
@@ -1977,10 +2055,11 @@ async function startExplore() {
   if (state.streaming) return;
   setBoardMode("interact");
   clearDoodle();
+  bumpAuthorGen();
   state.messages = [];
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
-  setCaption("小欧在想一道有意思的题…");
+  setCaption(THINKING_CAPTION);
   try {
     const card = await fetchAuthorCard(true);
     if (card) {
@@ -2591,6 +2670,7 @@ function chooseTopic(key) {
     return;
   }
   rememberCurrentWorkspace();
+  bumpAuthorGen();
   destroyMountedActivities();
   state.stageSpec = null;
   state.topicKey = key;
@@ -2601,6 +2681,7 @@ function chooseTopic(key) {
   updateAxioms();
   saveSession();
   renderHistory();
+  prefetchAuthor();
 }
 function openAttachSheet() {
   const sheet = $("#attachSheet");
@@ -2775,10 +2856,12 @@ function bindEvents() {
     state.problemCard = null;
     state.caption = "";
     state.seenTerms = [];
+    bumpAuthorGen();
     clearPendingImage();
     clearActivitySession();
     saveSession();
     renderHistory();
+    prefetchAuthor();
   });
 }
 

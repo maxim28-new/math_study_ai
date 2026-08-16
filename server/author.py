@@ -200,16 +200,25 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
 def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
     seeds = {
         "arithmetic": {
-            "hook": "1 加到 10 有点慢",
-            "insight": "首尾配对以后，每一对都一样多",
+            "hook": "搭一座奇数积木塔",
+            "insight": "连续奇数一层一层加起来，会拼成正方形",
             "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
-            "representation": "numberline",
-            "diagram": {"type": "numberline", "from": 1, "to": 10, "marks": [1, 10], "caption": "1 和 10 能凑成一对吗？"},
-            "first_question": "从 1 加到 10，有没有比一个一个加更快的办法？",
+            "board": {
+                "schema": 3,
+                "kind": "layer_sum",
+                "model": {"layers": [1, 3, 5], "item": "积木"},
+                "task": {
+                    "action": "count",
+                    "ask": "total",
+                    "prompt": "先数前两层，再想它们拼成了什么。",
+                },
+                "view": {"reveal": "items_without_total"},
+            },
+            "first_question": "第一层 1 块，第二层 3 块。这两层合起来是多少？看起来像什么形状？",
             "ladder": [
-                {"rung": "do", "ask": "你先试试 1 配 10、2 配 9，每对是多少？"},
-                {"rung": "see", "ask": "这样的对一共有几对？"},
-                {"rung": "why", "ask": "为什么每一对都会一样多？"},
+                {"rung": "do", "ask": "先数第一层和第二层各有几块。"},
+                {"rung": "see", "ask": "1 加 3 是多少？这两层合起来像什么图形？"},
+                {"rung": "why", "ask": "如果再加第三层 5 块，会变成什么形状？为什么？"},
             ],
         },
         "wordproblems": {
