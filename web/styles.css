@@ -830,9 +830,18 @@ button, input, select, textarea { font-family: inherit; }
   font: inherit;
   font-weight: 750;
   cursor: pointer;
+  border-radius: 4px;
+}
+.term-chip.is-flash {
+  animation: term-chip-flash 1.1s ease;
+}
+@keyframes term-chip-flash {
+  0% { background: rgba(63, 91, 214, .22); }
+  100% { background: transparent; }
 }
 .term-card {
-  margin: 0 10px 10px;
+  flex: 0 0 auto;
+  margin: 0;
   padding: 10px 12px;
   border: 1px solid rgba(63, 91, 214, .16);
   border-radius: 14px;
@@ -1168,6 +1177,11 @@ button, input, select, textarea { font-family: inherit; }
 }
 .geometry-compass-board .is-term-lit {
   filter: drop-shadow(0 0 6px rgba(224, 82, 82, .45));
+  animation: term-board-flash .7s ease;
+}
+@keyframes term-board-flash {
+  0% { opacity: .35; }
+  40% { opacity: 1; }
 }
 .geometry-point.is-term-lit { fill: #e05252; }
 .geometry-circle.is-term-lit,
@@ -1181,6 +1195,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 .color-seq-board.is-term-lit .color-seq-item {
   transform: scale(1.06);
+  animation: term-board-flash .7s ease;
 }
 .geometry-compass-width {
   stroke: #7a7166;

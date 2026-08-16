@@ -210,7 +210,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260816-boardv3j", html)
+        self.assertIn("v=20260816-boardv3k", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -338,8 +338,15 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("preserveAspectRatio", read("web/board/geometry-compass.js"))
         self.assertIn("function highlight(", geometry_board)
         self.assertIn(".term-chip", css)
+        self.assertIn(".term-chip.is-flash", css)
         self.assertIn('id="termCard"', html)
+        self.assertLess(html.find('id="historySheet"'), html.find('id="termCard"'))
+        caption = html.split('id="captionBar"', 1)[1].split('id="boardModeBar"', 1)[0]
+        self.assertNotIn('id="termCard"', caption)
         self.assertIn("function formatCaption(", read("web/terms/scaffold.js"))
+        self.assertIn("function flashTerm(", read("web/terms/scaffold.js"))
+        self.assertIn("function bindHistory(", read("web/terms/scaffold.js"))
+        self.assertIn("decorateTutorTerms", app)
         self.assertIn("圆心", read("web/terms/glossary.js"))
         self.assertIn("seen_terms", app)
 
@@ -404,7 +411,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("setCaption(cap)", restore)
         self.assertIn("点开始玩，把方块拖进格子", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260816-boardv3j", html)
+        self.assertIn("v=20260816-boardv3k", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

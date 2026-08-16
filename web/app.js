@@ -370,6 +370,13 @@ function highlightTermOnBoard(key) {
   if (handle && typeof handle.highlight === "function") handle.highlight(key || "");
 }
 
+function decorateTutorTerms(bubble) {
+  if (!bubble || !window.XiaoouTermScaffold || !XiaoouTermScaffold.linkTermsInElement) return;
+  const msg = bubble.closest(".msg");
+  if (msg && !msg.classList.contains("tutor")) return;
+  XiaoouTermScaffold.linkTermsInElement(bubble);
+}
+
 function setCaption(text) {
   state.caption = String(text || "");
   const el = $("#tutorCaption");
@@ -1298,6 +1305,9 @@ function openHistorySheet() {
 function closeHistorySheet() {
   const sheet = $("#historySheet");
   if (sheet) sheet.classList.remove("open");
+  if (window.XiaoouTermScaffold && XiaoouTermScaffold.closeCard) {
+    XiaoouTermScaffold.closeCard(highlightTermOnBoard);
+  }
 }
 
 function setTalkOpen(on) {
@@ -1625,9 +1635,11 @@ function renderContentInto(bubble, content) {
     if (cut >= 0) {
       const spoken = content.slice(0, cut).trim();
       bubble.innerHTML = renderMarkdown(spoken || "…");
+      decorateTutorTerms(bubble);
       return;
     }
     bubble.innerHTML = renderMarkdown(content);
+    decorateTutorTerms(bubble);
     return;
   }
   bubble.innerHTML = "";
@@ -1641,6 +1653,7 @@ function renderContentInto(bubble, content) {
     } else if (part.type === "text" && part.text) {
       const div = document.createElement("div");
       div.innerHTML = renderMarkdown(part.text);
+      decorateTutorTerms(div);
       bubble.appendChild(div);
     }
   }
@@ -1653,6 +1666,7 @@ function renderWelcome() {
   const starter = topic ? topic.starter : "";
   const body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「带题来问」模式。${starter}`;
   bubble.innerHTML = renderMarkdown(body);
+  decorateTutorTerms(bubble);
 }
 
 function renderHistory() {
@@ -2027,6 +2041,7 @@ async function streamAssistant(kickoff) {
           acc += payload.delta;
           const visible = state.mode === "explore" ? stripBoardProtocol(acc) : acc;
           tutorBubble.innerHTML = renderMarkdown(visible);
+          decorateTutorTerms(tutorBubble);
           if (state.mode === "explore" && window.XiaoouActivity && XiaoouActivity.tutorCaption) {
             const cap = XiaoouActivity.tutorCaption(acc);
             if (cap) setCaption(cap);
@@ -2052,18 +2067,21 @@ async function streamAssistant(kickoff) {
           acc += (acc ? "\n\n" : "") + payload.error;
           const visible = state.mode === "explore" ? stripBoardProtocol(acc) : acc;
           tutorBubble.innerHTML = renderMarkdown(visible);
+          decorateTutorTerms(tutorBubble);
         }
       }
     }
   } catch (err) {
     acc += (acc ? "\n\n" : "") + "抱歉，连接出了点问题，请稍后再试。";
     tutorBubble.innerHTML = renderMarkdown(acc);
+    decorateTutorTerms(tutorBubble);
   }
 
   tutorBubble.classList.remove("cursor-blink");
   if (state.mode === "explore") {
     acc = stripBoardProtocol(acc);
     tutorBubble.innerHTML = renderMarkdown(acc);
+    decorateTutorTerms(tutorBubble);
   }
   if (acc.trim()) {
     state.messages.push({ role: "assistant", content: acc });
@@ -2736,11 +2754,19 @@ function bindEvents() {
     saveSession();
   });
 
-  if (window.XiaoouTermScaffold && XiaoouTermScaffold.bindCaption) {
-    XiaoouTermScaffold.bindCaption($("#tutorCaption"), {
-      onHighlight: highlightTermOnBoard,
-      onSeen: rememberSeenTerm,
-    });
+  if (window.XiaoouTermScaffold) {
+    if (XiaoouTermScaffold.bindCaption) {
+      XiaoouTermScaffold.bindCaption($("#tutorCaption"), {
+        onHighlight: highlightTermOnBoard,
+        onSeen: rememberSeenTerm,
+      });
+    }
+    if (XiaoouTermScaffold.bindHistory) {
+      XiaoouTermScaffold.bindHistory($("#messages"), {
+        onHighlight: highlightTermOnBoard,
+        onSeen: rememberSeenTerm,
+      });
+    }
   }
 
   $("#resetBtn").addEventListener("click", () => {
