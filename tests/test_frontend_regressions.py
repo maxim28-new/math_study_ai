@@ -210,7 +210,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260816-boardv3i", html)
+        self.assertIn("v=20260816-boardv3j", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -301,6 +301,10 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("/board/path-board.js", html)
         self.assertIn("/board/geometry-compass.js", html)
         self.assertIn("/board/color-sequence.js", html)
+        self.assertIn("/terms/glossary.js", html)
+        self.assertIn("/terms/scaffold.js", html)
+        self.assertLess(html.find("/terms/glossary.js"), html.find("/terms/scaffold.js"))
+        self.assertLess(html.find("/terms/scaffold.js"), html.find("/app.js"))
         self.assertLess(html.find("/board/state.js"), html.find("/board/layer-pile.js"))
         self.assertLess(html.find("/board/layer-pile.js"), html.find("/board/path-board.js"))
         self.assertLess(html.find("/board/path-board.js"), html.find("/board/geometry-compass.js"))
@@ -332,6 +336,12 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('unit: ["red", "red", "blue"]', color_seq)
         self.assertIn(".stage-host:has(.semantic-board) { align-items: stretch; }", css)
         self.assertIn("preserveAspectRatio", read("web/board/geometry-compass.js"))
+        self.assertIn("function highlight(", geometry_board)
+        self.assertIn(".term-chip", css)
+        self.assertIn('id="termCard"', html)
+        self.assertIn("function formatCaption(", read("web/terms/scaffold.js"))
+        self.assertIn("圆心", read("web/terms/glossary.js"))
+        self.assertIn("seen_terms", app)
 
     def test_semantic_cards_disable_model_draw_commands(self):
         tutor = read("server/tutor.py")
@@ -394,7 +404,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("setCaption(cap)", restore)
         self.assertIn("点开始玩，把方块拖进格子", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260816-boardv3i", html)
+        self.assertIn("v=20260816-boardv3j", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

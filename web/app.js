@@ -32,6 +32,7 @@ const state = {
   recentHooks: [],
   topicWorkspaces: {},
   caption: "",
+  seenTerms: [],
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -47,7 +48,7 @@ function sanitizeForStore(messages) {
   });
 }
 function emptyWorkspace() {
-  return { messages: [], problemCard: null, boards: [], caption: "" };
+  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [] };
 }
 
 function messagePlainText(m) {
@@ -80,6 +81,7 @@ function snapshotWorkspace() {
     problemCard: state.problemCard,
     boards: collectBoards(),
     caption: state.caption || lastTutorCaption(),
+    seenTerms: (state.seenTerms || []).slice(),
   };
 }
 
@@ -89,6 +91,7 @@ function applyWorkspace(ws) {
   state.problemCard = next.problemCard || null;
   state.boards = Array.isArray(next.boards) ? next.boards.slice() : [];
   state.caption = String(next.caption || "").trim() || lastTutorCaption();
+  state.seenTerms = Array.isArray(next.seenTerms) ? next.seenTerms.slice() : [];
 }
 
 function rememberCurrentWorkspace() {
@@ -110,6 +113,7 @@ function saveSession() {
     boards: collectBoards(),
     problemCard: state.problemCard,
     caption: state.caption || lastTutorCaption(),
+    seenTerms: (state.seenTerms || []).slice(),
     topics: state.topicWorkspaces || {},
     authorEngine: state.authorEngine,
     recentHooks: state.recentHooks || [],
@@ -353,11 +357,28 @@ function clearActivitySession() {
   destroyMountedActivities();
 }
 
+function rememberSeenTerm(termId) {
+  if (!termId) return;
+  state.seenTerms = state.seenTerms || [];
+  if (state.seenTerms.indexOf(termId) >= 0) return;
+  state.seenTerms.push(termId);
+  saveSession();
+}
+
+function highlightTermOnBoard(key) {
+  const handle = state.semanticBoardHandle;
+  if (handle && typeof handle.highlight === "function") handle.highlight(key || "");
+}
+
 function setCaption(text) {
   state.caption = String(text || "");
   const el = $("#tutorCaption");
   if (!el) return;
-  el.innerHTML = state.caption ? inlineFmt(state.caption) : "";
+  if (state.caption && window.XiaoouTermScaffold && XiaoouTermScaffold.formatCaption) {
+    el.innerHTML = XiaoouTermScaffold.formatCaption(state.caption, inlineFmt);
+  } else {
+    el.innerHTML = state.caption ? inlineFmt(state.caption) : "";
+  }
   const scroll = $(".caption-scroll");
   if (scroll) scroll.scrollTop = 0;
 }
@@ -1704,6 +1725,7 @@ async function loadConfig() {
       problemCard: saved.problemCard || null,
       boards: Array.isArray(saved.boards) ? saved.boards : [],
       caption: saved.caption || "",
+      seenTerms: Array.isArray(saved.seenTerms) ? saved.seenTerms : [],
     };
   }
   applyWorkspace(state.topicWorkspaces[state.topicKey]);
@@ -1980,6 +2002,7 @@ async function streamAssistant(kickoff) {
         thinking: state.thinking,
         show_reasoning: state.showReasoning,
         card: state.problemCard || null,
+        seen_terms: state.seenTerms || [],
       }),
     });
     if (res.status === 401) {
@@ -2713,11 +2736,19 @@ function bindEvents() {
     saveSession();
   });
 
+  if (window.XiaoouTermScaffold && XiaoouTermScaffold.bindCaption) {
+    XiaoouTermScaffold.bindCaption($("#tutorCaption"), {
+      onHighlight: highlightTermOnBoard,
+      onSeen: rememberSeenTerm,
+    });
+  }
+
   $("#resetBtn").addEventListener("click", () => {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
     state.messages = [];
     state.problemCard = null;
     state.caption = "";
+    state.seenTerms = [];
     clearPendingImage();
     clearActivitySession();
     saveSession();

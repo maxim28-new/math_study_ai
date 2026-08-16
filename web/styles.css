@@ -819,6 +819,50 @@ button, input, select, textarea { font-family: inherit; }
   white-space: normal;
 }
 #tutorCaption .katex { font-size: 1em; }
+.term-chip {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-bottom: 1px dashed var(--primary);
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+.term-card {
+  margin: 0 10px 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(63, 91, 214, .16);
+  border-radius: 14px;
+  background: var(--primary-soft);
+}
+.term-card.hidden { display: none; }
+.term-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.term-card-head strong { font-size: 15px; }
+.term-card-close {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--primary);
+  background: #fff;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.term-card p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+#termCardExample { color: var(--ink-soft); }
 
 .play-stage {
   position: relative;
@@ -1117,6 +1161,26 @@ button, input, select, textarea { font-family: inherit; }
   fill: var(--ink);
   font-size: 15px;
   font-weight: 750;
+}
+.geometry-radius {
+  stroke: #e05252;
+  stroke-width: 3;
+}
+.geometry-compass-board .is-term-lit {
+  filter: drop-shadow(0 0 6px rgba(224, 82, 82, .45));
+}
+.geometry-point.is-term-lit { fill: #e05252; }
+.geometry-circle.is-term-lit,
+.geometry-segment.is-term-lit,
+.geometry-side.is-term-lit,
+.geometry-compass.is-term-lit,
+.geometry-radius.is-term-lit {
+  stroke: #e05252;
+  stroke-width: 3.4;
+  opacity: 1;
+}
+.color-seq-board.is-term-lit .color-seq-item {
+  transform: scale(1.06);
 }
 .geometry-compass-width {
   stroke: #7a7166;

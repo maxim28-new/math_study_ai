@@ -270,6 +270,12 @@ class AuthorCardTests(unittest.TestCase):
         self.assertNotIn("每一轮回复都要配一张", prompt)
         self.assertNotIn("每一轮回复都必须", prompt)
         self.assertIn("你只输出孩子能听懂的自然语言", prompt)
+        self.assertIn("叫“圆心”", prompt)
+        seen = tutor.build_system_prompt(
+            "geometry", "middle", mode="explore", card=card, seen_terms=["center"]
+        )
+        self.assertIn("圆心", seen)
+        self.assertIn("已经点开看过", seen)
 
     def test_seed_card_matches_topic_and_is_not_nine_square(self):
         for topic in ("wordproblems", "geometry", "reasoning", "fractions", "algebra"):

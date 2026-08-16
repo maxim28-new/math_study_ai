@@ -323,7 +323,8 @@ SEMANTIC_BOARD_GUIDE = """\
 - 只围绕题卡的数学模型提问；孩子操作画板后，你会收到一条标明「语义画板盘面」的系统说明。
 - 孩子也可能把画板上的涂鸦直接发给你。请直接看图里她画的记号、路线或圈画，不要当成作业本读题。
 - 画板没有展示的路线或总数，不要提前在文字里补出来。
-- 如果画板是一排彩色花朵或珠子，请按孩子看见的真实颜色提问，不要把它们说成同一种颜色。"""
+- 如果画板是一排彩色花朵或珠子，请按孩子看见的真实颜色提问，不要把它们说成同一种颜色。
+- 第一次用到圆规、圆心、半径、交点、线段、正三角形、规律、排列、组合这些词时，先说孩子能看见的意思，再给出名字，例如：圆最中间的那个点，叫“圆心”。一次只带出一个新词，不要写成词典。"""
 
 
 def _board_controlled_prompt(text: str) -> str:
@@ -347,12 +348,28 @@ def _board_controlled_prompt(text: str) -> str:
 # ------------------------------------------------------------------
 
 
+TERM_NAMES = {
+    "compass": "圆规",
+    "center": "圆心",
+    "radius": "半径",
+    "intersection": "交点",
+    "segment": "线段",
+    "equilateral": "正三角形",
+    "pattern": "规律",
+    "arrange": "排列",
+    "combine": "组合",
+    "equation": "等式",
+    "fraction": "分数",
+}
+
+
 def build_system_prompt(
     topic_key: str,
     level: str,
     child_name: str = "",
     mode: str = DEFAULT_MODE,
     card: dict | None = None,
+    seen_terms: list[str] | None = None,
 ) -> str:
     topic = TOPICS_BY_KEY.get(topic_key, TOPICS_BY_KEY[DEFAULT_TOPIC_KEY])
     level_desc = LEVELS.get(level, LEVELS[DEFAULT_LEVEL])
@@ -387,6 +404,11 @@ def build_system_prompt(
         core_block = _board_controlled_prompt(core_block)
         mode_block = _board_controlled_prompt(mode_block)
 
+    seen_block = ""
+    names = [TERM_NAMES[key] for key in (seen_terms or []) if key in TERM_NAMES]
+    if names:
+        seen_block = "\n这些词孩子已经点开看过，可以直接用，不必再解释：" + "、".join(names) + "。\n"
+
     return f"""{core_block}
 
 # 本次学习的设置
@@ -399,7 +421,7 @@ def build_system_prompt(
 {axioms_block}
 {card_block}
 {drawing_guide}
-
+{seen_block}
 {mode_block}
 """
 

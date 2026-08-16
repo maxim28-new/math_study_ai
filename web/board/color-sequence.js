@@ -121,6 +121,9 @@
       freeze() { board.classList.add("is-frozen"); },
       destroy() { board.remove(); },
       getSnapshot() { return Object.assign({}, snapshot, { visible: snapshot.visible.slice() }); },
+      highlight(key) {
+        board.classList.toggle("is-term-lit", key === "pattern");
+      },
       apply() { return false; },
     };
   };

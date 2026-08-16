@@ -83,6 +83,7 @@ class ChatRequest(BaseModel):
     thinking: Optional[bool] = None
     show_reasoning: Optional[bool] = None
     card: Optional[dict[str, Any]] = None
+    seen_terms: list[str] = Field(default_factory=list)
 
 
 class UnlockRequest(BaseModel):
@@ -264,7 +265,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
             yield _sse({"done": True})
             return
     system_prompt = tutor.build_system_prompt(
-        req.topic, req.level, req.child_name, req.mode, card
+        req.topic, req.level, req.child_name, req.mode, card, req.seen_terms
     )
     text_headers = {
         "Authorization": f"Bearer {settings.api_key}",
