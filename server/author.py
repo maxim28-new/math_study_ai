@@ -39,7 +39,7 @@ AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看�
 题卡必须给出一个 board。你只描述数学模型、孩子任务和揭示方式，绝不能发明 type、steps、
 SVG、Canvas、Konva、坐标或画图代码。
 
-board 只允许下面五种严格结构，字段名和值都不要改：
+board 只允许下面六种严格结构，字段名和值都不要改：
 1. 分层求和：
 {{"schema":3,"kind":"layer_sum","model":{{"layers":[1,2,3,4],"item":"罐"}},"task":{{"action":"count","ask":"total","prompt":"数一数每层，再想一共多少罐。"}},"view":{{"reveal":"items_without_total"}}}}
 2. 枚举走法：
@@ -51,12 +51,16 @@ board 只允许下面五种严格结构，字段名和值都不要改：
 静态 diagram.type 只能是 dots、stairs、square_layers、square_steps、square_compare、numberline、bars。
 5. 尺规作正三角形（只适用于研究两圆交点和三边相等）：
 {{"schema":3,"kind":"geometry_compass","model":{{"construction":"equilateral_triangle","labels":["A","B","P"]}},"task":{{"action":"construct","ask":"compare_three_sides","prompt":"按顺序画两个圆，再比较三条边。"}},"view":{{"reveal":"stepwise"}}}}
+6. 颜色规律排队：
+{{"schema":3,"kind":"color_sequence","model":{{"item":"花","unit":["red","red","blue"],"count":6}},"task":{{"action":"predict","ask":"color_at_end","prompt":"按规律想下一朵的颜色。"}},"view":{{"reveal":"hide_last"}}}}
+颜色只能是 red、blue、yellow、green、orange、purple。
 
 按题意选择：
 - 分层物体合计用 layer_sum；允许步长的走法用 path_count。
 - 需要孩子摆方块用 snap_grid。
 - 数轴、线段图、点阵和正方形变化用 static_diagram。
 - 几何主题优先出“两圆交点作正三角形”，使用 geometry_compass。
+- 找规律、按颜色重复排队必须用 color_sequence，禁止用单色 dots 代替花朵或珠子。
 - 不允许 board=null，不允许输出旧 semantic_board 或 diagram 顶层字段。
 - board 必须描述第一问的同一个规模；程序会按已校验 board 统一第一问。
 
@@ -167,6 +171,7 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
         )
     if board is None:
         return None
+    board = semantic_board.upgrade_legacy_pattern_board(board)
     first_question = semantic_board.first_question_for_v3(board)
     if not first_question:
         first_question = str(data.get("first_question") or "").strip()
@@ -284,8 +289,17 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
             "hook": "花朵颜色的规律",
             "insight": "先多看几个例子再猜，再用下一个去验证",
             "axiom": "找规律时，先多列几个具体例子，再猜规律，最后想办法验证。",
-            "representation": "dots",
-            "diagram": {"type": "dots", "rows": 1, "cols": 6, "newLastRowCol": True, "caption": "前面几朵按规律排，下一朵会是什么？"},
+            "board": {
+                "schema": 3,
+                "kind": "color_sequence",
+                "model": {"item": "花", "unit": ["red", "red", "blue"], "count": 6},
+                "task": {
+                    "action": "predict",
+                    "ask": "color_at_end",
+                    "prompt": "按红、红、蓝的规律排下去，第六朵会是什么颜色？",
+                },
+                "view": {"reveal": "hide_last"},
+            },
             "first_question": "红红蓝、红红蓝……第六朵会是什么颜色？",
             "ladder": [
                 {"rung": "do", "ask": "先把前五朵的颜色按顺序说出来。"},

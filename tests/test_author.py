@@ -218,6 +218,40 @@ class AuthorCardTests(unittest.TestCase):
         }
         self.assertIsNone(author.normalize_card(raw, "geometry"))
 
+    def test_reasoning_seed_uses_color_sequence(self):
+        card = author.seed_card("reasoning", "middle")
+        self.assertEqual(card["board"]["kind"], "color_sequence")
+        self.assertEqual(card["board"]["model"]["unit"], ["red", "red", "blue"])
+        self.assertEqual(card["board"]["view"]["reveal"], "hide_last")
+        self.assertIn("红", card["first_question"])
+        self.assertIn("蓝", card["first_question"])
+
+    def test_legacy_pattern_dots_card_upgrades_to_color_sequence(self):
+        raw = {
+            "topic": "reasoning",
+            "hook": "花朵颜色的规律",
+            "insight": "先多看几个例子再猜",
+            "axiom": "找规律时，先多列几个具体例子，再猜规律，最后想办法验证。",
+            "representation": "dots",
+            "diagram": {
+                "type": "dots",
+                "rows": 1,
+                "cols": 6,
+                "newLastRowCol": True,
+                "caption": "前面几朵按规律排，下一朵会是什么？",
+            },
+            "first_question": "红红蓝、红红蓝……第六朵会是什么颜色？",
+            "ladder": [
+                {"rung": "do", "ask": "先把前五朵的颜色按顺序说出来。"},
+                {"rung": "see", "ask": "每几朵重复一次？"},
+                {"rung": "why", "ask": "你怎么证明第六朵一定是这个颜色？"},
+            ],
+        }
+        card = author.normalize_card(raw, "reasoning")
+        self.assertIsNotNone(card)
+        self.assertEqual(card["board"]["kind"], "color_sequence")
+        self.assertEqual(card["board"]["model"]["unit"], ["red", "red", "blue"])
+
     def test_geometry_seed_uses_v3_compass_activity(self):
         card = author.seed_card("geometry", "middle")
         self.assertEqual(card["representation"], "board_v3")

@@ -64,6 +64,8 @@ fixtures.invalid.forEach((raw) => {
 });
 const geometry = B.normalize(fixtures.valid.find((raw) => raw.kind === "geometry_compass"));
 assert.deepStrictEqual(geometry.model.labels, ["A", "B", "P"]);
+const colors = B.normalize(fixtures.valid.find((raw) => raw.kind === "color_sequence"));
+assert.deepStrictEqual(colors.model.unit, ["red", "red", "blue"]);
 assert.strictEqual(B.isBoardLike({ type: "geometry_demo" }), true);
 
 console.log("semantic_board_test.js ok");

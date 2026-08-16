@@ -24,6 +24,54 @@ class SemanticBoardTests(unittest.TestCase):
             with self.subTest(kind=raw["kind"]):
                 self.assertIsNone(board.normalize_board_v3(raw))
 
+    def test_v3_color_sequence_question_uses_unit_colors(self):
+        spec = board.normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "color_sequence",
+                "model": {"item": "花", "unit": ["red", "red", "blue"], "count": 6},
+                "task": {
+                    "action": "predict",
+                    "ask": "color_at_end",
+                    "prompt": "不要信任这句里的颜色。",
+                },
+                "view": {"reveal": "hide_last"},
+            }
+        )
+        question = board.first_question_for_v3(spec)
+        self.assertIn("红、红、蓝", question)
+        self.assertIn("第6朵", question)
+        self.assertNotIn("不要信任", question)
+        self.assertEqual(
+            board.expand_color_sequence(spec["model"]["unit"], spec["model"]["count"])[-1],
+            "blue",
+        )
+
+    def test_upgrades_monochrome_pattern_dots_to_color_sequence(self):
+        raw = {
+            "schema": 3,
+            "kind": "static_diagram",
+            "model": {
+                "diagram": {
+                    "type": "dots",
+                    "rows": 1,
+                    "cols": 6,
+                    "newLastRowCol": True,
+                    "caption": "前面几朵按规律排，下一朵会是什么？",
+                }
+            },
+            "task": {
+                "action": "observe",
+                "ask": "notice",
+                "prompt": "红红蓝、红红蓝……第六朵会是什么颜色？",
+            },
+            "view": {"reveal": "model_only"},
+        }
+        upgraded = board.upgrade_legacy_pattern_board(raw)
+        self.assertEqual(upgraded["kind"], "color_sequence")
+        self.assertEqual(upgraded["model"]["unit"], ["red", "red", "blue"])
+        self.assertEqual(upgraded["view"]["reveal"], "hide_last")
+
     def test_v3_geometry_question_comes_from_model(self):
         spec = board.normalize_board_v3(
             {

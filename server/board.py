@@ -17,7 +17,18 @@ BOARD_KINDS = (
     "snap_grid",
     "static_diagram",
     "geometry_compass",
+    "color_sequence",
 )
+COLOR_SEQUENCE_COLORS = ("red", "blue", "yellow", "green", "orange", "purple")
+COLOR_SEQUENCE_LABELS = {
+    "red": "红",
+    "blue": "蓝",
+    "yellow": "黄",
+    "green": "绿",
+    "orange": "橙",
+    "purple": "紫",
+}
+ITEM_MEASURES = {"花": "朵", "珠": "颗", "块": "块"}
 STATIC_DIAGRAM_TYPES = (
     "dots",
     "stairs",
@@ -228,6 +239,36 @@ def normalize_board_v3(raw: Any) -> dict[str, Any] | None:
             "model": {"diagram": diagram},
             "task": normalized_task,
             "view": {"reveal": "model_only"},
+        }
+
+    if kind == "color_sequence":
+        unit_raw = model.get("unit")
+        count = _int(model.get("count"))
+        item = _bounded_text(model.get("item"), 4, "花")
+        normalized_task = _normalize_task(task, "predict", "color_at_end")
+        reveal = str(view.get("reveal") or "")
+        if (
+            not isinstance(unit_raw, list)
+            or not 2 <= len(unit_raw) <= 4
+            or count is None
+            or not 3 <= count <= 10
+            or count < len(unit_raw)
+            or any(str(color) not in COLOR_SEQUENCE_COLORS for color in unit_raw)
+            or not item
+            or not normalized_task
+            or reveal not in ("hide_last", "all")
+        ):
+            return None
+        return {
+            "schema": BOARD_SCHEMA_VERSION,
+            "kind": kind,
+            "model": {
+                "item": item,
+                "unit": [str(color) for color in unit_raw],
+                "count": count,
+            },
+            "task": normalized_task,
+            "view": {"reveal": reveal},
         }
 
     if kind == "geometry_compass":
@@ -459,4 +500,46 @@ def first_question_for_v3(board: dict[str, Any]) -> str:
             f"保持圆规宽度等于线段 {a}{b}，分别以 {a} 和 {b} 为圆心画圆。"
             f"两个圆的交点记作 {p}，你觉得 {p}{a}、{p}{b} 和 {a}{b} 谁更长，还是一样长？"
         )
+    if kind == "color_sequence":
+        unit = "、".join(COLOR_SEQUENCE_LABELS[color] for color in model["unit"])
+        measure = ITEM_MEASURES.get(model["item"], "个")
+        return (
+            f"这些{model['item']}按{unit}重复排队。"
+            f"第{model['count']}{measure}会是什么颜色？"
+        )
     return normalized["task"]["prompt"]
+
+
+def expand_color_sequence(unit: list[str], count: int) -> list[str]:
+    return [unit[index % len(unit)] for index in range(count)]
+
+
+def upgrade_legacy_pattern_board(board: dict[str, Any] | None) -> dict[str, Any] | None:
+    """把找规律被误写成的单色点阵，收成真正带颜色的序列。"""
+    if not isinstance(board, dict) or board.get("kind") != "static_diagram":
+        return board
+    model = board.get("model") if isinstance(board.get("model"), dict) else {}
+    diagram = model.get("diagram") if isinstance(model.get("diagram"), dict) else {}
+    task = board.get("task") if isinstance(board.get("task"), dict) else {}
+    if str(diagram.get("type") or "") != "dots" or _int(diagram.get("rows")) != 1:
+        return board
+    blob = f"{diagram.get('caption') or ''} {task.get('prompt') or ''}"
+    if "红" not in blob or "蓝" not in blob:
+        return board
+    count = _int(diagram.get("cols")) or 6
+    if not 3 <= count <= 10:
+        count = 6
+    upgraded = normalize_board_v3(
+        {
+            "schema": BOARD_SCHEMA_VERSION,
+            "kind": "color_sequence",
+            "model": {"item": "花", "unit": ["red", "red", "blue"], "count": count},
+            "task": {
+                "action": "predict",
+                "ask": "color_at_end",
+                "prompt": _bounded_text(task.get("prompt"), 200),
+            },
+            "view": {"reveal": "hide_last"},
+        }
+    )
+    return upgraded or board

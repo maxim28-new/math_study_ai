@@ -775,6 +775,7 @@ function mountBoardV3(raw) {
   if (!host) return;
   host.innerHTML = "";
   const engine = window.XiaoouSemanticBoard;
+  if (engine && engine.upgradeLegacyPatternBoard) raw = engine.upgradeLegacyPatternBoard(raw);
   const spec = engine && engine.normalize ? engine.normalize(raw) : null;
   if (!spec || !engine) {
     mountBoardFallback();

@@ -166,6 +166,25 @@
       if (!diagram || !task || raw.view.reveal !== "model_only") return null;
       return { schema: SCHEMA_VERSION, kind: raw.kind, model: { diagram }, task, view: { reveal: "model_only" } };
     }
+    if (raw.kind === "color_sequence") {
+      const COLORS = ["red", "blue", "yellow", "green", "orange", "purple"];
+      const unit = raw.model.unit;
+      const count = asInt(raw.model.count);
+      const item = text(raw.model.item, 4, "花");
+      const task = normalizeTask(raw.task, "predict", "color_at_end");
+      if (!Array.isArray(unit) || unit.length < 2 || unit.length > 4
+        || count === null || count < 3 || count > 10 || count < unit.length
+        || unit.some((color) => COLORS.indexOf(String(color)) < 0)
+        || !item || !task
+        || (raw.view.reveal !== "hide_last" && raw.view.reveal !== "all")) return null;
+      return {
+        schema: SCHEMA_VERSION,
+        kind: raw.kind,
+        model: { item, unit: unit.map(String), count },
+        task,
+        view: { reveal: raw.view.reveal },
+      };
+    }
     if (raw.kind === "geometry_compass") {
       const labels = raw.model.labels;
       const task = normalizeTask(raw.task, "construct", "compare_three_sides");
@@ -252,6 +271,14 @@
         "孩子已经找到的走法：" + (routes.join("；") || "还没有"),
       ].join("\n");
     }
+    if (snapshot.kind === "color_sequence") {
+      return [
+        "（当前语义画板盘面，这不是孩子打的字）",
+        "数学模型：color_sequence",
+        "可见颜色：" + ((snapshot.visible || []).join("、") || "还没有"),
+        snapshot.hidden ? "最后一朵还没揭开，不要把答案颜色说出来。" : "整排颜色都已经看见了。",
+      ].join("\n");
+    }
     if (snapshot.kind === "geometry_compass") {
       return [
         "（当前语义画板盘面，这不是孩子打的字）",
@@ -274,6 +301,9 @@
     }
     if (spec.kind === "geometry_compass" && typeof B.mountGeometryCompass === "function") {
       return B.mountGeometryCompass(host, spec, options || {});
+    }
+    if (spec.kind === "color_sequence" && typeof B.mountColorSequence === "function") {
+      return B.mountColorSequence(host, spec, options || {});
     }
     return null;
   };

@@ -40,6 +40,13 @@
       "model": {"construction": "equilateral_triangle", "labels": ["A", "B", "P"]},
       "task": {"action": "construct", "ask": "compare_three_sides", "prompt": "画两个圆。"},
       "view": {"reveal": "stepwise"}
+    },
+    {
+      "schema": 3,
+      "kind": "color_sequence",
+      "model": {"item": "花", "unit": ["red", "red", "blue"], "count": 6},
+      "task": {"action": "predict", "ask": "color_at_end", "prompt": "按规律想下一朵的颜色。"},
+      "view": {"reveal": "hide_last"}
     }
   ],
   "invalid": [
@@ -70,6 +77,13 @@
       "model": {"rows": 99, "cols": 3, "tray": 6},
       "task": {"action": "arrange", "ask": "observe", "prompt": ""},
       "view": {"reveal": "empty_grid_and_tiles"}
+    },
+    {
+      "schema": 3,
+      "kind": "color_sequence",
+      "model": {"item": "花", "unit": ["pink", "blue"], "count": 6},
+      "task": {"action": "predict", "ask": "color_at_end", "prompt": ""},
+      "view": {"reveal": "hide_last"}
     }
   ]
 }
