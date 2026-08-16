@@ -40,7 +40,7 @@
 
     const controls = document.createElement("div");
     controls.className = "geometry-compass-controls";
-    const next = button("夹住 AB", "geometry-next-btn");
+    const next = button(`夹住 ${labels[0]}${labels[1]}`, "geometry-next-btn");
     const reset = button("重新画", "geometry-reset-btn");
     reset.disabled = true;
     controls.appendChild(next);
@@ -109,7 +109,12 @@
         `以 ${labels[0]} 为圆心画好了第一个圆。`,
         `两个圆相交了。看看交点到两个圆心的距离。`,
       ];
-      const labelsByStep = ["夹住 AB", `以 ${labels[0]} 画圆`, `以 ${labels[1]} 画圆`, "已经画好"];
+      const labelsByStep = [
+        `夹住 ${labels[0]}${labels[1]}`,
+        `以 ${labels[0]} 画圆`,
+        `以 ${labels[1]} 画圆`,
+        "已经画好",
+      ];
       status.textContent = messages[step];
       next.textContent = labelsByStep[step];
       next.disabled = frozen || step === 3;
