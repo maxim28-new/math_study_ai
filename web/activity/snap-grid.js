@@ -51,7 +51,7 @@
     const stageHost = host.querySelector(".snap-grid-stage") || host;
     const fallback = host.querySelector(".snap-grid-fallback");
     const play = host.closest ? host.closest(".play-stage") : null;
-    const expanded = !!(play && play.classList.contains("is-expanded"));
+    const expanded = !!(play && play.classList.contains("is-playing"));
     const hostW = Math.max(200, stageHost.clientWidth || host.clientWidth || 280);
     const hostH = Math.max(0, stageHost.clientHeight || 0);
     const gap = 6;

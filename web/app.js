@@ -12,10 +12,13 @@ const state = {
   thinking: false, // API 深度思考（更慢）
   showReasoning: false, // 是否在界面展示思考过程（独立于 thinking）
   messages: [], // 发给模型的历史：{role:'user'|'assistant', content}（content 可能是字符串或多模态数组）
-  pendingImage: null, // 待发送的题目照片（dataURL）
+  pendingImage: null, // 待发送的题目照片或画板涂鸦（dataURL）
+  pendingImageKind: "", // photo | doodle | draw
   streaming: false,
   liveActivities: [],
   mountedActivities: [],
+  semanticBoardHandle: null,
+  semanticBoardSnapshot: null,
   boards: [],
   milestoneTimer: null,
   pendingMilestone: null,
@@ -27,9 +30,16 @@ const state = {
   problemCard: null,
   authorPromise: null,
   recentHooks: [],
+  topicWorkspaces: {},
+  caption: "",
+  seenTerms: [],
+  authorGen: 0,
+  mathWorkspace: null,
 };
 
 const STORE_KEY = "xiaoou.session.v1";
+const START_CAPTION = "点开始玩，把方块拖进格子";
+const THINKING_CAPTION = "小欧在想一道有意思的题…";
 
 // ---------------- 本地存储 ----------------
 // 图片是很大的 base64，存进 localStorage 会撑爆配额，所以持久化时把图片换成占位文字。
@@ -41,7 +51,108 @@ function sanitizeForStore(messages) {
     return { role: m.role, content: (text ? text + "\n" : "") + "[一张题目照片]" };
   });
 }
+function emptyWorkspace() {
+  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [], mathWorkspace: null };
+}
+
+function messagePlainText(m) {
+  if (!m) return "";
+  if (typeof m.content === "string") return m.content;
+  if (Array.isArray(m.content)) {
+    return m.content.map((p) => (p && p.type === "text" ? String(p.text || "") : "")).join("\n");
+  }
+  return "";
+}
+
+function lastTutorCaption() {
+  const msgs = state.messages || [];
+  if (window.XiaoouActivity && XiaoouActivity.tutorCaption) {
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      if (msgs[i].role !== "assistant") continue;
+      const cap = XiaoouActivity.tutorCaption(messagePlainText(msgs[i]));
+      if (cap && !isIdleCaption(cap)) return cap;
+    }
+  }
+  if (state.problemCard && state.problemCard.first_question) {
+    const q = String(state.problemCard.first_question).trim();
+    if (q && !isIdleCaption(q)) return q;
+  }
+  return "";
+}
+
+function isIdleCaption(text) {
+  const s = String(text || "").trim();
+  return !s || s === START_CAPTION || s === THINKING_CAPTION;
+}
+
+function liveCaption() {
+  const saved = String(state.caption || "").trim();
+  if (!isIdleCaption(saved)) return saved;
+  return lastTutorCaption();
+}
+
+function upgradeLegacyArithmeticSeed(card) {
+  if (!card || card.topic !== "arithmetic") return card;
+  const diagram = (card.board && card.board.kind === "static_diagram" && card.board.model)
+    ? card.board.model.diagram
+    : card.diagram;
+  if (!diagram || diagram.type !== "numberline") return card;
+  if (Number(diagram.from) !== 1 || Number(diagram.to) !== 10) return card;
+  const hook = String(card.hook || "");
+  const cap = String(diagram.caption || "");
+  if (hook !== "1 加到 10 有点慢" && cap !== "1 和 10 能凑成一对吗？") return card;
+  return Object.assign({}, card, {
+    representation: "board_v3",
+    diagram: null,
+    semantic_board: null,
+    board: {
+      schema: 3,
+      kind: "layer_sum",
+      model: { layers: [1, 3, 5], item: "积木" },
+      task: { action: "count", ask: "total", prompt: "先数前两层，再想它们拼成了什么。" },
+      view: { reveal: "stepwise" },
+    },
+  });
+}
+
+function topicCard(card) {
+  if (!card || typeof card !== "object") return null;
+  if (card.topic && card.topic !== state.topicKey) return null;
+  return upgradeLegacyArithmeticSeed(card);
+}
+
+function snapshotWorkspace() {
+  return {
+    messages: sanitizeForStore(state.messages || []),
+    problemCard: state.problemCard,
+    boards: collectBoards(),
+    caption: liveCaption(),
+    seenTerms: (state.seenTerms || []).slice(),
+    mathWorkspace: state.mathWorkspace || null,
+  };
+}
+
+function applyWorkspace(ws) {
+  const next = ws || emptyWorkspace();
+  state.messages = Array.isArray(next.messages) ? next.messages.slice() : [];
+  state.problemCard = topicCard(next.problemCard);
+  state.boards = Array.isArray(next.boards) ? next.boards.slice() : [];
+  const savedCap = String(next.caption || "").trim();
+  state.caption = isIdleCaption(savedCap) ? lastTutorCaption() : savedCap;
+  state.seenTerms = Array.isArray(next.seenTerms) ? next.seenTerms.slice() : [];
+  const W = window.XiaoouMathWorkspace;
+  const savedWs = next.mathWorkspace;
+  state.mathWorkspace = (W && W.fromDict(savedWs)) ? savedWs : null;
+}
+
+function rememberCurrentWorkspace() {
+  if (!state.topicKey) return;
+  state.topicWorkspaces = state.topicWorkspaces || {};
+  state.topicWorkspaces[state.topicKey] = snapshotWorkspace();
+}
+
 function saveSession() {
+  rememberCurrentWorkspace();
   const data = {
     topicKey: state.topicKey,
     level: state.level,
@@ -51,6 +162,11 @@ function saveSession() {
     showReasoning: state.showReasoning,
     messages: sanitizeForStore(state.messages),
     boards: collectBoards(),
+    problemCard: state.problemCard,
+    caption: liveCaption(),
+    seenTerms: (state.seenTerms || []).slice(),
+    mathWorkspace: state.mathWorkspace || null,
+    topics: state.topicWorkspaces || {},
     authorEngine: state.authorEngine,
     recentHooks: state.recentHooks || [],
   };
@@ -111,7 +227,7 @@ function inlineFmt(s) {
   return renderTextWithMath(String(s));
 }
 
-const DIAGRAM_TYPES = new Set(["dots", "square_layers", "square_steps", "square_compare", "numberline", "bars", "snap_grid"]);
+const DIAGRAM_TYPES = new Set(["dots", "stairs", "square_layers", "square_steps", "square_compare", "numberline", "bars", "snap_grid"]);
 
 /** 识别 xiaoou-draw JSON（模型有时用 ```json 或裸 JSON，也要能画图） */
 function tryParseDiagramSpec(text) {
@@ -128,6 +244,29 @@ function renderDiagramBlock(code) {
   const spec = tryParseDiagramSpec(code);
   const svg = renderDiagram(spec ? JSON.stringify(spec) : code.trim());
   return svg || "";
+}
+
+function parseBoardLikeJson(code) {
+  const text = String(code || "").trim();
+  if (!text.startsWith("{")) return null;
+  const parsed = (window.XiaoouActivity && XiaoouActivity.parseDiagramJson)
+    ? XiaoouActivity.parseDiagramJson(text)
+    : null;
+  if (!parsed || typeof parsed !== "object") {
+    return /"(?:type|kind|schema)"\s*:/.test(text) ? { incomplete: true } : null;
+  }
+  const boardEngine = window.XiaoouSemanticBoard;
+  if (boardEngine && boardEngine.isBoardLike && boardEngine.isBoardLike(parsed)) return parsed;
+  return ("type" in parsed || "kind" in parsed || "schema" in parsed) ? parsed : null;
+}
+
+function stripBoardProtocol(text) {
+  let value = String(text || "");
+  value = value.replace(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g, (block, code) => (
+    parseBoardLikeJson(code) ? " " : block
+  ));
+  value = value.split("\n").filter((line) => !parseBoardLikeJson(line)).join("\n");
+  return value.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function renderMarkdown(text) {
@@ -151,6 +290,8 @@ function renderMarkdown(text) {
         emitText();
         const svg = renderDiagram(JSON.stringify(spec));
         if (svg) html += svg;
+      } else if (parseBoardLikeJson(line)) {
+        emitText();
       } else {
         textLines.push(line);
       }
@@ -168,7 +309,7 @@ function renderMarkdown(text) {
         const code = fence.buf.join("\n");
         const svg = renderDiagramBlock(code);
         if (svg) html += svg;
-        else if (code.trim()) html += `<pre class="code">${escapeHtml(code)}</pre>`;
+        else if (code.trim() && !parseBoardLikeJson(code)) html += `<pre class="code">${escapeHtml(code)}</pre>`;
         fence = null;
       } else {
         fence.buf.push(raw);
@@ -201,7 +342,7 @@ function renderMarkdown(text) {
     const code = fence.buf.join("\n");
     const svg = renderDiagramBlock(code);
     if (svg) html += svg;
-    else if (code.trim()) html += `<pre class="code">${escapeHtml(code)}</pre>`;
+    else if (code.trim() && !parseBoardLikeJson(code)) html += `<pre class="code">${escapeHtml(code)}</pre>`;
   }
   flushPara(); closeList();
   return html || "<p></p>";
@@ -224,6 +365,7 @@ function renderDiagram(jsonText) {
   }
   let inner = "";
   if (s.type === "dots") inner = diagramDots(s);
+  else if (s.type === "stairs") inner = diagramStairs(s);
   else if (s.type === "square_layers") inner = diagramSquareLayers(s);
   else if (s.type === "square_steps") inner = diagramSquareSteps(s);
   else if (s.type === "square_compare") inner = diagramSquareCompare(s);
@@ -243,10 +385,30 @@ function freezeLiveActivities() {
   state.pendingMilestone = null;
 }
 
+function destroySemanticBoard() {
+  if (state.semanticBoardHandle) {
+    try { state.semanticBoardHandle.destroy(); } catch (e) {}
+    state.semanticBoardHandle = null;
+  }
+  state.semanticBoardSnapshot = null;
+}
+
+function clearStageHost() {
+  const host = $("#stageHost");
+  if (host) host.innerHTML = "";
+}
+
 function destroyMountedActivities() {
   freezeLiveActivities();
+  destroySemanticBoard();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
+  clearStageHost();
+}
+
+function bumpAuthorGen() {
+  state.authorGen = (state.authorGen || 0) + 1;
+  state.authorPromise = null;
 }
 
 function clearActivitySession() {
@@ -258,17 +420,57 @@ function clearActivitySession() {
   destroyMountedActivities();
 }
 
+function rememberSeenTerm(termId) {
+  if (!termId) return;
+  state.seenTerms = state.seenTerms || [];
+  if (state.seenTerms.indexOf(termId) >= 0) return;
+  state.seenTerms.push(termId);
+  saveSession();
+}
+
+function highlightTermOnBoard(key) {
+  const handle = state.semanticBoardHandle;
+  if (handle && typeof handle.highlight === "function") handle.highlight(key || "");
+}
+
+function decorateTutorTerms(bubble) {
+  if (!bubble || !window.XiaoouTermScaffold || !XiaoouTermScaffold.linkTermsInElement) return;
+  const msg = bubble.closest(".msg");
+  if (msg && !msg.classList.contains("tutor")) return;
+  XiaoouTermScaffold.linkTermsInElement(bubble);
+}
+
 function setCaption(text) {
+  state.caption = String(text || "");
   const el = $("#tutorCaption");
   if (!el) return;
-  el.innerHTML = text ? inlineFmt(text) : "";
+  if (state.caption && window.XiaoouTermScaffold && XiaoouTermScaffold.formatCaption) {
+    el.innerHTML = XiaoouTermScaffold.formatCaption(state.caption, inlineFmt);
+  } else {
+    el.innerHTML = state.caption ? inlineFmt(state.caption) : "";
+  }
+  const scroll = $(".caption-scroll");
+  if (scroll) scroll.scrollTop = 0;
+}
+
+function restoreExploreCaption() {
+  const cap = liveCaption();
+  if (cap) {
+    setCaption(cap);
+    return;
+  }
+  if (!state.problemCard && !(state.messages || []).length) {
+    setCaption(START_CAPTION);
+  }
 }
 
 function showStartPlay() {
   const wrap = $("#startPlayWrap");
   const play = $(".play-stage");
   if (wrap) wrap.classList.remove("hidden");
-  if (play) play.classList.remove("is-playing");
+  if (play) play.classList.remove("is-playing", "is-drawing");
+  setBoardMode("interact");
+  clearDoodle();
   const tools = $("#stageTools");
   if (tools) tools.classList.add("hidden");
 }
@@ -283,9 +485,7 @@ function hideStartPlay() {
 function resetExploreEmpty() {
   destroyMountedActivities();
   state.stageSpec = null;
-  const host = $("#stageHost");
-  if (host) host.innerHTML = "";
-  setCaption("点开始玩，把方块拖进格子");
+  setCaption(START_CAPTION);
   showStartPlay();
 }
 
@@ -312,33 +512,550 @@ function showStageToast(text) {
   }, 900);
 }
 
-function isStageExpanded() {
-  const play = $(".play-stage");
-  return !!(play && play.classList.contains("is-expanded"));
-}
-
-function syncExpandButton() {
-  const btn = $("#expandStageBtn");
-  if (!btn) return;
-  const on = isStageExpanded();
-  btn.textContent = on ? "收起" : "展开";
-  btn.setAttribute("aria-pressed", on ? "true" : "false");
-}
-
-function toggleStageExpand() {
+function setBoardMode(mode) {
+  const drawing = mode === "draw";
   const play = $(".play-stage");
   if (!play) return;
-  play.classList.toggle("is-expanded");
-  syncExpandButton();
-  if (state.stageSpec) {
-    const live = state.liveActivities[state.liveActivities.length - 1];
-    const occ = (live && live.getOccupancy) ? live.getOccupancy().occupied : [];
-    remountStage(state.stageSpec, occ);
+  play.classList.toggle("is-drawing", drawing);
+  const explore = $("#exploreStage");
+  if (explore) explore.classList.toggle("is-drawing", drawing);
+  const interact = $("#boardInteractBtn");
+  const draw = $("#boardDrawBtn");
+  if (interact) {
+    interact.classList.toggle("is-active", !drawing);
+    interact.setAttribute("aria-pressed", drawing ? "false" : "true");
   }
+  if (draw) {
+    draw.classList.toggle("is-active", drawing);
+    draw.setAttribute("aria-pressed", drawing ? "true" : "false");
+  }
+  if (!drawing) resetDoodleView();
+  setDoodleActive(drawing);
+  relayoutDoodle();
+}
+
+const doodle = {
+  strokes: [],
+  cur: null,
+  drawing: false,
+  color: "#2f4ab8",
+  tool: "pen",
+  width: 4.5,
+  erase: false,
+  dirty: false,
+  scale: 1,
+  panX: 0,
+  panY: 0,
+  pointers: new Map(),
+  gesture: null,
+  suppressDraw: false,
+  toolboxOpen: false,
+};
+
+function doodleViewport() {
+  return $("#boardViewport") || $(".play-stage");
+}
+
+function doodleAnchorEl() {
+  const host = $("#stageHost");
+  if (!host) return doodleViewport();
+  return host.querySelector(".semantic-board")
+    || host.querySelector(".snap-grid")
+    || host.querySelector("figure.diagram")
+    || host.querySelector("svg")
+    || host;
+}
+
+function doodlePoint(e) {
+  const t = e.touches ? e.touches[0] : e;
+  return clientToWorld(t.clientX, t.clientY);
+}
+
+function clientToWorld(clientX, clientY) {
+  const el = doodleAnchorEl();
+  if (!el) return { x: 0, y: 0 };
+  const rect = el.getBoundingClientRect();
+  if (!rect.width || !rect.height) return { x: 0, y: 0 };
+  return {
+    x: (clientX - rect.left) / rect.width,
+    y: (clientY - rect.top) / rect.height,
+  };
+}
+
+function worldToCanvas(pt) {
+  const canvas = $("#doodleCanvas");
+  const el = doodleAnchorEl();
+  if (!canvas || !el) return { x: 0, y: 0 };
+  const rect = el.getBoundingClientRect();
+  const cr = canvas.getBoundingClientRect();
+  if (!cr.width || !cr.height) return { x: 0, y: 0 };
+  return {
+    x: (rect.left + pt.x * rect.width - cr.left) / cr.width * canvas.clientWidth,
+    y: (rect.top + pt.y * rect.height - cr.top) / cr.height * canvas.clientHeight,
+  };
+}
+
+function figureWidthNorm() {
+  const el = doodleAnchorEl();
+  if (!el) return 1;
+  const width = el.getBoundingClientRect().width / (doodle.scale || 1);
+  return width || 1;
+}
+
+function currentDoodleWidthNorm() {
+  return currentDoodleWidth() / figureWidthNorm();
+}
+
+function strokeWidthCanvas(stroke) {
+  const norm = stroke.widthNorm || ((stroke.width || 3.6) / figureWidthNorm());
+  const a = worldToCanvas({ x: 0, y: 0 });
+  const b = worldToCanvas({ x: norm, y: 0 });
+  return Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+}
+
+function relayoutDoodle() {
+  requestAnimationFrame(() => {
+    sizeDoodleCanvas();
+    requestAnimationFrame(sizeDoodleCanvas);
+  });
+}
+
+function applyWorldTransform() {
+  const world = $("#boardWorld");
+  if (!world) return;
+  world.style.transform = "translate(" + doodle.panX + "px," + doodle.panY + "px) scale(" + doodle.scale + ")";
+}
+
+function clampDoodlePan() {
+  const vp = doodleViewport();
+  if (!vp) return;
+  const w = vp.clientWidth;
+  const h = vp.clientHeight;
+  const sw = w * doodle.scale;
+  const sh = h * doodle.scale;
+  const margin = 48;
+  doodle.panX = Math.min(w - margin, Math.max(margin - sw, doodle.panX));
+  doodle.panY = Math.min(h - margin, Math.max(margin - sh, doodle.panY));
+}
+
+function resetDoodleView() {
+  doodle.scale = 1;
+  doodle.panX = 0;
+  doodle.panY = 0;
+  doodle.gesture = null;
+  applyWorldTransform();
+}
+
+function pinchInfo() {
+  const pts = Array.from(doodle.pointers.values());
+  if (pts.length < 2) return null;
+  const dx = pts[1].x - pts[0].x;
+  const dy = pts[1].y - pts[0].y;
+  return {
+    dist: Math.hypot(dx, dy) || 1,
+    midX: (pts[0].x + pts[1].x) / 2,
+    midY: (pts[0].y + pts[1].y) / 2,
+  };
+}
+
+function applyPinch() {
+  const now = pinchInfo();
+  const g = doodle.gesture;
+  if (!now || !g) return;
+  const vp = doodleViewport();
+  if (!vp) return;
+  const rect = vp.getBoundingClientRect();
+  const nextScale = Math.min(4, Math.max(0.55, g.scale * (now.dist / g.dist)));
+  const worldX = (g.midX - rect.left - g.panX) / g.scale;
+  const worldY = (g.midY - rect.top - g.panY) / g.scale;
+  doodle.scale = nextScale;
+  doodle.panX = now.midX - rect.left - worldX * nextScale;
+  doodle.panY = now.midY - rect.top - worldY * nextScale;
+  clampDoodlePan();
+  applyWorldTransform();
+}
+
+function zoomAt(clientX, clientY, nextScale) {
+  const vp = doodleViewport();
+  if (!vp) return;
+  const rect = vp.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const worldX = (x - doodle.panX) / doodle.scale;
+  const worldY = (y - doodle.panY) / doodle.scale;
+  doodle.scale = Math.min(4, Math.max(0.55, nextScale));
+  doodle.panX = x - worldX * doodle.scale;
+  doodle.panY = y - worldY * doodle.scale;
+  clampDoodlePan();
+  applyWorldTransform();
+}
+
+function cancelOpenStroke() {
+  if (doodle.cur && doodle.strokes[doodle.strokes.length - 1] === doodle.cur) {
+    doodle.strokes.pop();
+  }
+  doodle.cur = null;
+  doodle.drawing = false;
+}
+
+function currentDoodleWidth() {
+  if (doodle.tool === "erase" || doodle.erase) return Math.max(14, doodle.width * 3.2);
+  return doodle.width;
+}
+
+function hasDoodleInk() {
+  return doodle.strokes.some((stroke) => {
+    const pts = stroke.points || [];
+    if (stroke.kind === "line") {
+      return pts.length >= 2 && (pts[0].x !== pts[1].x || pts[0].y !== pts[1].y);
+    }
+    return pts.length > 1;
+  });
+}
+
+function syncBoardSendButton() {
+  const send = $("#doodleSendBtn");
+  if (!send) return;
+  send.disabled = state.streaming || !doodle.dirty || !hasDoodleInk();
+}
+
+function setDoodleToolboxOpen(open) {
+  doodle.toolboxOpen = !!open;
+  const box = $("#doodleToolbox");
+  const btn = $("#doodleToolboxBtn");
+  if (box) box.classList.toggle("hidden", !doodle.toolboxOpen);
+  if (btn) {
+    btn.classList.toggle("is-open", doodle.toolboxOpen);
+    btn.setAttribute("aria-expanded", doodle.toolboxOpen ? "true" : "false");
+  }
+}
+
+function syncDoodleTools() {
+  document.querySelectorAll(".doodle-color").forEach((btn) => {
+    btn.classList.toggle("is-active", doodle.tool !== "erase" && btn.dataset.color === doodle.color);
+  });
+  document.querySelectorAll(".doodle-width").forEach((btn) => {
+    btn.classList.toggle("is-active", Number(btn.dataset.width) === doodle.width);
+  });
+  const pen = $("#doodlePenBtn");
+  const line = $("#doodleLineBtn");
+  const eraser = $("#doodleEraserBtn");
+  if (pen) {
+    pen.classList.toggle("is-active", doodle.tool === "pen");
+    pen.setAttribute("aria-pressed", doodle.tool === "pen" ? "true" : "false");
+  }
+  if (line) {
+    line.classList.toggle("is-active", doodle.tool === "line");
+    line.setAttribute("aria-pressed", doodle.tool === "line" ? "true" : "false");
+  }
+  if (eraser) eraser.classList.toggle("is-active", doodle.tool === "erase");
+  const names = { pen: "画笔", line: "直线", erase: "橡皮" };
+  const label = $("#doodleToolboxLabel");
+  if (label) label.textContent = names[doodle.tool] || "画笔";
+  const swatch = $("#doodleBoxSwatch");
+  if (swatch) swatch.style.setProperty("--swatch", doodle.tool === "erase" ? "#9a9288" : doodle.color);
+}
+
+function redrawDoodle() {
+  const canvas = $("#doodleCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  doodle.strokes.forEach((stroke) => {
+    const pts = stroke.points || [];
+    if (!pts.length) return;
+    ctx.globalCompositeOperation = stroke.erase ? "destination-out" : "source-over";
+    ctx.strokeStyle = stroke.color || "#2f4ab8";
+    ctx.lineWidth = strokeWidthCanvas(stroke);
+    ctx.beginPath();
+    const mapped = pts.map(worldToCanvas);
+    if (stroke.kind === "line" && mapped.length >= 2) {
+      ctx.moveTo(mapped[0].x, mapped[0].y);
+      ctx.lineTo(mapped[1].x, mapped[1].y);
+    } else {
+      ctx.moveTo(mapped[0].x, mapped[0].y);
+      for (let i = 1; i < mapped.length; i++) ctx.lineTo(mapped[i].x, mapped[i].y);
+    }
+    ctx.stroke();
+  });
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function sizeDoodleCanvas() {
+  const canvas = $("#doodleCanvas");
+  const vp = doodleViewport();
+  if (!canvas || !vp) return;
+  const rect = vp.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(rect.width * dpr));
+  canvas.height = Math.max(1, Math.round(rect.height * dpr));
+  canvas.style.width = rect.width + "px";
+  canvas.style.height = rect.height + "px";
+  applyWorldTransform();
+  redrawDoodle();
+}
+
+function clearDoodle() {
+  doodle.strokes = [];
+  doodle.cur = null;
+  doodle.drawing = false;
+  doodle.dirty = false;
+  redrawDoodle();
+  syncBoardSendButton();
+}
+
+function setDoodleActive(on) {
+  const canvas = $("#doodleCanvas");
+  const toolbar = $("#doodleToolbar");
+  if (canvas) canvas.classList.toggle("is-active", !!on);
+  if (toolbar) toolbar.classList.toggle("hidden", !on);
+  if (!on) setDoodleToolboxOpen(false);
+  if (on) {
+    syncDoodleTools();
+    relayoutDoodle();
+  }
+}
+
+function doodleIgnoreEl(el) {
+  if (!el || !el.closest) return false;
+  return !!(
+    el.closest("#boardModeBar") ||
+    el.closest("#doodleToolbar") ||
+    el.closest("#stageToast")
+  );
+}
+
+function captureBoardFallback() {
+  const play = $(".play-stage");
+  const doodleCanvas = $("#doodleCanvas");
+  if (!play) return "";
+  const rect = play.getBoundingClientRect();
+  const scale = Math.min(2, window.devicePixelRatio || 1);
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(rect.width * scale));
+  out.height = Math.max(1, Math.round(rect.height * scale));
+  const ctx = out.getContext("2d");
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#fffaf2";
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  play.querySelectorAll("canvas").forEach((c) => {
+    if (c.id === "doodleCanvas") return;
+    const r = c.getBoundingClientRect();
+    try {
+      ctx.drawImage(c, r.left - rect.left, r.top - rect.top, r.width, r.height);
+    } catch (err) {}
+  });
+  if (doodleCanvas) {
+    const r = doodleCanvas.getBoundingClientRect();
+    ctx.drawImage(doodleCanvas, r.left - rect.left, r.top - rect.top, r.width, r.height);
+  }
+  return out.toDataURL("image/jpeg", 0.86);
+}
+
+async function shrinkDataUrl(dataUrl, maxDim = 1280, quality = 0.82) {
+  if (!dataUrl) return "";
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      const scale = Math.min(1, maxDim / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function captureBoardImage() {
+  const play = $(".play-stage");
+  if (!play) return "";
+  if (typeof html2canvas === "function") {
+    try {
+      const canvas = await html2canvas(play, {
+        backgroundColor: "#fffaf2",
+        scale: Math.min(2, window.devicePixelRatio || 1),
+        logging: false,
+        useCORS: true,
+        ignoreElements: doodleIgnoreEl,
+      });
+      return shrinkDataUrl(canvas.toDataURL("image/jpeg", 0.88));
+    } catch (err) {}
+  }
+  return shrinkDataUrl(captureBoardFallback());
+}
+
+async function sendDoodleToTutor() {
+  if (state.streaming) return;
+  if (!hasDoodleInk()) {
+    showStageToast("先画一点再发给小欧");
+    return;
+  }
+  showStageToast("正在发给小欧…");
+  resetDoodleView();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  sizeDoodleCanvas();
+  let dataUrl = "";
+  try {
+    dataUrl = await captureBoardImage();
+  } catch (err) {}
+  if (!dataUrl) {
+    showStageToast("这张画还没发出去，再试一次");
+    return;
+  }
+  setPendingImage(dataUrl, "doodle");
+  doodle.dirty = false;
+  syncBoardSendButton();
+  await sendMessage("");
+}
+
+function initDoodle() {
+  const canvas = $("#doodleCanvas");
+  if (!canvas) return;
+  const startStroke = (e) => {
+    const point = doodlePoint(e);
+    const erase = doodle.tool === "erase";
+    doodle.drawing = true;
+    doodle.cur = {
+      kind: doodle.tool === "line" ? "line" : "pen",
+      points: doodle.tool === "line" ? [point, { x: point.x, y: point.y }] : [point],
+      color: doodle.color,
+      erase,
+      width: currentDoodleWidth(),
+      widthNorm: currentDoodleWidthNorm(),
+    };
+    doodle.strokes.push(doodle.cur);
+    doodle.dirty = true;
+    syncBoardSendButton();
+    redrawDoodle();
+  };
+  const start = (e) => {
+    if (!canvas.classList.contains("is-active")) return;
+    e.preventDefault();
+    doodle.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (doodle.pointers.size >= 2) {
+      cancelOpenStroke();
+      doodle.suppressDraw = true;
+      const pinch = pinchInfo();
+      doodle.gesture = pinch ? {
+        dist: pinch.dist,
+        midX: pinch.midX,
+        midY: pinch.midY,
+        scale: doodle.scale,
+        panX: doodle.panX,
+        panY: doodle.panY,
+      } : null;
+      redrawDoodle();
+      return;
+    }
+    if (doodle.toolboxOpen) setDoodleToolboxOpen(false);
+    if (doodle.suppressDraw || doodle.gesture) return;
+    if (canvas.setPointerCapture && e.pointerId != null) {
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    startStroke(e);
+  };
+  const move = (e) => {
+    if (!doodle.pointers.has(e.pointerId) && !doodle.drawing) return;
+    e.preventDefault();
+    if (doodle.pointers.has(e.pointerId)) {
+      doodle.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (doodle.pointers.size >= 2 && doodle.gesture) {
+      applyPinch();
+      return;
+    }
+    if (!doodle.drawing || !doodle.cur) return;
+    const point = doodlePoint(e);
+    if (doodle.cur.kind === "line") doodle.cur.points[1] = point;
+    else doodle.cur.points.push(point);
+    syncBoardSendButton();
+    redrawDoodle();
+  };
+  const end = (e) => {
+    doodle.pointers.delete(e.pointerId);
+    if (doodle.pointers.size < 2) doodle.gesture = null;
+    if (doodle.pointers.size === 0) {
+      doodle.drawing = false;
+      doodle.cur = null;
+      doodle.suppressDraw = false;
+    }
+  };
+  canvas.addEventListener("pointerdown", start);
+  canvas.addEventListener("pointermove", move);
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+  const viewport = $("#boardViewport");
+  if (viewport) {
+    viewport.addEventListener("wheel", (e) => {
+      if (!canvas.classList.contains("is-active")) return;
+      e.preventDefault();
+      zoomAt(e.clientX, e.clientY, doodle.scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+    }, { passive: false });
+  }
+  document.querySelectorAll(".doodle-color").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      doodle.color = btn.dataset.color || "#2f4ab8";
+      if (doodle.tool === "erase") doodle.tool = "pen";
+      doodle.erase = false;
+      syncDoodleTools();
+    });
+  });
+  document.querySelectorAll(".doodle-width").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const width = Number(btn.dataset.width);
+      if (width) doodle.width = width;
+      syncDoodleTools();
+    });
+  });
+  const pen = $("#doodlePenBtn");
+  if (pen) {
+    pen.addEventListener("click", () => {
+      doodle.tool = "pen";
+      doodle.erase = false;
+      syncDoodleTools();
+    });
+  }
+  const line = $("#doodleLineBtn");
+  if (line) {
+    line.addEventListener("click", () => {
+      doodle.tool = "line";
+      doodle.erase = false;
+      syncDoodleTools();
+    });
+  }
+  const eraser = $("#doodleEraserBtn");
+  if (eraser) {
+    eraser.addEventListener("click", () => {
+      doodle.tool = "erase";
+      doodle.erase = true;
+      syncDoodleTools();
+    });
+  }
+  const toolboxBtn = $("#doodleToolboxBtn");
+  if (toolboxBtn) {
+    toolboxBtn.addEventListener("click", () => setDoodleToolboxOpen(!doodle.toolboxOpen));
+  }
+  const fit = $("#doodleFitBtn");
+  if (fit) fit.addEventListener("click", resetDoodleView);
+  const reset = $("#doodleResetBtn");
+  if (reset) reset.addEventListener("click", clearDoodle);
+  const send = $("#doodleSendBtn");
+  if (send) send.addEventListener("click", () => sendDoodleToTutor());
 }
 
 function remountStage(spec, occupied) {
   if (!spec || !window.XiaoouActivity) return;
+  destroySemanticBoard();
   freezeLiveActivities();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
@@ -392,6 +1109,7 @@ function syncStageFromTutor(text) {
   }
   const html = lastStaticDiagramHtml(text);
   if (!html) return;
+  destroySemanticBoard();
   freezeLiveActivities();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
@@ -419,9 +1137,130 @@ function restoreStageFromHistory() {
   syncStageFromTutor(lastAsst.content);
 }
 
-function mountFromCard(card) {
-  if (!card) return;
+function mountBoardFallback(message) {
+  const host = $("#stageHost");
+  if (!host) return;
+  host.innerHTML = "";
+  const note = document.createElement("p");
+  note.className = "board-safe-fallback";
+  note.textContent = message || "这张画板还没准备好，换一题再试试。";
+  host.appendChild(note);
+}
+
+function ensureMathWorkspace(card) {
+  const W = window.XiaoouMathWorkspace;
+  if (!W || !card) return null;
+  if (state.mathWorkspace && W.matchesCard(state.mathWorkspace, card)) return state.mathWorkspace;
+  state.mathWorkspace = W.seedFromCard(card, state.topicKey);
+  return state.mathWorkspace;
+}
+
+function applyMathWorkspace(ws) {
+  const W = window.XiaoouMathWorkspace;
+  const parsed = W && W.fromDict(ws);
+  if (!parsed) return;
+  state.mathWorkspace = parsed;
+  const handle = state.semanticBoardHandle;
+  if (handle && typeof handle.applyWorkspace === "function") {
+    handle.applyWorkspace(parsed);
+  } else if (handle && typeof handle.highlight === "function") {
+    const vis = W.visibleSnapshot(parsed);
+    handle.highlight(((vis.emphasis || [])[0]) || "");
+  }
+  if (handle && handle.getSnapshot) state.semanticBoardSnapshot = handle.getSnapshot();
+  saveSession();
+}
+
+function mountBoardV3(raw, card) {
   hideStartPlay();
+  destroyMountedActivities();
+  state.stageSpec = null;
+  const host = $("#stageHost");
+  const tools = $("#stageTools");
+  if (tools) tools.classList.add("hidden");
+  if (!host) return;
+  host.innerHTML = "";
+  const engine = window.XiaoouSemanticBoard;
+  if (engine && engine.upgradeLegacyPatternBoard) raw = engine.upgradeLegacyPatternBoard(raw);
+  const spec = engine && engine.normalize ? engine.normalize(raw) : null;
+  if (!spec || !engine) {
+    mountBoardFallback();
+    return;
+  }
+  if (spec.kind === "snap_grid") {
+    const model = spec.model;
+    const snap = {
+      type: "snap_grid",
+      rows: model.rows,
+      cols: model.cols,
+      tray: model.tray,
+      caption: spec.task.prompt,
+    };
+    remountStage(snap, []);
+    return;
+  }
+  if (spec.kind === "static_diagram") {
+    const html = renderDiagram(JSON.stringify(spec.model.diagram));
+    if (!html) {
+      mountBoardFallback();
+      return;
+    }
+    host.innerHTML = html;
+    state.semanticBoardSnapshot = {
+      kind: "static_diagram",
+      diagram_type: spec.model.diagram.type,
+    };
+    return;
+  }
+  if (!engine.mount) {
+    mountBoardFallback();
+    return;
+  }
+  const mathWs = card ? ensureMathWorkspace(card) : state.mathWorkspace;
+  const handle = engine.mount(host, spec, {
+    workspace: mathWs,
+    card: card || state.problemCard,
+    topic: state.topicKey,
+    onChange(snapshot, eventName) {
+      if (eventName === "path_found") showStageToast("找到一种走法");
+      if (eventName === "layer_advanced") showStageToast("加上一层了");
+      if (eventName === "layer_completed") showStageToast("围成正方形了");
+      state.semanticBoardSnapshot = snapshot;
+      if (snapshot && snapshot.workspace) {
+        state.mathWorkspace = snapshot.workspace;
+        saveSession();
+      }
+    },
+  });
+  if (!handle) {
+    mountBoardFallback();
+    return;
+  }
+  state.semanticBoardHandle = handle;
+  state.semanticBoardSnapshot = handle.getSnapshot ? handle.getSnapshot() : null;
+  if (state.semanticBoardSnapshot && state.semanticBoardSnapshot.workspace) {
+    state.mathWorkspace = state.semanticBoardSnapshot.workspace;
+  }
+}
+
+function mountSemanticBoard(raw) {
+  mountBoardV3(raw);
+}
+
+function mountFromCard(card) {
+  if (!card) {
+    mountBoardFallback();
+    return;
+  }
+  hideStartPlay();
+  if (card.board) {
+    mountBoardV3(card.board, card);
+    return;
+  }
+  if (card.semantic_board) {
+    mountSemanticBoard(card.semantic_board);
+    return;
+  }
   const diagram = card.diagram;
   if (card.representation === "snap_grid" && diagram && window.XiaoouActivity) {
     const spec = XiaoouActivity.parseSnapGrid(diagram);
@@ -430,6 +1269,7 @@ function mountFromCard(card) {
       return;
     }
   }
+  destroySemanticBoard();
   freezeLiveActivities();
   state.mountedActivities.forEach((h) => { try { h.destroy(); } catch (e) {} });
   state.mountedActivities = [];
@@ -437,55 +1277,118 @@ function mountFromCard(card) {
   const host = $("#stageHost");
   const tools = $("#stageTools");
   if (tools) tools.classList.add("hidden");
-  if (host) host.innerHTML = diagram ? renderDiagram(JSON.stringify(diagram)) : "";
+  if (host) {
+    const html = diagram ? renderDiagram(JSON.stringify(diagram)) : "";
+    if (html) host.innerHTML = html;
+    else mountBoardFallback();
+  }
+}
+
+function friendlyAuthorError(err) {
+  const msg = String(err && err.message ? err.message : err || "");
+  if (/load failed|failed to fetch|networkerror|abort|timeout|network/i.test(msg)) {
+    return "这道题再想一会儿，点开始玩再试一次。";
+  }
+  return msg || "这道题再想一会儿，点开始玩再试一次。";
+}
+
+async function fetchAuthorOnce(body, timeoutMs) {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch("/api/author", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    if (res.status === 401) {
+      window.location.replace("/gate.html");
+      return null;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.card) {
+      throw new Error(data.error || "出题大脑这会儿有点忙，再试一次。");
+    }
+    return data.card;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function rememberAuthorCard(card, meta) {
+  const gen = meta && meta.gen != null ? meta.gen : state.authorGen;
+  const force = !!(meta && meta.force);
+  if (!card) return null;
+  if (gen !== state.authorGen) return null;
+  if (!topicCard(card)) return null;
+  if (!force && state.problemCard && topicCard(state.problemCard) && state.messages.length) {
+    return state.problemCard;
+  }
+  state.problemCard = card;
+  if (card.hook) {
+    state.recentHooks = (state.recentHooks || []).concat(card.hook).slice(-8);
+  }
+  return card;
 }
 
 async function fetchAuthorCard(force) {
-  if (!force && state.problemCard && state.problemCard.topic === state.topicKey) {
+  const gen = state.authorGen;
+  const topic = state.topicKey;
+  if (!force && state.problemCard && state.problemCard.topic === topic) {
     return state.problemCard;
   }
-  const res = await fetch("/api/author", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      topic: state.topicKey,
-      level: state.level,
-      engine: state.authorEngine,
-      recent: state.recentHooks || [],
-    }),
-  });
-  if (res.status === 401) {
-    window.location.replace("/gate.html");
-    return null;
+  const body = {
+    topic,
+    level: state.level,
+    engine: state.authorEngine,
+    recent: state.recentHooks || [],
+  };
+  let lastErr;
+  try {
+    const card = await fetchAuthorOnce(body, 45000);
+    if (!card) return null;
+    if (gen !== state.authorGen || state.topicKey !== topic) return null;
+    return rememberAuthorCard(card, { force, gen });
+  } catch (err) {
+    lastErr = err;
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.card) {
-    throw new Error(data.error || "出题大脑这会儿有点忙，再试一次。");
+  try {
+    const card = await fetchAuthorOnce(Object.assign({}, body, { seed_only: true }), 8000);
+    if (!card) return null;
+    if (gen !== state.authorGen || state.topicKey !== topic) return null;
+    return rememberAuthorCard(card, { force, gen });
+  } catch (err) {
+    lastErr = lastErr || err;
   }
-  state.problemCard = data.card;
-  if (data.card.hook) {
-    state.recentHooks = (state.recentHooks || []).concat(data.card.hook).slice(-8);
-  }
-  return data.card;
+  throw new Error(friendlyAuthorError(lastErr));
 }
 
 function prefetchAuthor() {
   if (state.mode !== "explore") return;
   if (state.config && !state.config.configured) return;
-  state.authorPromise = fetchAuthorCard(true).catch(() => null);
+  if (state.problemCard && state.problemCard.topic === state.topicKey) return;
+  const gen = state.authorGen;
+  const topic = state.topicKey;
+  state.authorPromise = fetchAuthorCard(false).then((card) => {
+    if (gen !== state.authorGen || state.topicKey !== topic) return null;
+    return card;
+  }).catch(() => null);
 }
 
 async function startPlay() {
   if (state.streaming) return;
   if (state.config && !state.config.configured) return;
   hideStartPlay();
-  setCaption("小欧在想一道有意思的题…");
-  let card = null;
+  setCaption(THINKING_CAPTION);
+  let card = topicCard(state.problemCard);
   try {
-    if (state.authorPromise) card = await state.authorPromise;
-    if (!card || card.topic !== state.topicKey) card = await fetchAuthorCard(true);
+    if (!card && state.authorPromise) {
+      card = topicCard(await state.authorPromise);
+    }
+    if (!card) card = await fetchAuthorCard(false);
   } catch (e) {
-    setCaption((e && e.message) || "这道题再想一会儿，点开始玩再试。");
+    setCaption(friendlyAuthorError(e));
     showStartPlay();
     return;
   }
@@ -497,6 +1400,8 @@ async function startPlay() {
   mountFromCard(card);
   if (card.first_question) setCaption(card.first_question);
   applyModeUI();
+  const alreadyStarted = state.messages.some((m) => m.role === "assistant");
+  if (alreadyStarted) return;
   await streamAssistant(true);
 }
 
@@ -510,16 +1415,6 @@ function placeMessages() {
   else if (app && composer) app.insertBefore(messages, composer);
 }
 
-function setTalkOpen(on) {
-  state.talkOpen = !!on;
-  const app = $(".app");
-  if (app) app.classList.toggle("talk-open", state.talkOpen);
-  const talkBtn = $("#talkBtn");
-  if (talkBtn) talkBtn.textContent = state.talkOpen ? "收起" : "想跟小欧说";
-  if (!state.talkOpen) stopVoiceTalk({ discard: true });
-  else refreshVoiceAvailability();
-}
-
 function openHistorySheet() {
   placeMessages();
   const sheet = $("#historySheet");
@@ -529,14 +1424,27 @@ function openHistorySheet() {
 function closeHistorySheet() {
   const sheet = $("#historySheet");
   if (sheet) sheet.classList.remove("open");
+  if (window.XiaoouTermScaffold && XiaoouTermScaffold.closeCard) {
+    XiaoouTermScaffold.closeCard(highlightTermOnBoard);
+  }
 }
-function openHelpSheet() {
-  const sheet = $("#helpSheet");
-  if (sheet) sheet.classList.add("open");
+
+function setTalkOpen(on) {
+  state.talkOpen = !!on;
+  const app = $(".app");
+  if (app) app.classList.toggle("talk-open", state.talkOpen);
+  const talkBtn = $("#talkBtn");
+  if (talkBtn) {
+    talkBtn.textContent = "我想说";
+    talkBtn.classList.toggle("is-active", state.talkOpen);
+    talkBtn.setAttribute("aria-pressed", state.talkOpen ? "true" : "false");
+  }
+  if (!state.talkOpen) stopVoiceTalk({ discard: true });
+  else refreshVoiceAvailability();
 }
+
 function closeHelpSheet() {
-  const sheet = $("#helpSheet");
-  if (sheet) sheet.classList.remove("open");
+  closeAttachSheet();
 }
 
 function hydrateSnapGrids(bubble, interactive) {
@@ -626,6 +1534,24 @@ function diagramDots(s) {
     }
   }
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${dots}</svg>`;
+}
+function diagramStairs(s) {
+  const rows = clampInt(s.rows || s.layers, 1, 10, 5);
+  const cell = 32, size = 22, pad = 16;
+  const maxW = rows * cell;
+  const w = maxW + pad * 2;
+  const h = rows * cell + pad * 2;
+  let parts = `<rect x="0" y="0" width="${w}" height="${h}" rx="16" fill="#fffdf8"/>`;
+  for (let r = 0; r < rows; r++) {
+    const count = r + 1;
+    const rowW = count * cell;
+    const x0 = pad + (maxW - rowW) / 2;
+    const y = pad + r * cell;
+    for (let c = 0; c < count; c++) {
+      parts += tileRect(x0 + c * cell + cell / 2, y + cell / 2, size, DIAG_BLUE);
+    }
+  }
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img">${parts}</svg>`;
 }
 function layerHighlight(raw, n) {
   if (raw === 0 || raw === "0" || raw === "none" || raw === false) return null;
@@ -828,9 +1754,11 @@ function renderContentInto(bubble, content) {
     if (cut >= 0) {
       const spoken = content.slice(0, cut).trim();
       bubble.innerHTML = renderMarkdown(spoken || "…");
+      decorateTutorTerms(bubble);
       return;
     }
     bubble.innerHTML = renderMarkdown(content);
+    decorateTutorTerms(bubble);
     return;
   }
   bubble.innerHTML = "";
@@ -844,6 +1772,7 @@ function renderContentInto(bubble, content) {
     } else if (part.type === "text" && part.text) {
       const div = document.createElement("div");
       div.innerHTML = renderMarkdown(part.text);
+      decorateTutorTerms(div);
       bubble.appendChild(div);
     }
   }
@@ -856,12 +1785,27 @@ function renderWelcome() {
   const starter = topic ? topic.starter : "";
   const body = `${name}你好呀，我是小欧。我不会直接告诉你答案，但我会陪你一步一步想出来。\n\n我们现在是「带题来问」模式。${starter}`;
   bubble.innerHTML = renderMarkdown(body);
+  decorateTutorTerms(bubble);
 }
 
 function renderHistory() {
   destroyMountedActivities();
   state.stageSpec = null;
   $("#messages").innerHTML = "";
+  const card = topicCard(state.problemCard);
+  if (state.mode === "explore" && card && state.messages.length) {
+    hideStartPlay();
+    for (const m of state.messages) {
+      const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
+      const content = typeof m.content === "string" ? stripBoardProtocol(m.content) : m.content;
+      renderContentInto(bubble, content);
+      if (m.role === "assistant") hydrateSnapGrids(bubble, false);
+    }
+    mountFromCard(card);
+    restoreExploreCaption();
+    applyModeUI();
+    return;
+  }
   if (state.messages.length === 0) {
     if (state.mode === "explore") {
       resetExploreEmpty();
@@ -874,10 +1818,13 @@ function renderHistory() {
   hideStartPlay();
   for (const m of state.messages) {
     const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
-    renderContentInto(bubble, m.content);
+    const content = state.mode === "explore" && m.role === "assistant" && typeof m.content === "string"
+      ? stripBoardProtocol(m.content)
+      : m.content;
+    renderContentInto(bubble, content);
     if (m.role === "assistant") hydrateSnapGrids(bubble, false);
   }
-  if (state.mode === "explore") restoreStageFromHistory();
+  if (state.mode === "explore") restoreExploreCaption();
   applyModeUI();
 }
 
@@ -901,10 +1848,23 @@ async function loadConfig() {
   state.showReasoning = (saved && typeof saved.showReasoning === "boolean")
     ? saved.showReasoning
     : !!cfg.show_reasoning;
-  state.messages = (saved && saved.messages) || [];
-  state.boards = (saved && Array.isArray(saved.boards)) ? saved.boards : [];
   state.authorEngine = cfg.default_author || (saved && saved.authorEngine) || "glm";
   state.recentHooks = (saved && Array.isArray(saved.recentHooks)) ? saved.recentHooks : [];
+  state.topicWorkspaces = {};
+  if (saved && saved.topics && typeof saved.topics === "object") {
+    state.topicWorkspaces = saved.topics;
+  } else if (saved) {
+    const legacyKey = saved.topicKey || cfg.default_topic;
+    state.topicWorkspaces[legacyKey] = {
+      messages: saved.messages || [],
+      problemCard: saved.problemCard || null,
+      boards: Array.isArray(saved.boards) ? saved.boards : [],
+      caption: saved.caption || "",
+      seenTerms: Array.isArray(saved.seenTerms) ? saved.seenTerms : [],
+      mathWorkspace: saved.mathWorkspace || null,
+    };
+  }
+  applyWorkspace(state.topicWorkspaces[state.topicKey]);
 
   // 主题下拉
   const topicSel = $("#topicSelect");
@@ -947,26 +1907,16 @@ async function loadConfig() {
 
   $("#childName").value = state.childName;
 
-  // 快捷按钮
+  // 快捷按钮（带题模式仍用横条；探索模式只保留加号里的「小提示」）
   const qa = $("#quickActions");
   qa.innerHTML = "";
-  const help = $("#helpActions");
-  if (help) help.innerHTML = "";
   cfg.quick_actions.forEach((a) => {
-    const make = (into) => {
-      if (!into) return;
-      const b = document.createElement("button");
-      b.type = "button";
-      b.textContent = a.label;
-      b.dataset.message = a.message;
-      b.addEventListener("click", () => {
-        closeHelpSheet();
-        sendMessage(a.message);
-      });
-      into.appendChild(b);
-    };
-    make(qa);
-    make(help);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = a.label;
+    b.dataset.message = a.message;
+    b.addEventListener("click", () => sendMessage(a.message));
+    qa.appendChild(b);
   });
 
   const modeSel = $("#modeSelect");
@@ -1043,9 +1993,6 @@ function applyModeUI() {
     if (startBtn) startBtn.disabled = true;
   }
 
-  const attach = $("#attachBtn");
-  if (attach) attach.classList.toggle("hidden", explore);
-
   const input = $("#input");
   if (input) input.placeholder = explore ? "说给你听，或打字…" : "拍题或打字告诉小欧…";
 
@@ -1062,12 +2009,19 @@ function applyModeUI() {
   if (modeSel) modeSel.value = state.mode;
 
   const started = explore && ($(".play-stage") && $(".play-stage").classList.contains("is-playing") || state.messages.length > 0);
-  const helpBtn = $("#helpBtn");
   const talkBtn = $("#talkBtn");
-  const historyBtn = $("#historyBtn");
-  if (helpBtn) helpBtn.classList.toggle("hidden", !explore || !started);
   if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
-  if (historyBtn) historyBtn.disabled = !explore;
+  const boardSend = $("#doodleSendBtn");
+  if (boardSend) boardSend.classList.toggle("hidden", !explore || !started);
+  syncBoardSendButton();
+  const hintBtn = $("#hintBtn");
+  if (hintBtn) hintBtn.hidden = !explore;
+  const newQ = $("#newQuestionBtn");
+  if (newQ) newQ.hidden = !explore;
+  const drawBtn = $("#drawBtn");
+  if (drawBtn) drawBtn.hidden = explore;
+  const attach = $("#attachBtn");
+  if (attach) attach.textContent = explore ? "拍给我" : "拍作业本";
 }
 
 function updatePhotoHint(cfg) {
@@ -1096,12 +2050,15 @@ async function sendMessage(text) {
   if (state.streaming) return;
   const typed = (text || $("#input").value).trim();
   const image = state.pendingImage;
+  const imageKind = state.pendingImageKind || (image ? "photo" : "");
   if (!typed && !image) return;
 
   // 组装本条消息：有图片时用多模态数组，否则用纯文字。
   let content;
   if (image) {
-    const caption = typed || "这是我作业本上的题目，你先帮我看看。";
+    const caption = typed || (imageKind === "doodle"
+      ? "这是我在数学画板上画的，请直接看图里我画的内容。"
+      : "这是我作业本上的题目，你先帮我看看。");
     content = [
       { type: "text", text: caption },
       { type: "image_url", image_url: { url: image } },
@@ -1113,16 +2070,25 @@ async function sendMessage(text) {
   // 显示孩子的消息
   let contentForModel = content;
   if (!image && typeof content === "string") {
-    const live = state.liveActivities[state.liveActivities.length - 1];
-    if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
-      const note = XiaoouActivity.formatBoardNote(live.getSnapshot(), null);
-      contentForModel = typed + "\n\n" + note;
+    const semantic = state.semanticBoardHandle;
+    if (semantic && semantic.getSnapshot && window.XiaoouSemanticBoard && XiaoouSemanticBoard.formatSnapshot) {
+      const note = (state.mathWorkspace && window.XiaoouMathWorkspace && XiaoouMathWorkspace.formatNote)
+        ? XiaoouMathWorkspace.formatNote(state.mathWorkspace)
+        : XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot());
+      contentForModel = note ? typed + "\n\n" + note : typed;
+    } else {
+      const live = state.liveActivities[state.liveActivities.length - 1];
+      if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
+        const note = XiaoouActivity.formatBoardNote(live.getSnapshot(), null);
+        contentForModel = typed + "\n\n" + note;
+      }
     }
   }
   state.messages.push({ role: "user", content: image ? content : contentForModel });
   const childBubble = addMessageEl("child");
   renderContentInto(childBubble, content);
   $("#input").value = "";
+  clearVoiceUndo();
   clearPendingImage();
   autoGrow($("#input"));
   saveSession();
@@ -1133,7 +2099,14 @@ async function sendMessage(text) {
 // 探索模式：点"出个新题"，让小欧出题（不显示孩子气泡）。
 async function startExplore() {
   if (state.streaming) return;
-  setCaption("小欧在想一道有意思的题…");
+  setBoardMode("interact");
+  clearDoodle();
+  bumpAuthorGen();
+  state.messages = [];
+  state.mathWorkspace = null;
+  const messages = $("#messages");
+  if (messages) messages.innerHTML = "";
+  setCaption(THINKING_CAPTION);
   try {
     const card = await fetchAuthorCard(true);
     if (card) {
@@ -1141,7 +2114,7 @@ async function startExplore() {
       if (card.first_question) setCaption(card.first_question);
     }
   } catch (e) {
-    setCaption((e && e.message) || "这道再想一会儿。");
+    setCaption(friendlyAuthorError(e));
     return;
   }
   await streamAssistant(true);
@@ -1169,6 +2142,10 @@ async function streamAssistant(kickoff) {
         thinking: state.thinking,
         show_reasoning: state.showReasoning,
         card: state.problemCard || null,
+        seen_terms: state.seenTerms || [],
+        workspace: state.mathWorkspace || null,
+        workspace_id: state.mathWorkspace && state.mathWorkspace.id ? state.mathWorkspace.id : "",
+        expected_workspace_version: state.mathWorkspace ? state.mathWorkspace.version : null,
       }),
     });
     if (res.status === 401) {
@@ -1189,9 +2166,13 @@ async function streamAssistant(kickoff) {
         const line = part.trim();
         if (!line.startsWith("data:")) continue;
         const payload = JSON.parse(line.slice(5).trim());
-        if (payload.delta) {
+        if (payload.workspace) {
+          applyMathWorkspace(payload.workspace);
+        } else if (payload.delta) {
           acc += payload.delta;
-          tutorBubble.innerHTML = renderMarkdown(acc);
+          const visible = state.mode === "explore" ? stripBoardProtocol(acc) : acc;
+          tutorBubble.innerHTML = renderMarkdown(visible);
+          decorateTutorTerms(tutorBubble);
           if (state.mode === "explore" && window.XiaoouActivity && XiaoouActivity.tutorCaption) {
             const cap = XiaoouActivity.tutorCaption(acc);
             if (cap) setCaption(cap);
@@ -1215,16 +2196,24 @@ async function streamAssistant(kickoff) {
           saveSession();
         } else if (payload.error) {
           acc += (acc ? "\n\n" : "") + payload.error;
-          tutorBubble.innerHTML = renderMarkdown(acc);
+          const visible = state.mode === "explore" ? stripBoardProtocol(acc) : acc;
+          tutorBubble.innerHTML = renderMarkdown(visible);
+          decorateTutorTerms(tutorBubble);
         }
       }
     }
   } catch (err) {
     acc += (acc ? "\n\n" : "") + "抱歉，连接出了点问题，请稍后再试。";
     tutorBubble.innerHTML = renderMarkdown(acc);
+    decorateTutorTerms(tutorBubble);
   }
 
   tutorBubble.classList.remove("cursor-blink");
+  if (state.mode === "explore") {
+    acc = stripBoardProtocol(acc);
+    tutorBubble.innerHTML = renderMarkdown(acc);
+    decorateTutorTerms(tutorBubble);
+  }
   if (acc.trim()) {
     state.messages.push({ role: "assistant", content: acc });
     saveSession();
@@ -1233,7 +2222,7 @@ async function streamAssistant(kickoff) {
         ? XiaoouActivity.tutorCaption(acc)
         : "";
       if (cap) setCaption(cap);
-      syncStageFromTutor(acc);
+      // 探索画板只由已校验题卡驱动，陪练文字不能替换或清空它。
     } else {
       const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
       if (hasGrid) freezeLiveActivities();
@@ -1260,7 +2249,8 @@ function setStreaming(on) {
   if (startBtn && state.config && state.config.configured) startBtn.disabled = on;
   const newQ = $("#newQuestionBtn");
   if (newQ) newQ.disabled = on;
-  document.querySelectorAll(".quick-actions button, #helpActions button").forEach((b) => (b.disabled = on));
+  document.querySelectorAll(".quick-actions button, #hintBtn").forEach((b) => (b.disabled = on));
+  syncBoardSendButton();
 }
 
 // 切换探究模式。切换会清空当前对话（因为教学设定不同）。
@@ -1312,9 +2302,7 @@ async function onFileChosen(e) {
   e.target.value = ""; // 允许再次选同一张
   if (!file) return;
   try {
-    state.pendingImage = await resizeImage(file);
-    $("#imgPreviewThumb").src = state.pendingImage;
-    $("#imgPreview").classList.remove("hidden");
+    setPendingImage(await resizeImage(file), "photo");
     $("#input").focus();
   } catch (err) {
     alert("这张图片没能读进来，换一张试试看？");
@@ -1323,12 +2311,14 @@ async function onFileChosen(e) {
 
 function clearPendingImage() {
   state.pendingImage = null;
+  state.pendingImageKind = "";
   $("#imgPreviewThumb").removeAttribute("src");
   $("#imgPreview").classList.add("hidden");
 }
 
-function setPendingImage(dataUrl) {
+function setPendingImage(dataUrl, kind) {
   state.pendingImage = dataUrl;
+  state.pendingImageKind = kind || "photo";
   $("#imgPreviewThumb").src = dataUrl;
   $("#imgPreview").classList.remove("hidden");
 }
@@ -1343,6 +2333,8 @@ const voiceSession = {
   discard: false,
   timer: null,
   startedAt: 0,
+  lastBefore: null,
+  lastAfter: "",
 };
 
 function voiceHttpsHost() {
@@ -1476,15 +2468,18 @@ async function transcribeVoiceBlob(blob) {
       return;
     }
     const input = $("#input");
-    const prefix = input && input.value.trim() ? input.value.trim() + " " : "";
+    const spoken = data.text.trim();
+    const before = input ? input.value : "";
+    const prefix = before.trim() ? before.trim() + " " : "";
     if (input) {
-      input.value = prefix + data.text.trim();
+      input.value = prefix + spoken;
       autoGrow(input);
       input.focus();
     }
+    rememberVoiceUndo(before, input ? input.value : "");
     setVoiceUi("idle");
     const hint = $("#voiceHint");
-    if (hint) hint.textContent = "听好了，可以改几个字再发给小欧";
+    if (hint) hint.textContent = "听好了，说错就点旁边清空";
   } catch (e) {
     setVoiceUi("error", "刚才没听清，再说一次吧。");
   } finally {
@@ -1550,12 +2545,49 @@ async function toggleVoiceTalk() {
   }
 }
 
+function rememberVoiceUndo(before, after) {
+  voiceSession.lastBefore = before;
+  voiceSession.lastAfter = after;
+  const btn = $("#voiceUndoBtn");
+  if (btn) btn.classList.remove("hidden");
+}
+
+function clearVoiceUndo() {
+  voiceSession.lastBefore = null;
+  voiceSession.lastAfter = "";
+  const btn = $("#voiceUndoBtn");
+  if (btn) btn.classList.add("hidden");
+}
+
+function undoLastVoice() {
+  const input = $("#input");
+  if (!input || voiceSession.lastBefore == null) return;
+  if (input.value !== voiceSession.lastAfter) {
+    clearVoiceUndo();
+    return;
+  }
+  input.value = voiceSession.lastBefore;
+  autoGrow(input);
+  input.focus();
+  clearVoiceUndo();
+  const hint = $("#voiceHint");
+  if (hint) hint.textContent = "已经撤掉刚才那句，再说一次就好";
+}
+
 function initVoice() {
   refreshVoiceAvailability();
   const talkBtn = $("#voiceTalkBtn");
   if (talkBtn) talkBtn.addEventListener("click", toggleVoiceTalk);
   const micBtn = $("#micBtn");
   if (micBtn) micBtn.addEventListener("click", toggleVoiceTalk);
+  const undo = $("#voiceUndoBtn");
+  if (undo) undo.addEventListener("click", undoLastVoice);
+  const input = $("#input");
+  if (input) {
+    input.addEventListener("input", () => {
+      if (voiceSession.lastAfter && input.value !== voiceSession.lastAfter) clearVoiceUndo();
+    });
+  }
 }
 
 // ---------------- 画板输入 ----------------
@@ -1616,7 +2648,7 @@ function initDraw() {
   $("#drawSend").addEventListener("click", () => {
     if (!strokes.length) { close(); return; }
     const dataUrl = canvas.toDataURL("image/png");
-    setPendingImage(dataUrl);
+    setPendingImage(dataUrl, "draw");
     close();
     $("#input").focus();
   });
@@ -1684,18 +2716,23 @@ function fillTopicList() {
 function chooseTopic(key) {
   closeTopicSheet();
   if (key === state.topicKey) return;
-  if (state.streaming) return;
-  if (state.messages.length && !confirm("换主题会开始新的探究，确定吗？")) return;
+  if (state.streaming) {
+    const sel = $("#topicSelect");
+    if (sel) sel.value = state.topicKey;
+    return;
+  }
+  rememberCurrentWorkspace();
+  bumpAuthorGen();
+  destroyMountedActivities();
+  state.stageSpec = null;
   state.topicKey = key;
   const sel = $("#topicSelect");
   if (sel) sel.value = key;
-  state.messages = [];
+  applyWorkspace((state.topicWorkspaces || {})[key]);
   clearPendingImage();
-  if (typeof clearActivitySession === "function") clearActivitySession();
   updateAxioms();
   saveSession();
   renderHistory();
-  state.problemCard = null;
   prefetchAuthor();
 }
 function openAttachSheet() {
@@ -1732,33 +2769,32 @@ function bindEvents() {
   $("#exploreBtn").addEventListener("click", () => startExplore());
   const startPlayBtn = $("#startPlayBtn");
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
+  const historyOpenBtn = $("#historyOpenBtn");
+  if (historyOpenBtn) historyOpenBtn.addEventListener("click", openHistorySheet);
+  const hintBtn = $("#hintBtn");
+  if (hintBtn) {
+    hintBtn.addEventListener("click", () => {
+      closeAttachSheet();
+      const actions = (state.config && state.config.quick_actions) || [];
+      const stuck = actions.find((a) => a.id === "stuck") || actions[0];
+      sendMessage(stuck ? stuck.message : "我卡住了，给我一点点小提示就好，请不要直接告诉我答案。");
+    });
+  }
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
-  const helpBtn = $("#helpBtn");
-  if (helpBtn) helpBtn.addEventListener("click", openHelpSheet);
-  const helpCancel = $("#helpCancel");
-  if (helpCancel) helpCancel.addEventListener("click", closeHelpSheet);
-  const helpSheet = $("#helpSheet");
-  if (helpSheet) {
-    helpSheet.addEventListener("click", (e) => {
-      if (e.target === helpSheet) closeHelpSheet();
-    });
-  }
-  const newQuestionBtn = $("#newQuestionBtn");
-  if (newQuestionBtn) {
-    newQuestionBtn.addEventListener("click", () => {
-      closeHelpSheet();
-      startExplore();
-    });
-  }
-  const historyBtn = $("#historyBtn");
-  if (historyBtn) historyBtn.addEventListener("click", openHistorySheet);
   const historyClose = $("#historyClose");
   if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
   const historySheet = $("#historySheet");
   if (historySheet) {
     historySheet.addEventListener("click", (e) => {
       if (e.target === historySheet) closeHistorySheet();
+    });
+  }
+  const newQuestionBtn = $("#newQuestionBtn");
+  if (newQuestionBtn) {
+    newQuestionBtn.addEventListener("click", () => {
+      closeAttachSheet();
+      startExplore();
     });
   }
   const undoTileBtn = $("#undoTileBtn");
@@ -1768,16 +2804,12 @@ function bindEvents() {
       if (live && live.undo) live.undo();
     });
   }
-  const expandStageBtn = $("#expandStageBtn");
-  if (expandStageBtn) expandStageBtn.addEventListener("click", toggleStageExpand);
-  syncExpandButton();
-  const homeworkBtn = $("#homeworkBtn");
-  if (homeworkBtn) {
-    homeworkBtn.addEventListener("click", () => {
-      closeAttachSheet();
-      switchMode("bring");
-    });
-  }
+  const boardInteractBtn = $("#boardInteractBtn");
+  if (boardInteractBtn) boardInteractBtn.addEventListener("click", () => setBoardMode("interact"));
+  const boardDrawBtn = $("#boardDrawBtn");
+  if (boardDrawBtn) boardDrawBtn.addEventListener("click", () => setBoardMode("draw"));
+  setBoardMode("interact");
+  initDoodle();
   const modeSelect = $("#modeSelect");
   if (modeSelect) {
     modeSelect.addEventListener("change", (e) => switchMode(e.target.value));
@@ -1821,11 +2853,13 @@ function bindEvents() {
     window.visualViewport.addEventListener("scroll", syncKeyboardInset);
     syncKeyboardInset();
   }
+  window.addEventListener("resize", () => {
+    const play = $(".play-stage");
+    if (play && play.classList.contains("is-drawing")) sizeDoodleCanvas();
+  });
 
   $("#topicSelect").addEventListener("change", (e) => {
-    state.topicKey = e.target.value;
-    updateAxioms();
-    saveSession();
+    chooseTopic(e.target.value);
   });
   $("#levelSelect").addEventListener("change", (e) => {
     state.level = e.target.value;
@@ -1840,9 +2874,7 @@ function bindEvents() {
   if (authorSel) {
     authorSel.addEventListener("change", (e) => {
       state.authorEngine = e.target.value;
-      state.problemCard = null;
       saveSession();
-      prefetchAuthor();
     });
   }
   $("#showReasoningSelect").addEventListener("change", (e) => {
@@ -1855,13 +2887,34 @@ function bindEvents() {
     saveSession();
   });
 
+  if (window.XiaoouTermScaffold) {
+    if (XiaoouTermScaffold.bindCaption) {
+      XiaoouTermScaffold.bindCaption($("#tutorCaption"), {
+        onHighlight: highlightTermOnBoard,
+        onSeen: rememberSeenTerm,
+      });
+    }
+    if (XiaoouTermScaffold.bindHistory) {
+      XiaoouTermScaffold.bindHistory($("#messages"), {
+        onHighlight: highlightTermOnBoard,
+        onSeen: rememberSeenTerm,
+      });
+    }
+  }
+
   $("#resetBtn").addEventListener("click", () => {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
     state.messages = [];
+    state.problemCard = null;
+    state.caption = "";
+    state.seenTerms = [];
+    state.mathWorkspace = null;
+    bumpAuthorGen();
     clearPendingImage();
     clearActivitySession();
     saveSession();
     renderHistory();
+    prefetchAuthor();
   });
 }
 

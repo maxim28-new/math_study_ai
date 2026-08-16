@@ -1,0 +1,96 @@
+{
+  "valid": [
+    {
+      "schema": 3,
+      "kind": "layer_sum",
+      "model": {"layers": [1, 3, 5], "item": "积木"},
+      "task": {"action": "count", "ask": "total", "prompt": "一层一层围上去，看看是不是正方形。"},
+      "view": {"reveal": "stepwise"}
+    },
+    {
+      "schema": 3,
+      "kind": "layer_sum",
+      "model": {"layers": [1, 2, 3, 4], "item": "罐"},
+      "task": {"action": "count", "ask": "total", "prompt": "数一数。"},
+      "view": {"reveal": "items_without_total"}
+    },
+    {
+      "schema": 3,
+      "kind": "path_count",
+      "model": {"start": 0, "target": 4, "moves": [1, 2]},
+      "task": {"action": "enumerate", "ask": "number_of_paths", "prompt": "找走法。"},
+      "view": {"reveal": "rules_only"}
+    },
+    {
+      "schema": 3,
+      "kind": "snap_grid",
+      "model": {"rows": 2, "cols": 3, "tray": 6},
+      "task": {"action": "arrange", "ask": "observe", "prompt": "摆进去看看。"},
+      "view": {"reveal": "empty_grid_and_tiles"}
+    },
+    {
+      "schema": 3,
+      "kind": "static_diagram",
+      "model": {
+        "diagram": {
+          "type": "bars",
+          "items": [{"label": "小明", "value": 8}, {"label": "小红", "value": 5}],
+          "caption": "比一比"
+        }
+      },
+      "task": {"action": "observe", "ask": "notice", "prompt": "多的是哪一段？"},
+      "view": {"reveal": "model_only"}
+    },
+    {
+      "schema": 3,
+      "kind": "geometry_compass",
+      "model": {"construction": "equilateral_triangle", "labels": ["A", "B", "P"]},
+      "task": {"action": "construct", "ask": "compare_three_sides", "prompt": "画两个圆。"},
+      "view": {"reveal": "stepwise"}
+    },
+    {
+      "schema": 3,
+      "kind": "color_sequence",
+      "model": {"item": "花", "unit": ["red", "red", "blue"], "count": 6},
+      "task": {"action": "predict", "ask": "color_at_end", "prompt": "按规律想下一朵的颜色。"},
+      "view": {"reveal": "hide_last"}
+    }
+  ],
+  "invalid": [
+    {
+      "schema": 3,
+      "kind": "geometry_demo",
+      "model": {"steps": []},
+      "task": {"action": "draw", "ask": "anything"},
+      "view": {"reveal": "all"}
+    },
+    {
+      "schema": 3,
+      "kind": "static_diagram",
+      "model": {"diagram": {"type": "geometry_demo", "steps": []}},
+      "task": {"action": "observe", "ask": "notice", "prompt": ""},
+      "view": {"reveal": "model_only"}
+    },
+    {
+      "schema": 3,
+      "kind": "geometry_compass",
+      "model": {"construction": "arbitrary_steps", "labels": ["A", "B", "P"]},
+      "task": {"action": "construct", "ask": "compare_three_sides", "prompt": ""},
+      "view": {"reveal": "stepwise"}
+    },
+    {
+      "schema": 3,
+      "kind": "snap_grid",
+      "model": {"rows": 99, "cols": 3, "tray": 6},
+      "task": {"action": "arrange", "ask": "observe", "prompt": ""},
+      "view": {"reveal": "empty_grid_and_tiles"}
+    },
+    {
+      "schema": 3,
+      "kind": "color_sequence",
+      "model": {"item": "花", "unit": ["pink", "blue"], "count": 6},
+      "task": {"action": "predict", "ask": "color_at_end", "prompt": ""},
+      "view": {"reveal": "hide_last"}
+    }
+  ]
+}

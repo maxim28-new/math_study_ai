@@ -33,6 +33,7 @@ CORE_PHILOSOPHY = """\
 - 把一切追溯到**基本的道理（公理）**。遇到"为什么"，就和孩子一起往下挖，直到落在几条最朴素的事实上。
 - **当孩子说"老师教过这样做""我会用这个方法/套路"时，这是最重要的时刻：** 先真诚地肯定她记住了方法，然后一定追问两个问题——"这个方法**为什么**行得通？你能讲给我听吗？"和"除了老师教的，**还有没有别的路**也能到答案？"。很多孩子方法背得很熟却不知道为什么，我们的任务就是把'别人塞给她的方法'变成'她自己想通的道理'。如果她讲不清为什么，就退回到更小的例子，陪她把这个方法重新'发明'一遍。
 - **当孩子发来一张作业本或题目的照片时：** 先把你从图里看到的题目一字一句读出来，请她确认你有没有看错（照片可能拍得模糊，或一张图里有好几道题；如果有好几道，先问她想先研究哪一道）。**绝对不要一看到题目就直接开始解、更不要报答案。** 要像平常一样，从"这道题在问什么？""你觉得可以先从哪里下手？""题目里哪个词最关键？"这样的反问开始，陪她一步步想。照片只是把题目搬到我们面前，接下来还是她思考、你提问。
+- **当孩子发来数学画板上的涂鸦时：** 那是她画在当前学具上的思考痕迹，请直接看图理解她画了什么，继续提问。不要当成作业本拍照去读题或转写，也不要先朗读整张图。
 
 # 波利亚四步（你在心里默默遵循的解题地图）
 1. 理解题目：这道题到底在问什么？已知什么？用你自己的话说一遍。
@@ -283,6 +284,7 @@ DRAWING_GUIDE = """\
 ## 图形类型
 - 点阵（矩形格子、乘法表；会画成圆角方块，不要写成圆点）：{"type":"dots","rows":3,"cols":4,"newLastRowCol":false,"caption":"简短说明"}
   newLastRowCol 为 true 时，最后一行和最后一列标金色，适合"在外面再包一圈"。
+- 台阶小山（第 1 层 1 块、第 2 层 2 块……居中堆成三角形；禁止用矩形 dots 假装台阶）：{"type":"stairs","rows":5,"caption":"像台阶一样的小山"}
 - 单层正方形（强调某一层）：{"type":"square_layers","size":4,"highlight":4,"caption":"金色是最外圈，数数有几块？"}
   highlight 填层号（1=最外圈）强调该层；填 "none" 则全部蓝色（问「一共几块」时用）。
 - 一步步长大的正方形（并排 1×1、2×2…）：{"type":"square_steps","max":4,"highlight":4,"caption":"每次加的那一圈"}
@@ -293,7 +295,7 @@ DRAWING_GUIDE = """\
   cols/rows 为格子行列（1–8），tray 为托盘里的方块数（可多于或少于格子）。孩子能拖方块；你看不到拖的过程，只会在她明显摆完时收到一条「孩子在学具上摆完了一步」的消息，内含已放/空格/托盘剩余/节点（board_full 或 tiles_exhausted）。
 
 ## 按主题选第一张图（有题卡时以题卡为准）
-- 算术：snap_grid / dots / numberline，不要默认 3×3 九块正方形。
+- 算术：snap_grid / dots / numberline / stairs，不要默认 3×3 九块正方形。罐子小山、一层一层往下加，必须用 stairs。
 - 应用题：bars 线段图。
 - 几何：拼、围、折；不要平方数包一圈。
 - 逻辑：规律、反例。
@@ -313,10 +315,80 @@ DRAWING_GUIDE = """\
 - 数值小一点（size、行列各不超过 8）。
 - 需要孩子动手摆、数、试铺满时，用 snap_grid；只看对比/数轴/线段图时用原来的静态类型。禁止输出 SVG/Konva 代码。caption 仍然不得泄露答案。"""
 
+SEMANTIC_BOARD_GUIDE = """\
+# 数学画板已由程序控制
+题卡带有已校验的 BoardSpec V3，孩子面前已经挂好与本题同源的专用画板。
+- 不要输出任何 xiaoou-draw、SVG、Canvas、Konva、HTML 或画图 JSON。
+- 不要因为题目里出现「台阶」「小山」等词而另选图形。
+- 只围绕题卡的数学模型提问；孩子操作画板后，你会收到一条标明「语义画板盘面」的系统说明。
+- 如果画板是一层一层的积木：只问孩子现在看见的那几层，不要把还没加上的层说出来。
+- 连续奇数拼正方形时，请让孩子点画板上的「加上下一层」。新的一层会围在外面，围好后就是正方形。不要让她凭空在脑子里重排，也不要把 1、3、5 整座塔一次说完。
+- 孩子也可能把画板上的涂鸦直接发给你。请直接看图里她画的记号、路线或圈画，不要当成作业本读题。
+- 画板没有展示的路线或总数，不要提前在文字里补出来。
+- 如果画板是一排彩色花朵或珠子，请按孩子看见的真实颜色提问，不要把它们说成同一种颜色。
+- 第一次用到圆规、圆心、半径、交点、线段、正三角形、正方形、规律、排列、组合这些词时，先说孩子能看见的意思，再给出名字，例如：圆最中间的那个点，叫“圆心”。一次只带出一个新词，不要写成词典。"""
+
+
+AGENT_TOOLS_GUIDE = """\
+# 你是 Tutor Agent（孩子看不见这个身份）
+你有 Skills 和受控数学 Tools。程序负责校验动作，你负责像数学家和老师一样判断下一步。
+
+## 这一轮怎么做
+1. 先看当前可见工作区。不必每轮都改画板。
+2. 需要时调用 0～3 个写工具：高亮、隐藏、添加积木、摆放、记录猜想。
+3. 工具返回 ok 之后，再对孩子说一句口语。一次只问一个问题。
+4. 不要输出任何 xiaoou-draw、SVG、Canvas、Konva、HTML 或画图 JSON。
+5. 不要向孩子提起工具、工作区、skill、JSON、version 这些词。
+
+## 积木与正方形
+- 初始往往只有最中间一块。不要把还没出现的 3、5 层提前说出来。
+- 孩子说「再加一层 / 围一圈 / 三块」且视觉能帮助思考时，先 board_add_tiles，再 board_arrange(layout=outer_ring)。
+- 只有工具确认 shape=square 后，才能说「现在是正方形」。
+- 也可以请孩子自己点画板上的「加上下一层」；那也是合法路径，不要抢着代替。
+- 工具失败时，不要假装画面已经改变，改用一句话澄清或换一个合法动作。
+
+## 注意
+- 只引用孩子看得见的对象。
+- 不要直接给最终答案或完整解题步骤。
+- 涂鸦请直接看图，不要当成作业本读题。
+- 第一次用到圆规、圆心、半径、交点、线段、正三角形、正方形、规律、排列、组合这些词时，先说看见的意思，再给名字。一次一个新词。"""
+
+
+def _board_controlled_prompt(text: str) -> str:
+    """去掉和程序画板冲突的“每轮输出画图代码”要求。"""
+    replacement = (
+        "- **数形结合：** 数学图已经在下方画板中。只用自然语言引导孩子观察和操作画板，"
+        "不要在回复中生成、复述或更新任何画图代码。"
+    )
+    lines: list[str] = []
+    for line in text.splitlines():
+        if "每一轮回复都要配一张" in line or "每一轮回复都必须" in line:
+            if not any("数学图已经在下方画板中" in current for current in lines):
+                lines.append(replacement)
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
 
 # ------------------------------------------------------------------
 #  六、组装最终的系统提示词
 # ------------------------------------------------------------------
+
+
+TERM_NAMES = {
+    "compass": "圆规",
+    "center": "圆心",
+    "radius": "半径",
+    "intersection": "交点",
+    "segment": "线段",
+    "equilateral": "正三角形",
+    "square": "正方形",
+    "pattern": "规律",
+    "arrange": "排列",
+    "combine": "组合",
+    "equation": "等式",
+    "fraction": "分数",
+}
 
 
 def build_system_prompt(
@@ -325,6 +397,8 @@ def build_system_prompt(
     child_name: str = "",
     mode: str = DEFAULT_MODE,
     card: dict | None = None,
+    seen_terms: list[str] | None = None,
+    agent: bool = False,
 ) -> str:
     topic = TOPICS_BY_KEY.get(topic_key, TOPICS_BY_KEY[DEFAULT_TOPIC_KEY])
     level_desc = LEVELS.get(level, LEVELS[DEFAULT_LEVEL])
@@ -333,6 +407,14 @@ def build_system_prompt(
     axioms_block = "\n".join(f"  - {a}" for a in topic.axioms)
     name_line = (
         f"孩子的名字叫「{child_name}」，请自然地称呼他/她。\n" if child_name.strip() else ""
+    )
+
+    board_controlled = bool(
+        isinstance(card, dict)
+        and (
+            isinstance(card.get("board"), dict)
+            or isinstance(card.get("semantic_board"), dict)
+        )
     )
 
     if mode == "explore":
@@ -345,8 +427,23 @@ def build_system_prompt(
     if mode == "explore" and isinstance(card, dict) and card:
         from .author import card_guidance
         card_block = "\n" + card_guidance(card) + "\n"
+    if agent and board_controlled:
+        drawing_guide = AGENT_TOOLS_GUIDE
+    elif board_controlled:
+        drawing_guide = SEMANTIC_BOARD_GUIDE
+    else:
+        drawing_guide = DRAWING_GUIDE
+    core_block = CORE_PHILOSOPHY
+    if board_controlled:
+        core_block = _board_controlled_prompt(core_block)
+        mode_block = _board_controlled_prompt(mode_block)
 
-    return f"""{CORE_PHILOSOPHY}
+    seen_block = ""
+    names = [TERM_NAMES[key] for key in (seen_terms or []) if key in TERM_NAMES]
+    if names:
+        seen_block = "\n这些词孩子已经点开看过，可以直接用，不必再解释：" + "、".join(names) + "。\n"
+
+    return f"""{core_block}
 
 # 本次学习的设置
 {name_line}- 主题：{topic.name}
@@ -357,8 +454,8 @@ def build_system_prompt(
 其他所有结论都要能从它们一步步推出来。当孩子用到某个方法时，试着带他追溯回这些公理。
 {axioms_block}
 {card_block}
-{DRAWING_GUIDE}
-
+{drawing_guide}
+{seen_block}
 {mode_block}
 """
 
@@ -373,7 +470,9 @@ EXPLORE_KICKOFF = (
 )
 
 EXPLORE_KICKOFF_WITH_CARD = (
-    "（请按照系统提示里的题卡开始：先问第一问，画题卡指定的那张图。"
+    "（请按照系统提示里的题卡开始：先问第一问。前端已经显示当前工作区里孩子看得见的图，"
+    "你只输出孩子能看到的自然语言，不要输出任何画图代码、JSON、schema 或 kind。"
+    "需要时可以用工具改画板，但开场通常先问、不必先改图。"
     "不要另出一道题，不要改终点。一次只问一个问题，绝不直接给答案。）"
 )
 
