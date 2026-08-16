@@ -210,7 +210,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260816-boardv3l", html)
+        self.assertIn("v=20260816-boardv3m", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -327,6 +327,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('preserveAspectRatio: "xMidYMid meet"', geometry_board)
         self.assertIn('viewBox: "-70 -20 500 360"', geometry_board)
         self.assertIn(".layer-pile-item", css)
+        self.assertIn(".layer-square", css)
+        self.assertIn("加上下一层", read("web/board/layer-pile.js"))
+        self.assertIn('reveal: "stepwise"', app)
         self.assertIn(".path-board-canvas", css)
         self.assertIn(".geometry-compass-canvas", css)
         self.assertIn(".color-seq-item", css)
@@ -417,7 +420,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260816-boardv3l", html)
+        self.assertIn("v=20260816-boardv3m", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

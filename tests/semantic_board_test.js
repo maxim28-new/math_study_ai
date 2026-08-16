@@ -68,4 +68,14 @@ const colors = B.normalize(fixtures.valid.find((raw) => raw.kind === "color_sequ
 assert.deepStrictEqual(colors.model.unit, ["red", "red", "blue"]);
 assert.strictEqual(B.isBoardLike({ type: "geometry_demo" }), true);
 
+const oddSquare = B.normalize({
+  schema: 3,
+  kind: "layer_sum",
+  model: { layers: [1, 3, 5], item: "积木" },
+  task: { action: "count", ask: "total", prompt: "看。" },
+  view: { reveal: "items_without_total" },
+});
+assert.strictEqual(oddSquare.view.reveal, "stepwise");
+assert.deepStrictEqual(oddSquare.model.layers, [1, 3, 5]);
+
 console.log("semantic_board_test.js ok");

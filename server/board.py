@@ -49,6 +49,19 @@ def _int(value: Any) -> int | None:
         return None
 
 
+def _is_odd_square_layers(layers: list[int]) -> bool:
+    return len(layers) >= 2 and all(n == 2 * i + 1 for i, n in enumerate(layers))
+
+
+def _layer_sum_reveal(layers: list[int], raw_reveal: Any) -> str | None:
+    reveal = str(raw_reveal or "items_without_total")
+    if reveal not in ("items_without_total", "stepwise"):
+        return None
+    if _is_odd_square_layers(layers):
+        return "stepwise"
+    return reveal
+
+
 def _bounded_text(value: Any, limit: int, default: str = "") -> str:
     text = str(value or "").strip()
     return (text or default)[:limit]
@@ -176,7 +189,7 @@ def normalize_board_v3(raw: Any) -> dict[str, Any] | None:
             "kind": kind,
             "model": {"layers": legacy["layers"], "item": legacy["item"]},
             "task": normalized_task,
-            "view": {"reveal": "items_without_total"},
+            "view": {"reveal": legacy["reveal"]},
         }
 
     if kind == "path_count":
@@ -318,8 +331,8 @@ def _normalize_layer_sum(raw: dict[str, Any]) -> dict[str, Any] | None:
         layers.append(n)
     if str(raw.get("ask") or "") != "total":
         return None
-    reveal = str(raw.get("reveal") or "items_without_total")
-    if reveal != "items_without_total":
+    reveal = _layer_sum_reveal(layers, raw.get("reveal"))
+    if reveal is None:
         return None
     item = str(raw.get("item") or "块").strip()[:4] or "块"
     return {
@@ -478,6 +491,12 @@ def first_question_for_v3(board: dict[str, Any]) -> str:
     kind = normalized["kind"]
     model = normalized["model"]
     if kind == "layer_sum":
+        if _is_odd_square_layers(model["layers"]):
+            item = model["item"]
+            return (
+                f"先看最中间这一块{item}。"
+                f"点「加上下一层」，外面那一圈是几块？能不能围成正方形？"
+            )
         return first_question_for_board(
             {
                 "kind": kind,

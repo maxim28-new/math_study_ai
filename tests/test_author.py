@@ -286,6 +286,7 @@ class AuthorCardTests(unittest.TestCase):
         arithmetic = author.seed_card("arithmetic", "middle")
         self.assertEqual(arithmetic["board"]["kind"], "layer_sum")
         self.assertEqual(arithmetic["board"]["model"]["layers"], [1, 3, 5])
+        self.assertEqual(arithmetic["board"]["view"]["reveal"], "stepwise")
         self.assertNotEqual(arithmetic["board"]["kind"], "static_diagram")
 
     def test_glm_thinking_cannot_be_disabled(self):

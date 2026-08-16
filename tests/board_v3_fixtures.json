@@ -3,6 +3,13 @@
     {
       "schema": 3,
       "kind": "layer_sum",
+      "model": {"layers": [1, 3, 5], "item": "积木"},
+      "task": {"action": "count", "ask": "total", "prompt": "一层一层围上去，看看是不是正方形。"},
+      "view": {"reveal": "stepwise"}
+    },
+    {
+      "schema": 3,
+      "kind": "layer_sum",
       "model": {"layers": [1, 2, 3, 4], "item": "罐"},
       "task": {"action": "count", "ask": "total", "prompt": "数一数。"},
       "view": {"reveal": "items_without_total"}

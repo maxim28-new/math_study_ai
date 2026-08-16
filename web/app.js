@@ -109,7 +109,7 @@ function upgradeLegacyArithmeticSeed(card) {
       kind: "layer_sum",
       model: { layers: [1, 3, 5], item: "积木" },
       task: { action: "count", ask: "total", prompt: "先数前两层，再想它们拼成了什么。" },
-      view: { reveal: "items_without_total" },
+      view: { reveal: "stepwise" },
     },
   });
 }
@@ -1189,6 +1189,8 @@ function mountBoardV3(raw) {
   const handle = engine.mount(host, spec, {
     onChange(snapshot, eventName) {
       if (eventName === "path_found") showStageToast("找到一种走法");
+      if (eventName === "layer_advanced") showStageToast("加上一层了");
+      if (eventName === "layer_completed") showStageToast("围成正方形了");
       state.semanticBoardSnapshot = snapshot;
     },
   });

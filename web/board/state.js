@@ -24,18 +24,26 @@
     return { action, ask, prompt: text(raw.prompt, 200) };
   }
 
+  function isOddSquareLayers(layers) {
+    return Array.isArray(layers) && layers.length >= 2
+      && layers.every((n, i) => n === 2 * i + 1);
+  }
+
   function normalizeLayerSum(model, task, view) {
     if (!Array.isArray(model.layers) || model.layers.length < 1 || model.layers.length > 10) return null;
     const layers = model.layers.map(asInt);
     if (layers.some((n) => n === null || n < 1 || n > 20)) return null;
     const normalizedTask = normalizeTask(task, "count", "total");
-    if (!normalizedTask || !view || view.reveal !== "items_without_total") return null;
+    const rawReveal = view && view.reveal;
+    let reveal = rawReveal === "stepwise" || rawReveal === "items_without_total" ? rawReveal : null;
+    if (!normalizedTask || !reveal) return null;
+    if (isOddSquareLayers(layers)) reveal = "stepwise";
     return {
       schema: SCHEMA_VERSION,
       kind: "layer_sum",
       model: { layers, item: text(model.item, 4, "块") },
       task: normalizedTask,
-      view: { reveal: "items_without_total" },
+      view: { reveal },
     };
   }
 
@@ -254,12 +262,22 @@
   B.formatSnapshot = function formatSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return "";
     if (snapshot.kind === "layer_sum") {
-      return [
+      const visible = snapshot.visible_layers || snapshot.layers || [];
+      const side = snapshot.side || 0;
+      const lines = [
         "（当前语义画板盘面，这不是孩子打的字）",
         "数学模型：layer_sum",
-        "各层物体数：" + (snapshot.layers || []).join("、"),
-        "画板没有显示合计答案。",
-      ].join("\n");
+        "全部层：" + (snapshot.layers || []).join("、"),
+        "孩子现在看见的层：" + (visible.join("、") || "还没有"),
+      ];
+      if (side) {
+        lines.push("画板上是每边 " + side + " 块的正方形。新加上的一圈是 " + (snapshot.added || 0) + " 块。");
+      } else {
+        lines.push("画板没有显示合计答案。");
+      }
+      if (snapshot.remaining) lines.push("还没加上的层：" + snapshot.remaining.join("、") + "。先不要提这些层。");
+      if (!snapshot.completed) lines.push("请让孩子点画板上的「加上下一层」，不要凭空让她在脑子里重排。");
+      return lines.join("\n");
     }
     if (snapshot.kind === "path_count") {
       const routes = (snapshot.found_paths || []).map((path) => path.join("+"));

@@ -116,6 +116,22 @@ class SemanticBoardTests(unittest.TestCase):
         )
         self.assertNotIn("answer", spec)
 
+    def test_odd_square_layers_use_stepwise_reveal(self):
+        spec = board.normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "layer_sum",
+                "model": {"layers": [1, 3, 5], "item": "积木"},
+                "task": {"action": "count", "ask": "total", "prompt": "看一看。"},
+                "view": {"reveal": "items_without_total"},
+            }
+        )
+        self.assertEqual(spec["view"]["reveal"], "stepwise")
+        self.assertEqual(spec["model"]["layers"], [1, 3, 5])
+        question = board.first_question_for_v3(spec)
+        self.assertIn("加上下一层", question)
+        self.assertIn("正方形", question)
+
     def test_normalizes_path_count(self):
         spec = board.normalize_semantic_board(
             {

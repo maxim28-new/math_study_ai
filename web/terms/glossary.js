@@ -45,6 +45,13 @@
       highlight: "equilateral",
     },
     {
+      id: "square",
+      words: ["正方形"],
+      kid: "四条边一样长、四个角都是直角的方形。",
+      example: "每边 2 块积木，就能围成一个小正方形。",
+      highlight: "square",
+    },
+    {
       id: "pattern",
       words: ["规律"],
       kid: "一直重复出现的小秘密。看懂它，就能猜后面是什么。",

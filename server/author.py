@@ -56,7 +56,8 @@ board 只允许下面六种严格结构，字段名和值都不要改：
 颜色只能是 red、blue、yellow、green、orange、purple。
 
 按题意选择：
-- 分层物体合计用 layer_sum；允许步长的走法用 path_count。
+- 分层物体合计用 layer_sum；连续奇数 1、3、5 围成正方形时，view.reveal 必须是 stepwise。
+- 允许步长的走法用 path_count。
 - 需要孩子摆方块用 snap_grid。
 - 数轴、线段图、点阵和正方形变化用 static_diagram。
 - 几何主题优先出“两圆交点作正三角形”，使用 geometry_compass。
@@ -200,8 +201,8 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
 def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
     seeds = {
         "arithmetic": {
-            "hook": "搭一座奇数积木塔",
-            "insight": "连续奇数一层一层加起来，会拼成正方形",
+            "hook": "一圈一圈围成正方形",
+            "insight": "连续奇数一层一层加在外面，会围成越来越大的正方形",
             "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
             "board": {
                 "schema": 3,
@@ -210,15 +211,15 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
                 "task": {
                     "action": "count",
                     "ask": "total",
-                    "prompt": "先数前两层，再想它们拼成了什么。",
+                    "prompt": "一层一层往外加，看看会不会围成正方形。",
                 },
-                "view": {"reveal": "items_without_total"},
+                "view": {"reveal": "stepwise"},
             },
-            "first_question": "第一层 1 块，第二层 3 块。这两层合起来是多少？看起来像什么形状？",
+            "first_question": "先看最中间这一块积木。点「加上下一层」，外面那一圈是几块？",
             "ladder": [
-                {"rung": "do", "ask": "先数第一层和第二层各有几块。"},
-                {"rung": "see", "ask": "1 加 3 是多少？这两层合起来像什么图形？"},
-                {"rung": "why", "ask": "如果再加第三层 5 块，会变成什么形状？为什么？"},
+                {"rung": "do", "ask": "先数最中间有几块。"},
+                {"rung": "see", "ask": "外面加上 3 块以后，是不是正方形？每边几块？"},
+                {"rung": "why", "ask": "再加一圈 5 块，为什么还是正方形？"},
             ],
         },
         "wordproblems": {
@@ -326,6 +327,7 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
         legacy_diagram,
         str(base.get("first_question") or ""),
     )
+    board = semantic_board.normalize_board_v3(board) or board
     card = {
         "topic": topic if topic in seeds else "arithmetic",
         "misconceptions": ["只看表面数字，没先画出来"],
