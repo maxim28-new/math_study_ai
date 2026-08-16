@@ -210,7 +210,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260816-boardv3d", html)
+        self.assertIn("v=20260816-boardv3e", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn("小提示", html)
@@ -337,6 +337,27 @@ class FrontendRegressionTests(unittest.TestCase):
         stairs = app[app.find("function diagramStairs"):app.find("function layerHighlight")]
         self.assertIn("tileRect(", stairs)
         self.assertNotIn("<circle", stairs)
+
+    def test_explore_refresh_restores_last_caption(self):
+        app = read("web/app.js")
+        html = read("web/index.html")
+        self.assertEqual(app.count("function lastTutorCaption("), 1)
+        self.assertIn("function restoreExploreCaption(", app)
+        self.assertIn("function messagePlainText(", app)
+        self.assertIn("caption: state.caption || lastTutorCaption()", app)
+        self.assertIn("caption: state.caption || lastTutorCaption(),", app)
+        hist = app[app.find("function renderHistory"):app.find("async function loadConfig")]
+        self.assertIn("restoreExploreCaption()", hist)
+        self.assertIn("mountFromCard(state.problemCard)", hist)
+        card_branch = hist.split("if (state.messages.length === 0)")[0]
+        self.assertIn("restoreExploreCaption()", card_branch)
+        self.assertNotIn("resetExploreEmpty()", card_branch)
+        self.assertNotIn("syncStageFromTutor(", hist)
+        restore = app[app.find("function restoreExploreCaption"):app.find("function showStartPlay")]
+        self.assertIn("setCaption(cap)", restore)
+        self.assertIn("点开始玩，把方块拖进格子", app)
+        self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
+        self.assertIn("v=20260816-boardv3e", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

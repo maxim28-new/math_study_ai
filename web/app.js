@@ -31,6 +31,7 @@ const state = {
   authorPromise: null,
   recentHooks: [],
   topicWorkspaces: {},
+  caption: "",
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -46,7 +47,31 @@ function sanitizeForStore(messages) {
   });
 }
 function emptyWorkspace() {
-  return { messages: [], problemCard: null, boards: [] };
+  return { messages: [], problemCard: null, boards: [], caption: "" };
+}
+
+function messagePlainText(m) {
+  if (!m) return "";
+  if (typeof m.content === "string") return m.content;
+  if (Array.isArray(m.content)) {
+    return m.content.map((p) => (p && p.type === "text" ? String(p.text || "") : "")).join("\n");
+  }
+  return "";
+}
+
+function lastTutorCaption() {
+  const msgs = state.messages || [];
+  if (window.XiaoouActivity && XiaoouActivity.tutorCaption) {
+    for (let i = msgs.length - 1; i >= 0; i -= 1) {
+      if (msgs[i].role !== "assistant") continue;
+      const cap = XiaoouActivity.tutorCaption(messagePlainText(msgs[i]));
+      if (cap) return cap;
+    }
+  }
+  if (state.problemCard && state.problemCard.first_question) {
+    return String(state.problemCard.first_question);
+  }
+  return "";
 }
 
 function snapshotWorkspace() {
@@ -54,6 +79,7 @@ function snapshotWorkspace() {
     messages: sanitizeForStore(state.messages || []),
     problemCard: state.problemCard,
     boards: collectBoards(),
+    caption: state.caption || lastTutorCaption(),
   };
 }
 
@@ -62,6 +88,7 @@ function applyWorkspace(ws) {
   state.messages = Array.isArray(next.messages) ? next.messages.slice() : [];
   state.problemCard = next.problemCard || null;
   state.boards = Array.isArray(next.boards) ? next.boards.slice() : [];
+  state.caption = String(next.caption || "").trim() || lastTutorCaption();
 }
 
 function rememberCurrentWorkspace() {
@@ -82,6 +109,7 @@ function saveSession() {
     messages: sanitizeForStore(state.messages),
     boards: collectBoards(),
     problemCard: state.problemCard,
+    caption: state.caption || lastTutorCaption(),
     topics: state.topicWorkspaces || {},
     authorEngine: state.authorEngine,
     recentHooks: state.recentHooks || [],
@@ -326,11 +354,17 @@ function clearActivitySession() {
 }
 
 function setCaption(text) {
+  state.caption = String(text || "");
   const el = $("#tutorCaption");
   if (!el) return;
-  el.innerHTML = text ? inlineFmt(text) : "";
+  el.innerHTML = state.caption ? inlineFmt(state.caption) : "";
   const scroll = $(".caption-scroll");
   if (scroll) scroll.scrollTop = 0;
+}
+
+function restoreExploreCaption() {
+  const cap = String(state.caption || "").trim() || lastTutorCaption();
+  setCaption(cap);
 }
 
 function showStartPlay() {
@@ -1316,6 +1350,19 @@ function renderHistory() {
   destroyMountedActivities();
   state.stageSpec = null;
   $("#messages").innerHTML = "";
+  if (state.mode === "explore" && state.problemCard) {
+    hideStartPlay();
+    for (const m of state.messages) {
+      const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
+      const content = typeof m.content === "string" ? stripBoardProtocol(m.content) : m.content;
+      renderContentInto(bubble, content);
+      if (m.role === "assistant") hydrateSnapGrids(bubble, false);
+    }
+    mountFromCard(state.problemCard);
+    restoreExploreCaption();
+    applyModeUI();
+    return;
+  }
   if (state.messages.length === 0) {
     if (state.mode === "explore") {
       resetExploreEmpty();
@@ -1333,10 +1380,6 @@ function renderHistory() {
       : m.content;
     renderContentInto(bubble, content);
     if (m.role === "assistant") hydrateSnapGrids(bubble, false);
-  }
-  if (state.mode === "explore") {
-    if (state.problemCard) mountFromCard(state.problemCard);
-    else mountBoardFallback();
   }
   applyModeUI();
 }
@@ -1372,6 +1415,7 @@ async function loadConfig() {
       messages: saved.messages || [],
       problemCard: saved.problemCard || null,
       boards: Array.isArray(saved.boards) ? saved.boards : [],
+      caption: saved.caption || "",
     };
   }
   applyWorkspace(state.topicWorkspaces[state.topicKey]);
@@ -2342,6 +2386,7 @@ function bindEvents() {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
     state.messages = [];
     state.problemCard = null;
+    state.caption = "";
     clearPendingImage();
     clearActivitySession();
     saveSession();
