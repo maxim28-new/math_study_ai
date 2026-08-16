@@ -420,7 +420,7 @@ async def request_author_card(topic: str, level: str, recent: list[str], engine:
     if engine == "deepseek":
         payload["response_format"] = {"type": "json_object"}
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(50.0)) as client:
         resp = await client.post(endpoint, json=payload, headers=headers)
         resp.raise_for_status()
         data = resp.json()
@@ -449,11 +449,10 @@ async def author_problem(
         chosen = "deepseek"
     last_error = "出题失败"
     if engine_ready(chosen):
-        for _ in range(2):
-            try:
-                return await request_author_card(topic, level, recent, chosen)
-            except (httpx.HTTPError, ValueError) as exc:
-                last_error = str(exc)
+        try:
+            return await request_author_card(topic, level, recent, chosen)
+        except (httpx.HTTPError, ValueError) as exc:
+            last_error = str(exc)
     if engine_ready(chosen):
         return seed_card(topic, level)
     raise ValueError(last_error if last_error else "还没有接上出题大脑。")

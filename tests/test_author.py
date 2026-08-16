@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from fastapi.testclient import TestClient
@@ -222,6 +223,11 @@ class AuthorCardTests(unittest.TestCase):
         self.assertEqual(card["representation"], "board_v3")
         self.assertEqual(card["board"]["schema"], 3)
         self.assertEqual(card["board"]["kind"], "geometry_compass")
+
+    def test_author_falls_back_to_seed_after_one_short_attempt(self):
+        src = Path(__file__).resolve().parents[1].joinpath("server/author.py").read_text(encoding="utf-8")
+        self.assertIn("httpx.Timeout(50.0)", src)
+        self.assertNotIn("for _ in range(2):", src)
 
     def test_v3_tutor_prompt_has_no_competing_draw_command(self):
         card = author.seed_card("geometry", "middle")

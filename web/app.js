@@ -30,6 +30,7 @@ const state = {
   problemCard: null,
   authorPromise: null,
   recentHooks: [],
+  topicWorkspaces: {},
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -44,7 +45,33 @@ function sanitizeForStore(messages) {
     return { role: m.role, content: (text ? text + "\n" : "") + "[一张题目照片]" };
   });
 }
+function emptyWorkspace() {
+  return { messages: [], problemCard: null, boards: [] };
+}
+
+function snapshotWorkspace() {
+  return {
+    messages: sanitizeForStore(state.messages || []),
+    problemCard: state.problemCard,
+    boards: collectBoards(),
+  };
+}
+
+function applyWorkspace(ws) {
+  const next = ws || emptyWorkspace();
+  state.messages = Array.isArray(next.messages) ? next.messages.slice() : [];
+  state.problemCard = next.problemCard || null;
+  state.boards = Array.isArray(next.boards) ? next.boards.slice() : [];
+}
+
+function rememberCurrentWorkspace() {
+  if (!state.topicKey) return;
+  state.topicWorkspaces = state.topicWorkspaces || {};
+  state.topicWorkspaces[state.topicKey] = snapshotWorkspace();
+}
+
 function saveSession() {
+  rememberCurrentWorkspace();
   const data = {
     topicKey: state.topicKey,
     level: state.level,
@@ -55,6 +82,7 @@ function saveSession() {
     messages: sanitizeForStore(state.messages),
     boards: collectBoards(),
     problemCard: state.problemCard,
+    topics: state.topicWorkspaces || {},
     authorEngine: state.authorEngine,
     recentHooks: state.recentHooks || [],
   };
@@ -853,14 +881,12 @@ async function fetchAuthorCard(force) {
     recent: state.recentHooks || [],
   };
   let lastErr;
-  for (let i = 0; i < 2; i++) {
-    try {
-      const card = await fetchAuthorOnce(body, 70000);
-      if (!card) return null;
-      return rememberAuthorCard(card);
-    } catch (err) {
-      lastErr = err;
-    }
+  try {
+    const card = await fetchAuthorOnce(body, 45000);
+    if (!card) return null;
+    return rememberAuthorCard(card);
+  } catch (err) {
+    lastErr = err;
   }
   try {
     const card = await fetchAuthorOnce(Object.assign({}, body, { seed_only: true }), 8000);
@@ -874,7 +900,8 @@ async function fetchAuthorCard(force) {
 function prefetchAuthor() {
   if (state.mode !== "explore") return;
   if (state.config && !state.config.configured) return;
-  state.authorPromise = fetchAuthorCard(true).catch(() => null);
+  if (state.problemCard && state.problemCard.topic === state.topicKey) return;
+  state.authorPromise = fetchAuthorCard(false).catch(() => null);
 }
 
 async function startPlay() {
@@ -882,10 +909,15 @@ async function startPlay() {
   if (state.config && !state.config.configured) return;
   hideStartPlay();
   setCaption("小欧在想一道有意思的题…");
-  let card = null;
+  let card = (state.problemCard && state.problemCard.topic === state.topicKey)
+    ? state.problemCard
+    : null;
   try {
-    if (state.authorPromise) card = await state.authorPromise;
-    if (!card || card.topic !== state.topicKey) card = await fetchAuthorCard(true);
+    if (!card && state.authorPromise) {
+      card = await state.authorPromise;
+      if (card && card.topic !== state.topicKey) card = null;
+    }
+    if (!card) card = await fetchAuthorCard(false);
   } catch (e) {
     setCaption(friendlyAuthorError(e));
     showStartPlay();
@@ -899,6 +931,8 @@ async function startPlay() {
   mountFromCard(card);
   if (card.first_question) setCaption(card.first_question);
   applyModeUI();
+  const alreadyStarted = state.messages.some((m) => m.role === "assistant");
+  if (alreadyStarted) return;
   await streamAssistant(true);
 }
 
@@ -1327,13 +1361,20 @@ async function loadConfig() {
   state.showReasoning = (saved && typeof saved.showReasoning === "boolean")
     ? saved.showReasoning
     : !!cfg.show_reasoning;
-  state.messages = (saved && saved.messages) || [];
-  state.boards = (saved && Array.isArray(saved.boards)) ? saved.boards : [];
-  state.problemCard = (
-    saved && saved.problemCard && saved.problemCard.topic === state.topicKey
-  ) ? saved.problemCard : null;
   state.authorEngine = cfg.default_author || (saved && saved.authorEngine) || "glm";
   state.recentHooks = (saved && Array.isArray(saved.recentHooks)) ? saved.recentHooks : [];
+  state.topicWorkspaces = {};
+  if (saved && saved.topics && typeof saved.topics === "object") {
+    state.topicWorkspaces = saved.topics;
+  } else if (saved) {
+    const legacyKey = saved.topicKey || cfg.default_topic;
+    state.topicWorkspaces[legacyKey] = {
+      messages: saved.messages || [],
+      problemCard: saved.problemCard || null,
+      boards: Array.isArray(saved.boards) ? saved.boards : [],
+    };
+  }
+  applyWorkspace(state.topicWorkspaces[state.topicKey]);
 
   // 主题下拉
   const topicSel = $("#topicSelect");
@@ -1567,6 +1608,9 @@ async function startExplore() {
   if (state.streaming) return;
   setBoardMode("interact");
   clearDoodle();
+  state.messages = [];
+  const messages = $("#messages");
+  if (messages) messages.innerHTML = "";
   setCaption("小欧在想一道有意思的题…");
   try {
     const card = await fetchAuthorCard(true);
@@ -2125,19 +2169,22 @@ function fillTopicList() {
 function chooseTopic(key) {
   closeTopicSheet();
   if (key === state.topicKey) return;
-  if (state.streaming) return;
-  if (state.messages.length && !confirm("换主题会开始新的探究，确定吗？")) return;
+  if (state.streaming) {
+    const sel = $("#topicSelect");
+    if (sel) sel.value = state.topicKey;
+    return;
+  }
+  rememberCurrentWorkspace();
+  destroyMountedActivities();
+  state.stageSpec = null;
   state.topicKey = key;
   const sel = $("#topicSelect");
   if (sel) sel.value = key;
-  state.messages = [];
+  applyWorkspace((state.topicWorkspaces || {})[key]);
   clearPendingImage();
-  if (typeof clearActivitySession === "function") clearActivitySession();
   updateAxioms();
   saveSession();
   renderHistory();
-  state.problemCard = null;
-  prefetchAuthor();
 }
 function openAttachSheet() {
   const sheet = $("#attachSheet");
@@ -2263,9 +2310,7 @@ function bindEvents() {
   });
 
   $("#topicSelect").addEventListener("change", (e) => {
-    state.topicKey = e.target.value;
-    updateAxioms();
-    saveSession();
+    chooseTopic(e.target.value);
   });
   $("#levelSelect").addEventListener("change", (e) => {
     state.level = e.target.value;
@@ -2280,9 +2325,7 @@ function bindEvents() {
   if (authorSel) {
     authorSel.addEventListener("change", (e) => {
       state.authorEngine = e.target.value;
-      state.problemCard = null;
       saveSession();
-      prefetchAuthor();
     });
   }
   $("#showReasoningSelect").addEventListener("change", (e) => {
@@ -2298,6 +2341,7 @@ function bindEvents() {
   $("#resetBtn").addEventListener("click", () => {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
     state.messages = [];
+    state.problemCard = null;
     clearPendingImage();
     clearActivitySession();
     saveSession();
