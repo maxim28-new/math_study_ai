@@ -73,7 +73,7 @@
     function render() {
       canvas.innerHTML = "";
       const svg = svgEl("svg", {
-        viewBox: "-55 0 470 320",
+        viewBox: "-55 -15 470 380",
         role: "img",
         "aria-label": `${labels[0]}${labels[1]} 为圆规宽度，两圆相交于 ${labels[2]}`,
       });
@@ -117,9 +117,7 @@
       ];
       status.textContent = messages[step];
       next.textContent = labelsByStep[step];
-      next.hidden = step === 3;
       next.disabled = frozen || step === 3;
-      reset.hidden = step === 0;
       reset.disabled = frozen || step === 0;
     }
 

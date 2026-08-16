@@ -210,7 +210,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260816-boardv3", html)
+        self.assertIn("v=20260816-boardv3b", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn("小提示", html)
@@ -276,11 +276,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("new Konva.Stage", path_board)
         self.assertIn("mountGeometryCompass", geometry_board)
         self.assertIn("equilateral_triangle", geometry_board)
-        self.assertIn("next.hidden = step === 3", geometry_board)
-        self.assertIn("reset.hidden = step === 0", geometry_board)
+        self.assertIn('viewBox: "-55 -15 470 380"', geometry_board)
         self.assertIn(".layer-pile-item", css)
         self.assertIn(".path-board-canvas", css)
         self.assertIn(".geometry-compass-canvas", css)
+        self.assertIn("min-height: 230px", css)
 
     def test_semantic_cards_disable_model_draw_commands(self):
         tutor = read("server/tutor.py")
