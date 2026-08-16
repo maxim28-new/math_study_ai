@@ -436,6 +436,7 @@ function setBoardMode(mode) {
   }
   if (!drawing) resetDoodleView();
   setDoodleActive(drawing);
+  relayoutDoodle();
 }
 
 const doodle = {
@@ -459,19 +460,68 @@ function doodleViewport() {
   return $("#boardViewport") || $(".play-stage");
 }
 
+function doodleAnchorEl() {
+  const host = $("#stageHost");
+  if (!host) return doodleViewport();
+  return host.querySelector(".semantic-board")
+    || host.querySelector(".snap-grid")
+    || host.querySelector("figure.diagram")
+    || host.querySelector("svg")
+    || host;
+}
+
 function doodlePoint(e) {
   const t = e.touches ? e.touches[0] : e;
   return clientToWorld(t.clientX, t.clientY);
 }
 
 function clientToWorld(clientX, clientY) {
-  const vp = doodleViewport();
-  if (!vp) return { x: clientX, y: clientY };
-  const rect = vp.getBoundingClientRect();
+  const el = doodleAnchorEl();
+  if (!el) return { x: 0, y: 0 };
+  const rect = el.getBoundingClientRect();
+  if (!rect.width || !rect.height) return { x: 0, y: 0 };
   return {
-    x: (clientX - rect.left - doodle.panX) / doodle.scale,
-    y: (clientY - rect.top - doodle.panY) / doodle.scale,
+    x: (clientX - rect.left) / rect.width,
+    y: (clientY - rect.top) / rect.height,
   };
+}
+
+function worldToCanvas(pt) {
+  const canvas = $("#doodleCanvas");
+  const el = doodleAnchorEl();
+  if (!canvas || !el) return { x: 0, y: 0 };
+  const rect = el.getBoundingClientRect();
+  const cr = canvas.getBoundingClientRect();
+  if (!cr.width || !cr.height) return { x: 0, y: 0 };
+  return {
+    x: (rect.left + pt.x * rect.width - cr.left) / cr.width * canvas.clientWidth,
+    y: (rect.top + pt.y * rect.height - cr.top) / cr.height * canvas.clientHeight,
+  };
+}
+
+function figureWidthNorm() {
+  const el = doodleAnchorEl();
+  if (!el) return 1;
+  const width = el.getBoundingClientRect().width / (doodle.scale || 1);
+  return width || 1;
+}
+
+function currentDoodleWidthNorm() {
+  return currentDoodleWidth() / figureWidthNorm();
+}
+
+function strokeWidthCanvas(stroke) {
+  const norm = stroke.widthNorm || ((stroke.width || 3.6) / figureWidthNorm());
+  const a = worldToCanvas({ x: 0, y: 0 });
+  const b = worldToCanvas({ x: norm, y: 0 });
+  return Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+}
+
+function relayoutDoodle() {
+  requestAnimationFrame(() => {
+    sizeDoodleCanvas();
+    requestAnimationFrame(sizeDoodleCanvas);
+  });
 }
 
 function applyWorldTransform() {
@@ -608,14 +658,15 @@ function redrawDoodle() {
     if (!pts.length) return;
     ctx.globalCompositeOperation = stroke.erase ? "destination-out" : "source-over";
     ctx.strokeStyle = stroke.color || "#2f4ab8";
-    ctx.lineWidth = stroke.width || (stroke.erase ? 20 : 3.6);
+    ctx.lineWidth = strokeWidthCanvas(stroke);
     ctx.beginPath();
-    if (stroke.kind === "line" && pts.length >= 2) {
-      ctx.moveTo(pts[0].x, pts[0].y);
-      ctx.lineTo(pts[1].x, pts[1].y);
+    const mapped = pts.map(worldToCanvas);
+    if (stroke.kind === "line" && mapped.length >= 2) {
+      ctx.moveTo(mapped[0].x, mapped[0].y);
+      ctx.lineTo(mapped[1].x, mapped[1].y);
     } else {
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.moveTo(mapped[0].x, mapped[0].y);
+      for (let i = 1; i < mapped.length; i++) ctx.lineTo(mapped[i].x, mapped[i].y);
     }
     ctx.stroke();
   });
@@ -652,10 +703,7 @@ function setDoodleActive(on) {
   if (toolbar) toolbar.classList.toggle("hidden", !on);
   if (on) {
     syncDoodleTools();
-    requestAnimationFrame(() => {
-      sizeDoodleCanvas();
-      requestAnimationFrame(sizeDoodleCanvas);
-    });
+    relayoutDoodle();
   }
 }
 
@@ -740,6 +788,9 @@ async function sendDoodleToTutor() {
     return;
   }
   showStageToast("正在发给小欧…");
+  resetDoodleView();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  sizeDoodleCanvas();
   let dataUrl = "";
   try {
     dataUrl = await captureBoardImage();
@@ -767,6 +818,7 @@ function initDoodle() {
       color: doodle.color,
       erase,
       width: currentDoodleWidth(),
+      widthNorm: currentDoodleWidthNorm(),
     };
     doodle.strokes.push(doodle.cur);
     doodle.dirty = true;
@@ -1853,6 +1905,7 @@ async function sendMessage(text) {
   const childBubble = addMessageEl("child");
   renderContentInto(childBubble, content);
   $("#input").value = "";
+  clearVoiceUndo();
   clearPendingImage();
   autoGrow($("#input"));
   saveSession();
@@ -2085,6 +2138,8 @@ const voiceSession = {
   discard: false,
   timer: null,
   startedAt: 0,
+  lastBefore: null,
+  lastAfter: "",
 };
 
 function voiceHttpsHost() {
@@ -2218,15 +2273,18 @@ async function transcribeVoiceBlob(blob) {
       return;
     }
     const input = $("#input");
-    const prefix = input && input.value.trim() ? input.value.trim() + " " : "";
+    const spoken = data.text.trim();
+    const before = input ? input.value : "";
+    const prefix = before.trim() ? before.trim() + " " : "";
     if (input) {
-      input.value = prefix + data.text.trim();
+      input.value = prefix + spoken;
       autoGrow(input);
       input.focus();
     }
+    rememberVoiceUndo(before, input ? input.value : "");
     setVoiceUi("idle");
     const hint = $("#voiceHint");
-    if (hint) hint.textContent = "听好了，可以改几个字再发给小欧";
+    if (hint) hint.textContent = "听好了，说错就点下面撤销";
   } catch (e) {
     setVoiceUi("error", "刚才没听清，再说一次吧。");
   } finally {
@@ -2292,12 +2350,49 @@ async function toggleVoiceTalk() {
   }
 }
 
+function rememberVoiceUndo(before, after) {
+  voiceSession.lastBefore = before;
+  voiceSession.lastAfter = after;
+  const btn = $("#voiceUndoBtn");
+  if (btn) btn.classList.remove("hidden");
+}
+
+function clearVoiceUndo() {
+  voiceSession.lastBefore = null;
+  voiceSession.lastAfter = "";
+  const btn = $("#voiceUndoBtn");
+  if (btn) btn.classList.add("hidden");
+}
+
+function undoLastVoice() {
+  const input = $("#input");
+  if (!input || voiceSession.lastBefore == null) return;
+  if (input.value !== voiceSession.lastAfter) {
+    clearVoiceUndo();
+    return;
+  }
+  input.value = voiceSession.lastBefore;
+  autoGrow(input);
+  input.focus();
+  clearVoiceUndo();
+  const hint = $("#voiceHint");
+  if (hint) hint.textContent = "已经撤掉刚才那句，再说一次就好";
+}
+
 function initVoice() {
   refreshVoiceAvailability();
   const talkBtn = $("#voiceTalkBtn");
   if (talkBtn) talkBtn.addEventListener("click", toggleVoiceTalk);
   const micBtn = $("#micBtn");
   if (micBtn) micBtn.addEventListener("click", toggleVoiceTalk);
+  const undo = $("#voiceUndoBtn");
+  if (undo) undo.addEventListener("click", undoLastVoice);
+  const input = $("#input");
+  if (input) {
+    input.addEventListener("input", () => {
+      if (voiceSession.lastAfter && input.value !== voiceSession.lastAfter) clearVoiceUndo();
+    });
+  }
 }
 
 // ---------------- 画板输入 ----------------
