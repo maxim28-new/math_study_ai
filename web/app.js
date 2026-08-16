@@ -454,6 +454,7 @@ const doodle = {
   pointers: new Map(),
   gesture: null,
   suppressDraw: false,
+  toolboxOpen: false,
 };
 
 function doodleViewport() {
@@ -623,6 +624,17 @@ function syncBoardSendButton() {
   send.disabled = state.streaming || !doodle.dirty || !hasDoodleInk();
 }
 
+function setDoodleToolboxOpen(open) {
+  doodle.toolboxOpen = !!open;
+  const box = $("#doodleToolbox");
+  const btn = $("#doodleToolboxBtn");
+  if (box) box.classList.toggle("hidden", !doodle.toolboxOpen);
+  if (btn) {
+    btn.classList.toggle("is-open", doodle.toolboxOpen);
+    btn.setAttribute("aria-expanded", doodle.toolboxOpen ? "true" : "false");
+  }
+}
+
 function syncDoodleTools() {
   document.querySelectorAll(".doodle-color").forEach((btn) => {
     btn.classList.toggle("is-active", doodle.tool !== "erase" && btn.dataset.color === doodle.color);
@@ -642,6 +654,11 @@ function syncDoodleTools() {
     line.setAttribute("aria-pressed", doodle.tool === "line" ? "true" : "false");
   }
   if (eraser) eraser.classList.toggle("is-active", doodle.tool === "erase");
+  const names = { pen: "画笔", line: "直线", erase: "橡皮" };
+  const label = $("#doodleToolboxLabel");
+  if (label) label.textContent = names[doodle.tool] || "画笔";
+  const swatch = $("#doodleBoxSwatch");
+  if (swatch) swatch.style.setProperty("--swatch", doodle.tool === "erase" ? "#9a9288" : doodle.color);
 }
 
 function redrawDoodle() {
@@ -701,6 +718,7 @@ function setDoodleActive(on) {
   const toolbar = $("#doodleToolbar");
   if (canvas) canvas.classList.toggle("is-active", !!on);
   if (toolbar) toolbar.classList.toggle("hidden", !on);
+  if (!on) setDoodleToolboxOpen(false);
   if (on) {
     syncDoodleTools();
     relayoutDoodle();
@@ -844,6 +862,7 @@ function initDoodle() {
       redrawDoodle();
       return;
     }
+    if (doodle.toolboxOpen) setDoodleToolboxOpen(false);
     if (doodle.suppressDraw || doodle.gesture) return;
     if (canvas.setPointerCapture && e.pointerId != null) {
       try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
@@ -926,6 +945,10 @@ function initDoodle() {
       doodle.erase = true;
       syncDoodleTools();
     });
+  }
+  const toolboxBtn = $("#doodleToolboxBtn");
+  if (toolboxBtn) {
+    toolboxBtn.addEventListener("click", () => setDoodleToolboxOpen(!doodle.toolboxOpen));
   }
   const fit = $("#doodleFitBtn");
   if (fit) fit.addEventListener("click", resetDoodleView);
@@ -2284,7 +2307,7 @@ async function transcribeVoiceBlob(blob) {
     rememberVoiceUndo(before, input ? input.value : "");
     setVoiceUi("idle");
     const hint = $("#voiceHint");
-    if (hint) hint.textContent = "听好了，说错就点下面撤销";
+    if (hint) hint.textContent = "听好了，说错就点旁边清空";
   } catch (e) {
     setVoiceUi("error", "刚才没听清，再说一次吧。");
   } finally {
