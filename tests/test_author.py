@@ -9,7 +9,7 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from server.app import app
-from server import author
+from server import author, tutor
 from server.config import thinking_request_extras, load_settings
 
 
@@ -40,15 +40,15 @@ class AuthorCardTests(unittest.TestCase):
         self.assertIsNone(card)
 
     def test_nine_square_rejected_for_geometry(self):
-        err = author.validate_card(NINE, "geometry")
-        self.assertIsNotNone(err)
-        self.assertIn("9", err)
+        self.assertIsNone(author.normalize_card(NINE, "geometry"))
 
     def test_nine_square_ok_for_square_arithmetic(self):
         card = dict(NINE)
         card["topic"] = "arithmetic"
         card["insight"] = "连续奇数相加会得到平方数"
-        self.assertIsNone(author.validate_card(card, "arithmetic"))
+        normalized = author.normalize_card(card, "arithmetic")
+        self.assertIsNotNone(normalized)
+        self.assertIsNone(author.validate_card(normalized, "arithmetic"))
 
     def test_layer_sum_semantic_board_overrides_legacy_diagram(self):
         raw = {
@@ -76,10 +76,11 @@ class AuthorCardTests(unittest.TestCase):
         }
         card = author.normalize_card(raw, "arithmetic")
         self.assertIsNotNone(card)
-        self.assertEqual(card["representation"], "semantic_board")
+        self.assertEqual(card["representation"], "board_v3")
         self.assertIsNone(card["diagram"])
-        self.assertEqual(card["semantic_board"]["kind"], "layer_sum")
-        self.assertEqual(card["semantic_board"]["layers"], [1, 2, 3, 4, 5])
+        self.assertIsNone(card["semantic_board"])
+        self.assertEqual(card["board"]["kind"], "layer_sum")
+        self.assertEqual(card["board"]["model"]["layers"], [1, 2, 3, 4, 5])
         self.assertEqual(
             card["first_question"],
             "从上到下每层分别有 1、2、3、4、5 罐，这些层一共有多少罐？",
@@ -129,9 +130,10 @@ class AuthorCardTests(unittest.TestCase):
             ],
         }
         card = author.normalize_card(raw, "arithmetic")
-        self.assertEqual(card["diagram"]["type"], "dots")
-        self.assertEqual(card["representation"], "dots")
+        self.assertEqual(card["board"]["model"]["diagram"]["type"], "dots")
+        self.assertEqual(card["representation"], "board_v3")
         self.assertIsNone(card["semantic_board"])
+        self.assertIsNone(card["diagram"])
 
     def test_invalid_semantic_board_rejects_card_instead_of_guessing(self):
         raw = {
@@ -176,8 +178,8 @@ class AuthorCardTests(unittest.TestCase):
         }
         card = author.normalize_card(raw, "arithmetic")
         self.assertIsNotNone(card)
-        self.assertEqual(card["diagram"]["type"], "dots")
-        self.assertEqual(card["representation"], "dots")
+        self.assertEqual(card["board"]["model"]["diagram"]["type"], "dots")
+        self.assertEqual(card["representation"], "board_v3")
 
     def test_geometry_triangle_is_not_stairs(self):
         raw = {
@@ -196,7 +198,38 @@ class AuthorCardTests(unittest.TestCase):
         }
         card = author.normalize_card(raw, "geometry")
         self.assertIsNotNone(card)
-        self.assertEqual(card["diagram"]["type"], "dots")
+        self.assertEqual(card["board"]["model"]["diagram"]["type"], "dots")
+
+    def test_unknown_geometry_demo_is_rejected_at_author_boundary(self):
+        raw = {
+            "topic": "geometry",
+            "hook": "圆规画三角形",
+            "insight": "三边一样长",
+            "axiom": "同圆半径相等",
+            "representation": "dots",
+            "diagram": {"type": "geometry_demo", "steps": []},
+            "first_question": "试试看？",
+            "ladder": [
+                {"rung": "do", "ask": "先画。"},
+                {"rung": "see", "ask": "再看。"},
+                {"rung": "why", "ask": "为什么？"},
+            ],
+        }
+        self.assertIsNone(author.normalize_card(raw, "geometry"))
+
+    def test_geometry_seed_uses_v3_compass_activity(self):
+        card = author.seed_card("geometry", "middle")
+        self.assertEqual(card["representation"], "board_v3")
+        self.assertEqual(card["board"]["schema"], 3)
+        self.assertEqual(card["board"]["kind"], "geometry_compass")
+
+    def test_v3_tutor_prompt_has_no_competing_draw_command(self):
+        card = author.seed_card("geometry", "middle")
+        prompt = tutor.build_system_prompt("geometry", "middle", mode="explore", card=card)
+        self.assertIn("BoardSpec V3", prompt)
+        self.assertNotIn("每一轮回复都要配一张", prompt)
+        self.assertNotIn("每一轮回复都必须", prompt)
+        self.assertIn("你只输出孩子能听懂的自然语言", prompt)
 
     def test_seed_card_matches_topic_and_is_not_nine_square(self):
         for topic in ("wordproblems", "geometry", "reasoning", "fractions", "algebra"):

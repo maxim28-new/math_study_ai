@@ -16,18 +16,7 @@ from . import tutor
 AUTHOR_ENGINES = ("deepseek", "glm")
 
 LADDER_RUNGS = ("do", "see", "why")
-REPRESENTATIONS = {
-    "snap_grid",
-    "bars",
-    "dots",
-    "numberline",
-    "stairs",
-    "square_layers",
-    "square_steps",
-    "square_compare",
-    "semantic_board",
-    "none",
-}
+REPRESENTATIONS = {"board_v3"}
 
 AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看不到你。你只输出一张 JSON 题卡，不要讲解、不要 Markdown 前言。
 
@@ -46,27 +35,30 @@ AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看�
 {inspirations_block}
 - 最近出过、请避开的钩子：{recent_block}
 
-# 语义画板 v2（数学含义与画法必须分开）
-- 如果研究「每层有不同数量的物体，问几层合计」，必须给 semantic_board.kind=layer_sum。
-- 如果研究「从起点按允许步长到终点有几种走法」，必须给 semantic_board.kind=path_count。
-- 不能因为故事里出现「台阶」「小山」就选择画法；先判断是在数分层物体，还是在枚举移动路径。
-- semantic_board 必须描述第一问正在问的那一个规模，不要在画板写目标 4、第一问却先问目标 2。
-- 语义画板题的第一问会由程序根据已校验数据统一数字；你仍要写一句自然的 first_question 供校验与参考。
-- semantic_board 不适用时填 null，才使用下面的旧学具。
+# 数学画板 V3
+题卡必须给出一个 board。你只描述数学模型、孩子任务和揭示方式，绝不能发明 type、steps、
+SVG、Canvas、Konva、坐标或画图代码。
 
-# 旧学具约束
-- 算术：snap_grid / dots / numberline，不要默认 3×3 九块。
-- 应用题：bars（线段图）。
-- 几何：拼、围、折；不要平方数包一圈。
-- 逻辑：规律、反例、判断。
-- 分数：先切成一样大的份（bars 或 dots）。
-- 代数：天平/猜数（bars 或 numberline）。
-diagram 必须是小欧能画的 xiaoou-draw JSON（type 与 representation 一致）。representation 为 none 时 diagram 为 null。
-有 semantic_board 时 representation 写 semantic_board，diagram 必须为 null。
+board 只允许下面五种严格结构，字段名和值都不要改：
+1. 分层求和：
+{{"schema":3,"kind":"layer_sum","model":{{"layers":[1,2,3,4],"item":"罐"}},"task":{{"action":"count","ask":"total","prompt":"数一数每层，再想一共多少罐。"}},"view":{{"reveal":"items_without_total"}}}}
+2. 枚举走法：
+{{"schema":3,"kind":"path_count","model":{{"start":0,"target":4,"moves":[1,2]}},"task":{{"action":"enumerate","ask":"number_of_paths","prompt":"试着走到第4级，找出不同走法。"}},"view":{{"reveal":"rules_only"}}}}
+3. 拖方块：
+{{"schema":3,"kind":"snap_grid","model":{{"rows":2,"cols":3,"tray":6}},"task":{{"action":"arrange","ask":"observe","prompt":"把6块放进格子，看看会变成什么。"}},"view":{{"reveal":"empty_grid_and_tiles"}}}}
+4. 受控静态数学图：
+{{"schema":3,"kind":"static_diagram","model":{{"diagram":{{"type":"numberline","from":0,"to":10,"marks":[3,7],"caption":"3和7在数轴上"}}}},"task":{{"action":"observe","ask":"notice","prompt":"观察两个数的位置，你发现什么？"}},"view":{{"reveal":"model_only"}}}}
+静态 diagram.type 只能是 dots、stairs、square_layers、square_steps、square_compare、numberline、bars。
+5. 尺规作正三角形（只适用于研究两圆交点和三边相等）：
+{{"schema":3,"kind":"geometry_compass","model":{{"construction":"equilateral_triangle","labels":["A","B","P"]}},"task":{{"action":"construct","ask":"compare_three_sides","prompt":"按顺序画两个圆，再比较三条边。"}},"view":{{"reveal":"stepwise"}}}}
 
-semantic_board 只允许下面两种严格结构：
-- 分层合计：{{"schema":2,"kind":"layer_sum","layers":[1,2,3,4,5],"item":"罐","ask":"total","purpose":"count_layers","reveal":"items_without_total"}}
-- 路径计数：{{"schema":2,"kind":"path_count","start":0,"target":2,"moves":[1,2],"ask":"number_of_paths","purpose":"explore_choices","reveal":"rules_only"}}
+按题意选择：
+- 分层物体合计用 layer_sum；允许步长的走法用 path_count。
+- 需要孩子摆方块用 snap_grid。
+- 数轴、线段图、点阵和正方形变化用 static_diagram。
+- 几何主题优先出“两圆交点作正三角形”，使用 geometry_compass。
+- 不允许 board=null，不允许输出旧 semantic_board 或 diagram 顶层字段。
+- board 必须描述第一问的同一个规模；程序会按已校验 board 统一第一问。
 
 # 只输出这个 JSON
 {{
@@ -74,9 +66,7 @@ semantic_board 只允许下面两种严格结构：
   "hook": "一句具体情景",
   "insight": "孩子最后要自己发现的那一个道理",
   "axiom": "对准的一条公理",
-  "representation": "semantic_board|snap_grid|bars|dots|numberline|square_layers|square_steps|square_compare|none",
-  "semantic_board": null,
-  "diagram": {{"type":"..."}},
+  "board": {{"schema":3,"kind":"...","model":{{}},"task":{{}},"view":{{}}}},
   "first_question": "只有一句，口语，不泄底",
   "ladder": [
     {{"rung":"do","ask":"手上这一层问什么"}},
@@ -107,13 +97,14 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
 
 
 def is_nine_square(card: dict[str, Any]) -> bool:
-    diagram = card.get("diagram") if isinstance(card.get("diagram"), dict) else {}
-    if diagram.get("type") != "snap_grid":
+    board = card.get("board") if isinstance(card.get("board"), dict) else {}
+    if board.get("kind") != "snap_grid":
         return False
+    model = board.get("model") if isinstance(board.get("model"), dict) else {}
     try:
-        cols = int(diagram.get("cols") or 0)
-        rows = int(diagram.get("rows") or 0)
-        tray = int(diagram.get("tray") or 0)
+        cols = int(model.get("cols") or 0)
+        rows = int(model.get("rows") or 0)
+        tray = int(model.get("tray") or 0)
     except (TypeError, ValueError):
         return False
     return cols == 3 and rows == 3 and tray == 9
@@ -138,15 +129,13 @@ def validate_card(card: dict[str, Any], topic: str) -> str | None:
     ladder = card.get("ladder")
     if not isinstance(ladder, list) or len(ladder) < 3:
         return "台阶不够三层"
-    if card.get("representation") not in REPRESENTATIONS:
-        return "学具类型不对"
-    semantic = card.get("semantic_board")
-    if semantic is not None and semantic_board.validate_semantic_board(semantic):
-        return "语义画板不合格"
-    if card.get("representation") == "semantic_board" and semantic is None:
-        return "语义画板缺失"
-    if semantic is not None and card.get("diagram") is not None:
-        return "语义画板不能混用旧图"
+    if card.get("representation") != "board_v3":
+        return "题卡没有使用 V3 画板"
+    board = card.get("board")
+    if semantic_board.validate_board_v3(board):
+        return "V3 画板不合格"
+    if card.get("semantic_board") is not None or card.get("diagram") is not None:
+        return "V3 题卡不能混用旧画板字段"
     if is_nine_square(card) and not _allows_nine_square(card, topic):
         return "不要用 9 块摆正方形当第一问"
     return None
@@ -166,36 +155,30 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
                         "ask": str(row.get("ask") or "").strip(),
                     }
                 )
-    raw_semantic = data.get("semantic_board")
-    semantic = semantic_board.normalize_semantic_board(raw_semantic)
-    if raw_semantic is not None and semantic is None:
+    raw_board = data.get("board")
+    if raw_board is not None:
+        board = semantic_board.normalize_board_v3(raw_board)
+    else:
+        board = semantic_board.board_v3_from_legacy(
+            data.get("semantic_board"),
+            str(data.get("representation") or "none").strip(),
+            data.get("diagram"),
+            str(data.get("first_question") or "").strip(),
+        )
+    if board is None:
         return None
-    representation = str(data.get("representation") or "none").strip()
-    if representation not in REPRESENTATIONS:
-        representation = "none"
-    diagram = data.get("diagram")
-    if semantic is not None:
-        representation = "semantic_board"
-        diagram = None
-    elif representation == "semantic_board":
-        return None
-    elif representation == "none":
-        diagram = None
-    elif not isinstance(diagram, dict):
-        diagram = None
-    first_question = (
-        semantic_board.first_question_for_board(semantic)
-        if semantic is not None
-        else str(data.get("first_question") or "").strip()
-    )
+    first_question = semantic_board.first_question_for_v3(board)
+    if not first_question:
+        first_question = str(data.get("first_question") or "").strip()
     card = {
         "topic": str(data.get("topic") or topic).strip() or topic,
         "hook": str(data.get("hook") or "").strip(),
         "insight": str(data.get("insight") or "").strip(),
         "axiom": str(data.get("axiom") or "").strip(),
-        "representation": representation,
-        "semantic_board": semantic,
-        "diagram": diagram,
+        "representation": "board_v3",
+        "board": board,
+        "semantic_board": None,
+        "diagram": None,
         "first_question": first_question,
         "ladder": ladder,
         "misconceptions": [
@@ -242,16 +225,25 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
             ],
         },
         "geometry": {
-            "hook": "三根小棒围三角形",
-            "insight": "两边加起来必须比第三边长，才能围住",
-            "axiom": "任意两点之间，可以画一条直线段。",
-            "representation": "dots",
-            "diagram": {"type": "dots", "rows": 1, "cols": 3, "newLastRowCol": False, "caption": "三根小棒，能围成一个封闭的三角形吗？"},
-            "first_question": "如果三根小棒长度是 2、3、6，还能围成三角形吗？",
+            "hook": "圆规的宽度不变，也能画出正三角形",
+            "insight": "同一个圆上的点到圆心一样远，两圆交点到两个圆心都等于半径",
+            "axiom": "以任意一点为圆心、任意长为半径，可以画一个圆。",
+            "board": {
+                "schema": 3,
+                "kind": "geometry_compass",
+                "model": {"construction": "equilateral_triangle", "labels": ["A", "B", "P"]},
+                "task": {
+                    "action": "construct",
+                    "ask": "compare_three_sides",
+                    "prompt": "按顺序画两个圆，再比较三条边。",
+                },
+                "view": {"reveal": "stepwise"},
+            },
+            "first_question": "保持圆规宽度不变，两个圆的交点能帮我们得到三条一样长的边吗？",
             "ladder": [
-                {"rung": "do", "ask": "先拿 2、3、4 试一试，能围上吗？"},
-                {"rung": "see", "ask": "换成 2、3、6，哪一边对不上？"},
-                {"rung": "why", "ask": "两边加起来要比第三边长，是因为什么？"},
+                {"rung": "do", "ask": "先把圆规夹成线段 AB 那么宽。"},
+                {"rung": "see", "ask": "交点 P 到 A、B 的距离分别是多少？"},
+                {"rung": "why", "ask": "为什么 PA、PB、AB 一定一样长？"},
             ],
         },
         "algebra": {
@@ -303,12 +295,30 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
         },
     }
     base = seeds.get(topic) or seeds["arithmetic"]
+    legacy_representation = str(base.get("representation") or "")
+    legacy_diagram = base.get("diagram")
+    board = base.get("board") or semantic_board.board_v3_from_legacy(
+        None,
+        legacy_representation,
+        legacy_diagram,
+        str(base.get("first_question") or ""),
+    )
     card = {
         "topic": topic if topic in seeds else "arithmetic",
         "misconceptions": ["只看表面数字，没先画出来"],
+        "representation": "board_v3",
+        "board": board,
         "semantic_board": None,
+        "diagram": None,
         **base,
     }
+    card["representation"] = "board_v3"
+    card["board"] = board
+    card["semantic_board"] = None
+    card["diagram"] = None
+    card["first_question"] = semantic_board.first_question_for_v3(board) or str(
+        base.get("first_question") or ""
+    )
     if topic not in seeds:
         card["topic"] = "arithmetic"
     return card
@@ -333,18 +343,15 @@ def card_guidance(card: dict[str, Any]) -> str:
         f"  - {row.get('rung')}: {row.get('ask')}" for row in ladder if isinstance(row, dict)
     )
     misses = "、".join(card.get("misconceptions") or []) or "（未列出）"
-    semantic = card.get("semantic_board")
-    if isinstance(semantic, dict):
-        board_line = json.dumps(semantic, ensure_ascii=False, separators=(",", ":"))
-        board_rule = (
-            f"- 语义画板：{board_line}\n"
-            "- 画板已经由程序按这份数学模型挂好。不要输出 xiaoou-draw，不要另选 dots/stairs 等图形，"
-            "也不要在文字里提前列完答案；根据孩子在画板上的操作继续追问。"
-        )
-        opening_rule = "现在先用第一问开场；不要重复描述画法，画板已经在孩子面前。"
-    else:
-        board_rule = f"- 学具：{card.get('representation')}"
-        opening_rule = "现在先用第一问开场，并画题卡里的那张图。"
+    board = card.get("board")
+    board_kind = board.get("kind") if isinstance(board, dict) else "unknown"
+    board_rule = (
+        f"- 数学画板活动：{board_kind}\n"
+        "- 画板已经由程序按已校验题卡挂好。你只输出孩子能听懂的自然语言，绝不输出或复述"
+        "任何 JSON、xiaoou-draw、schema、kind、SVG、Canvas、Konva 或画图步骤。"
+        "根据孩子的操作和盘面快照继续追问，不要在文字里提前列完答案。"
+    )
+    opening_rule = "现在先用第一问开场；不要重复描述画板代码，画板已经在孩子面前。"
     return f"""# 本堂课的题卡（孩子看不到）
 你只教下面这张卡。不要另出一道题，不要把课拖回「9 块摆正方形」，除非这张卡的道理就是平方数/奇数包一圈。
 - 钩子：{card.get("hook")}

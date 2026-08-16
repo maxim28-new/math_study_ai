@@ -1,6 +1,8 @@
 "use strict";
 
 const assert = require("assert");
+const fs = require("fs");
+const pathModule = require("path");
 const B = require("../web/board/state.js");
 
 const layers = B.normalize({
@@ -12,7 +14,8 @@ const layers = B.normalize({
   reveal: "items_without_total",
 });
 assert.strictEqual(layers.kind, "layer_sum");
-assert.deepStrictEqual(layers.layers, [1, 2, 3, 4, 5]);
+assert.strictEqual(layers.schema, 3);
+assert.deepStrictEqual(layers.model.layers, [1, 2, 3, 4, 5]);
 
 const path = B.normalize({
   schema: 2,
@@ -48,5 +51,19 @@ assert.strictEqual(B.normalize({
   reveal: "rules_only",
 }), null);
 assert.ok(B.formatSnapshot(state.snapshot()).includes("语义画板盘面"));
+
+const fixtures = JSON.parse(fs.readFileSync(
+  pathModule.join(__dirname, "board_v3_fixtures.json"),
+  "utf8"
+));
+fixtures.valid.forEach((raw) => {
+  assert.deepStrictEqual(B.normalize(raw), raw, `valid V3 fixture: ${raw.kind}`);
+});
+fixtures.invalid.forEach((raw) => {
+  assert.strictEqual(B.normalize(raw), null, `invalid V3 fixture: ${raw.kind}`);
+});
+const geometry = B.normalize(fixtures.valid.find((raw) => raw.kind === "geometry_compass"));
+assert.deepStrictEqual(geometry.model.labels, ["A", "B", "P"]);
+assert.strictEqual(B.isBoardLike({ type: "geometry_demo" }), true);
 
 console.log("semantic_board_test.js ok");

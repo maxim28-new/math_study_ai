@@ -134,6 +134,29 @@ function renderDiagramBlock(code) {
   return svg || "";
 }
 
+function parseBoardLikeJson(code) {
+  const text = String(code || "").trim();
+  if (!text.startsWith("{")) return null;
+  const parsed = (window.XiaoouActivity && XiaoouActivity.parseDiagramJson)
+    ? XiaoouActivity.parseDiagramJson(text)
+    : null;
+  if (!parsed || typeof parsed !== "object") {
+    return /"(?:type|kind|schema)"\s*:/.test(text) ? { incomplete: true } : null;
+  }
+  const boardEngine = window.XiaoouSemanticBoard;
+  if (boardEngine && boardEngine.isBoardLike && boardEngine.isBoardLike(parsed)) return parsed;
+  return ("type" in parsed || "kind" in parsed || "schema" in parsed) ? parsed : null;
+}
+
+function stripBoardProtocol(text) {
+  let value = String(text || "");
+  value = value.replace(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)```/g, (block, code) => (
+    parseBoardLikeJson(code) ? " " : block
+  ));
+  value = value.split("\n").filter((line) => !parseBoardLikeJson(line)).join("\n");
+  return value.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function renderMarkdown(text) {
   const lines = text.split("\n");
   let html = "";
@@ -155,6 +178,8 @@ function renderMarkdown(text) {
         emitText();
         const svg = renderDiagram(JSON.stringify(spec));
         if (svg) html += svg;
+      } else if (parseBoardLikeJson(line)) {
+        emitText();
       } else {
         textLines.push(line);
       }
@@ -172,7 +197,7 @@ function renderMarkdown(text) {
         const code = fence.buf.join("\n");
         const svg = renderDiagramBlock(code);
         if (svg) html += svg;
-        else if (code.trim()) html += `<pre class="code">${escapeHtml(code)}</pre>`;
+        else if (code.trim() && !parseBoardLikeJson(code)) html += `<pre class="code">${escapeHtml(code)}</pre>`;
         fence = null;
       } else {
         fence.buf.push(raw);
@@ -205,7 +230,7 @@ function renderMarkdown(text) {
     const code = fence.buf.join("\n");
     const svg = renderDiagramBlock(code);
     if (svg) html += svg;
-    else if (code.trim()) html += `<pre class="code">${escapeHtml(code)}</pre>`;
+    else if (code.trim() && !parseBoardLikeJson(code)) html += `<pre class="code">${escapeHtml(code)}</pre>`;
   }
   flushPara(); closeList();
   return html || "<p></p>";
@@ -668,7 +693,17 @@ function restoreStageFromHistory() {
   syncStageFromTutor(lastAsst.content);
 }
 
-function mountSemanticBoard(raw) {
+function mountBoardFallback(message) {
+  const host = $("#stageHost");
+  if (!host) return;
+  host.innerHTML = "";
+  const note = document.createElement("p");
+  note.className = "board-safe-fallback";
+  note.textContent = message || "这张画板还没准备好，换一题再试试。";
+  host.appendChild(note);
+}
+
+function mountBoardV3(raw) {
   hideStartPlay();
   destroyMountedActivities();
   state.stageSpec = null;
@@ -679,11 +714,37 @@ function mountSemanticBoard(raw) {
   host.innerHTML = "";
   const engine = window.XiaoouSemanticBoard;
   const spec = engine && engine.normalize ? engine.normalize(raw) : null;
-  if (!spec || !engine || !engine.mount) {
-    const note = document.createElement("p");
-    note.className = "board-safe-fallback";
-    note.textContent = "这张画板还没准备好，先听小欧问问题。";
-    host.appendChild(note);
+  if (!spec || !engine) {
+    mountBoardFallback();
+    return;
+  }
+  if (spec.kind === "snap_grid") {
+    const model = spec.model;
+    const snap = {
+      type: "snap_grid",
+      rows: model.rows,
+      cols: model.cols,
+      tray: model.tray,
+      caption: spec.task.prompt,
+    };
+    remountStage(snap, []);
+    return;
+  }
+  if (spec.kind === "static_diagram") {
+    const html = renderDiagram(JSON.stringify(spec.model.diagram));
+    if (!html) {
+      mountBoardFallback();
+      return;
+    }
+    host.innerHTML = html;
+    state.semanticBoardSnapshot = {
+      kind: "static_diagram",
+      diagram_type: spec.model.diagram.type,
+    };
+    return;
+  }
+  if (!engine.mount) {
+    mountBoardFallback();
     return;
   }
   const handle = engine.mount(host, spec, {
@@ -693,19 +754,27 @@ function mountSemanticBoard(raw) {
     },
   });
   if (!handle) {
-    const note = document.createElement("p");
-    note.className = "board-safe-fallback";
-    note.textContent = "这张画板还没准备好，先听小欧问问题。";
-    host.appendChild(note);
+    mountBoardFallback();
     return;
   }
   state.semanticBoardHandle = handle;
   state.semanticBoardSnapshot = handle.getSnapshot ? handle.getSnapshot() : null;
 }
 
+function mountSemanticBoard(raw) {
+  mountBoardV3(raw);
+}
+
 function mountFromCard(card) {
-  if (!card) return;
+  if (!card) {
+    mountBoardFallback();
+    return;
+  }
   hideStartPlay();
+  if (card.board) {
+    mountBoardV3(card.board);
+    return;
+  }
   if (card.semantic_board) {
     mountSemanticBoard(card.semantic_board);
     return;
@@ -726,7 +795,11 @@ function mountFromCard(card) {
   const host = $("#stageHost");
   const tools = $("#stageTools");
   if (tools) tools.classList.add("hidden");
-  if (host) host.innerHTML = diagram ? renderDiagram(JSON.stringify(diagram)) : "";
+  if (host) {
+    const html = diagram ? renderDiagram(JSON.stringify(diagram)) : "";
+    if (html) host.innerHTML = html;
+    else mountBoardFallback();
+  }
 }
 
 function friendlyAuthorError(err) {
@@ -1221,14 +1294,15 @@ function renderHistory() {
   hideStartPlay();
   for (const m of state.messages) {
     const bubble = addMessageEl(m.role === "user" ? "child" : "tutor");
-    renderContentInto(bubble, m.content);
+    const content = state.mode === "explore" && m.role === "assistant" && typeof m.content === "string"
+      ? stripBoardProtocol(m.content)
+      : m.content;
+    renderContentInto(bubble, content);
     if (m.role === "assistant") hydrateSnapGrids(bubble, false);
   }
   if (state.mode === "explore") {
-    if (state.problemCard && state.problemCard.semantic_board) {
-      mountSemanticBoard(state.problemCard.semantic_board);
-    }
-    restoreStageFromHistory();
+    if (state.problemCard) mountFromCard(state.problemCard);
+    else mountBoardFallback();
   }
   applyModeUI();
 }
@@ -1551,7 +1625,8 @@ async function streamAssistant(kickoff) {
         const payload = JSON.parse(line.slice(5).trim());
         if (payload.delta) {
           acc += payload.delta;
-          tutorBubble.innerHTML = renderMarkdown(acc);
+          const visible = state.mode === "explore" ? stripBoardProtocol(acc) : acc;
+          tutorBubble.innerHTML = renderMarkdown(visible);
           if (state.mode === "explore" && window.XiaoouActivity && XiaoouActivity.tutorCaption) {
             const cap = XiaoouActivity.tutorCaption(acc);
             if (cap) setCaption(cap);
@@ -1575,7 +1650,8 @@ async function streamAssistant(kickoff) {
           saveSession();
         } else if (payload.error) {
           acc += (acc ? "\n\n" : "") + payload.error;
-          tutorBubble.innerHTML = renderMarkdown(acc);
+          const visible = state.mode === "explore" ? stripBoardProtocol(acc) : acc;
+          tutorBubble.innerHTML = renderMarkdown(visible);
         }
       }
     }
@@ -1585,6 +1661,10 @@ async function streamAssistant(kickoff) {
   }
 
   tutorBubble.classList.remove("cursor-blink");
+  if (state.mode === "explore") {
+    acc = stripBoardProtocol(acc);
+    tutorBubble.innerHTML = renderMarkdown(acc);
+  }
   if (acc.trim()) {
     state.messages.push({ role: "assistant", content: acc });
     saveSession();
@@ -1593,7 +1673,7 @@ async function streamAssistant(kickoff) {
         ? XiaoouActivity.tutorCaption(acc)
         : "";
       if (cap) setCaption(cap);
-      syncStageFromTutor(acc);
+      // 探索画板只由已校验题卡驱动，陪练文字不能替换或清空它。
     } else {
       const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
       if (hasGrid) freezeLiveActivities();

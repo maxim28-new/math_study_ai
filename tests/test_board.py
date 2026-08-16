@@ -2,12 +2,46 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import unittest
 
 from server import board
 
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
 class SemanticBoardTests(unittest.TestCase):
+    def test_v3_shared_contract_fixtures(self):
+        fixtures = json.loads((ROOT / "tests" / "board_v3_fixtures.json").read_text(encoding="utf-8"))
+        for raw in fixtures["valid"]:
+            with self.subTest(kind=raw["kind"]):
+                normalized = board.normalize_board_v3(raw)
+                self.assertEqual(normalized, raw)
+                self.assertIsNone(board.validate_board_v3(normalized))
+        for raw in fixtures["invalid"]:
+            with self.subTest(kind=raw["kind"]):
+                self.assertIsNone(board.normalize_board_v3(raw))
+
+    def test_v3_geometry_question_comes_from_model(self):
+        spec = board.normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "geometry_compass",
+                "model": {"construction": "equilateral_triangle", "labels": ["A", "B", "P"]},
+                "task": {
+                    "action": "construct",
+                    "ask": "compare_three_sides",
+                    "prompt": "不要信任这句里的数字。",
+                },
+                "view": {"reveal": "stepwise"},
+            }
+        )
+        question = board.first_question_for_v3(spec)
+        self.assertIn("PA、PB 和 AB", question)
+        self.assertNotIn("不要信任", question)
+
     def test_normalizes_layer_sum_without_answer(self):
         spec = board.normalize_semantic_board(
             {

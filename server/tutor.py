@@ -316,13 +316,29 @@ DRAWING_GUIDE = """\
 - 需要孩子动手摆、数、试铺满时，用 snap_grid；只看对比/数轴/线段图时用原来的静态类型。禁止输出 SVG/Konva 代码。caption 仍然不得泄露答案。"""
 
 SEMANTIC_BOARD_GUIDE = """\
-# 语义画板已由程序控制
-题卡带有 semantic_board，孩子面前已经挂好与本题同源的专用画板。
+# 数学画板已由程序控制
+题卡带有已校验的 BoardSpec V3，孩子面前已经挂好与本题同源的专用画板。
 - 不要输出任何 xiaoou-draw、SVG、Canvas、Konva、HTML 或画图 JSON。
 - 不要因为题目里出现「台阶」「小山」等词而另选图形。
 - 只围绕题卡的数学模型提问；孩子操作画板后，你会收到一条标明「语义画板盘面」的系统说明。
 - 孩子也可能把画板上的涂鸦直接发给你。请直接看图里她画的记号、路线或圈画，不要当成作业本读题。
 - 画板没有展示的路线或总数，不要提前在文字里补出来。"""
+
+
+def _board_controlled_prompt(text: str) -> str:
+    """去掉和程序画板冲突的“每轮输出画图代码”要求。"""
+    replacement = (
+        "- **数形结合：** 数学图已经在下方画板中。只用自然语言引导孩子观察和操作画板，"
+        "不要在回复中生成、复述或更新任何画图代码。"
+    )
+    lines: list[str] = []
+    for line in text.splitlines():
+        if "每一轮回复都要配一张" in line or "每一轮回复都必须" in line:
+            if not any("数学图已经在下方画板中" in current for current in lines):
+                lines.append(replacement)
+            continue
+        lines.append(line)
+    return "\n".join(lines)
 
 
 # ------------------------------------------------------------------
@@ -346,6 +362,14 @@ def build_system_prompt(
         f"孩子的名字叫「{child_name}」，请自然地称呼他/她。\n" if child_name.strip() else ""
     )
 
+    board_controlled = bool(
+        isinstance(card, dict)
+        and (
+            isinstance(card.get("board"), dict)
+            or isinstance(card.get("semantic_board"), dict)
+        )
+    )
+
     if mode == "explore":
         inspirations_block = "\n".join(f"  - {s}" for s in topic.inspirations)
         mode_block = EXPLORE_GUIDANCE.format(inspirations_block=inspirations_block)
@@ -356,13 +380,13 @@ def build_system_prompt(
     if mode == "explore" and isinstance(card, dict) and card:
         from .author import card_guidance
         card_block = "\n" + card_guidance(card) + "\n"
-    drawing_guide = (
-        SEMANTIC_BOARD_GUIDE
-        if isinstance(card, dict) and isinstance(card.get("semantic_board"), dict)
-        else DRAWING_GUIDE
-    )
+    drawing_guide = SEMANTIC_BOARD_GUIDE if board_controlled else DRAWING_GUIDE
+    core_block = CORE_PHILOSOPHY
+    if board_controlled:
+        core_block = _board_controlled_prompt(core_block)
+        mode_block = _board_controlled_prompt(mode_block)
 
-    return f"""{CORE_PHILOSOPHY}
+    return f"""{core_block}
 
 # 本次学习的设置
 {name_line}- 主题：{topic.name}
@@ -389,8 +413,8 @@ EXPLORE_KICKOFF = (
 )
 
 EXPLORE_KICKOFF_WITH_CARD = (
-    "（请按照系统提示里的题卡开始：先问第一问。题卡如果带 semantic_board，前端已经显示画板，"
-    "不要再输出画图代码；旧题卡才画题卡指定的图。"
+    "（请按照系统提示里的题卡开始：先问第一问。前端已经显示经过校验的 V3 数学画板，"
+    "你只输出孩子能看到的自然语言，不要输出任何画图代码、JSON、schema 或 kind。"
     "不要另出一道题，不要改终点。一次只问一个问题，绝不直接给答案。）"
 )
 

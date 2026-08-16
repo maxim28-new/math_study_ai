@@ -15,11 +15,12 @@
     options = options || {};
     const pathState = B.createPathState(spec);
     if (!pathState || typeof Konva === "undefined") return null;
+    const model = spec.model;
     host.innerHTML = "";
 
     const board = document.createElement("div");
     board.className = "semantic-board path-board";
-    board.setAttribute("aria-label", `从第 ${spec.start} 级到第 ${spec.target} 级，可以跳 ${spec.moves.join(" 或 ")} 级`);
+    board.setAttribute("aria-label", `从第 ${model.start} 级到第 ${model.target} 级，可以跳 ${model.moves.join(" 或 ")} 级`);
 
     const canvas = document.createElement("div");
     canvas.className = "path-board-canvas";
@@ -36,7 +37,7 @@
 
     const controls = document.createElement("div");
     controls.className = "path-board-controls";
-    const moveButtons = spec.moves.map((step) => {
+    const moveButtons = model.moves.map((step) => {
       const el = button(`跳 ${step} 级`, "path-move-btn");
       el.addEventListener("click", () => applyMove(step));
       controls.appendChild(el);
@@ -65,7 +66,7 @@
       const layer = new Konva.Layer();
       stage.add(layer);
 
-      const span = spec.target - spec.start;
+      const span = model.target - model.start;
       const padX = 28;
       const padTop = 28;
       const padBottom = 38;
@@ -76,7 +77,7 @@
       const points = [];
 
       for (let i = 0; i <= span; i += 1) {
-        const value = spec.start + i;
+        const value = model.start + i;
         const x = padX + i * xStep;
         const y = height - padBottom - stepH - i * yStep;
         points.push({ x: x + stepW / 2, y: y + stepH / 2, value });
@@ -94,9 +95,9 @@
         }));
       }
 
-      const currentIndex = snapshot.current - spec.start;
+      const currentIndex = snapshot.current - model.start;
       const currentPoint = points[currentIndex];
-      spec.moves.forEach((move) => {
+      model.moves.forEach((move) => {
         const endIndex = currentIndex + move;
         if (endIndex >= points.length) return;
         const end = points[endIndex];
@@ -128,12 +129,12 @@
     }
 
     function updateStatus(snapshot) {
-      if (snapshot.current === spec.target) {
+      if (snapshot.current === model.target) {
         status.textContent = "到终点了！可以重新走，看看还有没有别的走法。";
       } else if (snapshot.current_route.length) {
         status.textContent = `刚才跳了 ${snapshot.current_route.join("、")} 级，现在在第 ${snapshot.current} 级。`;
       } else {
-        status.textContent = `从第 ${spec.start} 级出发，选一次跳几级。`;
+        status.textContent = `从第 ${model.start} 级出发，选一次跳几级。`;
       }
       found.innerHTML = "";
       snapshot.found_paths.forEach((route) => {
@@ -143,9 +144,9 @@
         found.appendChild(chip);
       });
       moveButtons.forEach(({ step, el }) => {
-        el.disabled = frozen || snapshot.current + step > spec.target;
+        el.disabled = frozen || snapshot.current + step > model.target;
       });
-      reset.disabled = frozen || snapshot.current === spec.start;
+      reset.disabled = frozen || snapshot.current === model.start;
     }
 
     function render() {

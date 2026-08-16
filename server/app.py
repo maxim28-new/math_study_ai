@@ -256,8 +256,15 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
         yield _sse({"done": True})
         return
 
+    card = req.card
+    if req.mode == "explore" and card is not None:
+        card = author.normalize_card(card, req.topic)
+        if card is None:
+            yield _sse({"error": "这张题卡的画板没有通过校验，请换一题。"})
+            yield _sse({"done": True})
+            return
     system_prompt = tutor.build_system_prompt(
-        req.topic, req.level, req.child_name, req.mode, req.card
+        req.topic, req.level, req.child_name, req.mode, card
     )
     text_headers = {
         "Authorization": f"Bearer {settings.api_key}",
@@ -296,7 +303,7 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
 
             # 探索模式点"出个新题"：临时追加一条出题指令（不进入前端展示的历史）。
             if req.kickoff and req.mode == "explore":
-                kickoff = tutor.EXPLORE_KICKOFF_WITH_CARD if req.card else tutor.EXPLORE_KICKOFF
+                kickoff = tutor.EXPLORE_KICKOFF_WITH_CARD if card else tutor.EXPLORE_KICKOFF
                 teaching_messages = teaching_messages + [
                     {"role": "user", "content": kickoff}
                 ]

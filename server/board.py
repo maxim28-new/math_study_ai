@@ -1,4 +1,7 @@
-"""语义画板 v2：先校验数学模型，再由前端选择专用渲染组件。"""
+"""版本化数学画板协议。
+
+V3 是探索题卡的唯一输出协议；V2 和 xiaoou-draw 仅保留为旧会话适配入口。
+"""
 
 from __future__ import annotations
 
@@ -7,6 +10,23 @@ from typing import Any
 
 SCHEMA_VERSION = 2
 SUPPORTED_KINDS = ("layer_sum", "path_count")
+BOARD_SCHEMA_VERSION = 3
+BOARD_KINDS = (
+    "layer_sum",
+    "path_count",
+    "snap_grid",
+    "static_diagram",
+    "geometry_compass",
+)
+STATIC_DIAGRAM_TYPES = (
+    "dots",
+    "stairs",
+    "square_layers",
+    "square_steps",
+    "square_compare",
+    "numberline",
+    "bars",
+)
 
 
 def _int(value: Any) -> int | None:
@@ -16,6 +36,233 @@ def _int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _bounded_text(value: Any, limit: int, default: str = "") -> str:
+    text = str(value or "").strip()
+    return (text or default)[:limit]
+
+
+def _normalize_static_diagram(raw: Any) -> dict[str, Any] | None:
+    """校验旧静态图参数；V3 只把它当成受控的确定性视图。"""
+    if not isinstance(raw, dict):
+        return None
+    kind = str(raw.get("type") or "")
+    caption = _bounded_text(raw.get("caption"), 80)
+    if kind == "dots":
+        rows, cols = _int(raw.get("rows")), _int(raw.get("cols"))
+        if rows is None or cols is None or not 1 <= rows <= 8 or not 1 <= cols <= 8:
+            return None
+        return {
+            "type": kind,
+            "rows": rows,
+            "cols": cols,
+            "newLastRowCol": bool(raw.get("newLastRowCol", False)),
+            "caption": caption,
+        }
+    if kind == "stairs":
+        rows = _int(raw.get("rows"))
+        if rows is None or not 1 <= rows <= 8:
+            return None
+        return {"type": kind, "rows": rows, "caption": caption}
+    if kind in ("square_layers", "square_steps"):
+        size_key = "max" if kind == "square_steps" else "size"
+        size = _int(raw.get(size_key))
+        if size is None or not 1 <= size <= 8:
+            return None
+        result: dict[str, Any] = {"type": kind, size_key: size, "caption": caption}
+        if kind == "square_layers":
+            highlight_raw = raw.get("highlight", "none")
+            if highlight_raw == "none":
+                result["highlight"] = "none"
+            else:
+                highlight = _int(highlight_raw)
+                if highlight is None or not 1 <= highlight <= size:
+                    return None
+                result["highlight"] = highlight
+        else:
+            highlight = _int(raw.get("highlight", size))
+            if highlight is None or not 1 <= highlight <= size:
+                return None
+            result["highlight"] = highlight
+        return result
+    if kind == "square_compare":
+        start, end = _int(raw.get("from")), _int(raw.get("to"))
+        if start is None or end is None or not 1 <= start < end <= 8:
+            return None
+        return {"type": kind, "from": start, "to": end, "caption": caption}
+    if kind == "numberline":
+        start, end = _int(raw.get("from")), _int(raw.get("to"))
+        if start is None or end is None or start >= end or end - start > 30:
+            return None
+        marks_raw = raw.get("marks") or []
+        if not isinstance(marks_raw, list) or len(marks_raw) > 12:
+            return None
+        marks: list[int] = []
+        for value in marks_raw:
+            mark = _int(value)
+            if mark is None or not start <= mark <= end:
+                return None
+            if mark not in marks:
+                marks.append(mark)
+        return {"type": kind, "from": start, "to": end, "marks": marks, "caption": caption}
+    if kind == "bars":
+        items_raw = raw.get("items")
+        if not isinstance(items_raw, list) or not 1 <= len(items_raw) <= 6:
+            return None
+        items: list[dict[str, Any]] = []
+        for row in items_raw:
+            if not isinstance(row, dict):
+                return None
+            value = _int(row.get("value"))
+            label = _bounded_text(row.get("label"), 12)
+            if value is None or not 1 <= value <= 100 or not label:
+                return None
+            items.append({"label": label, "value": value})
+        return {"type": kind, "items": items, "caption": caption}
+    return None
+
+
+def _normalize_task(raw: Any, action: str, ask: str) -> dict[str, str] | None:
+    if not isinstance(raw, dict):
+        return None
+    if str(raw.get("action") or "") != action or str(raw.get("ask") or "") != ask:
+        return None
+    return {
+        "action": action,
+        "ask": ask,
+        "prompt": _bounded_text(raw.get("prompt"), 200),
+    }
+
+
+def normalize_board_v3(raw: Any) -> dict[str, Any] | None:
+    """把 V3 判别联合标准化；任何未知能力均 fail closed。"""
+    if not isinstance(raw, dict) or _int(raw.get("schema")) != BOARD_SCHEMA_VERSION:
+        return None
+    kind = str(raw.get("kind") or "")
+    model = raw.get("model")
+    task = raw.get("task")
+    view = raw.get("view")
+    if not isinstance(model, dict) or not isinstance(view, dict):
+        return None
+
+    if kind == "layer_sum":
+        legacy = normalize_semantic_board(
+            {
+                "schema": 2,
+                "kind": kind,
+                "layers": model.get("layers"),
+                "item": model.get("item"),
+                "ask": task.get("ask") if isinstance(task, dict) else None,
+                "reveal": view.get("reveal"),
+            }
+        )
+        normalized_task = _normalize_task(task, "count", "total")
+        if not legacy or not normalized_task:
+            return None
+        return {
+            "schema": BOARD_SCHEMA_VERSION,
+            "kind": kind,
+            "model": {"layers": legacy["layers"], "item": legacy["item"]},
+            "task": normalized_task,
+            "view": {"reveal": "items_without_total"},
+        }
+
+    if kind == "path_count":
+        legacy = normalize_semantic_board(
+            {
+                "schema": 2,
+                "kind": kind,
+                "start": model.get("start"),
+                "target": model.get("target"),
+                "moves": model.get("moves"),
+                "ask": task.get("ask") if isinstance(task, dict) else None,
+                "reveal": view.get("reveal"),
+            }
+        )
+        normalized_task = _normalize_task(task, "enumerate", "number_of_paths")
+        if not legacy or not normalized_task:
+            return None
+        return {
+            "schema": BOARD_SCHEMA_VERSION,
+            "kind": kind,
+            "model": {
+                "start": legacy["start"],
+                "target": legacy["target"],
+                "moves": legacy["moves"],
+            },
+            "task": normalized_task,
+            "view": {"reveal": "rules_only"},
+        }
+
+    if kind == "snap_grid":
+        rows, cols, tray = _int(model.get("rows")), _int(model.get("cols")), _int(model.get("tray"))
+        normalized_task = _normalize_task(task, "arrange", "observe")
+        if (
+            rows is None
+            or cols is None
+            or tray is None
+            or not 1 <= rows <= 8
+            or not 1 <= cols <= 8
+            or not 0 <= tray <= 64
+            or not normalized_task
+            or str(view.get("reveal") or "") != "empty_grid_and_tiles"
+        ):
+            return None
+        return {
+            "schema": BOARD_SCHEMA_VERSION,
+            "kind": kind,
+            "model": {"rows": rows, "cols": cols, "tray": tray},
+            "task": normalized_task,
+            "view": {"reveal": "empty_grid_and_tiles"},
+        }
+
+    if kind == "static_diagram":
+        diagram = _normalize_static_diagram(model.get("diagram"))
+        normalized_task = _normalize_task(task, "observe", "notice")
+        if not diagram or not normalized_task or str(view.get("reveal") or "") != "model_only":
+            return None
+        return {
+            "schema": BOARD_SCHEMA_VERSION,
+            "kind": kind,
+            "model": {"diagram": diagram},
+            "task": normalized_task,
+            "view": {"reveal": "model_only"},
+        }
+
+    if kind == "geometry_compass":
+        labels = model.get("labels")
+        normalized_task = _normalize_task(task, "construct", "compare_three_sides")
+        if (
+            str(model.get("construction") or "") != "equilateral_triangle"
+            or not isinstance(labels, list)
+            or len(labels) != 3
+            or any(not _bounded_text(label, 2) for label in labels)
+            or len(set(str(label) for label in labels)) != 3
+            or not normalized_task
+            or str(view.get("reveal") or "") != "stepwise"
+        ):
+            return None
+        return {
+            "schema": BOARD_SCHEMA_VERSION,
+            "kind": kind,
+            "model": {
+                "construction": "equilateral_triangle",
+                "labels": [_bounded_text(label, 2) for label in labels],
+            },
+            "task": normalized_task,
+            "view": {"reveal": "stepwise"},
+        }
+    return None
+
+
+def validate_board_v3(board: Any) -> str | None:
+    normalized = normalize_board_v3(board)
+    if normalized is None:
+        return "V3 画板类型或参数不受支持"
+    if normalized != board:
+        return "V3 画板尚未标准化"
+    return None
 
 
 def _normalize_layer_sum(raw: dict[str, Any]) -> dict[str, Any] | None:
@@ -116,3 +363,100 @@ def first_question_for_board(board: dict[str, Any]) -> str:
             f"到第 {board['target']} 级一共有几种不同走法？"
         )
     return ""
+
+
+def board_v3_from_legacy(
+    semantic: Any = None,
+    representation: str = "none",
+    diagram: Any = None,
+    prompt: str = "",
+) -> dict[str, Any] | None:
+    """读取旧题卡时一次性转换；新作者不应再输出旧字段。"""
+    v2 = normalize_semantic_board(semantic)
+    if semantic is not None and v2 is None:
+        return None
+    if v2 and v2["kind"] == "layer_sum":
+        return normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "layer_sum",
+                "model": {"layers": v2["layers"], "item": v2["item"]},
+                "task": {"action": "count", "ask": "total", "prompt": prompt},
+                "view": {"reveal": "items_without_total"},
+            }
+        )
+    if v2 and v2["kind"] == "path_count":
+        return normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "path_count",
+                "model": {
+                    "start": v2["start"],
+                    "target": v2["target"],
+                    "moves": v2["moves"],
+                },
+                "task": {"action": "enumerate", "ask": "number_of_paths", "prompt": prompt},
+                "view": {"reveal": "rules_only"},
+            }
+        )
+    if representation == "snap_grid":
+        if not isinstance(diagram, dict) or str(diagram.get("type") or "") != "snap_grid":
+            return None
+        return normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "snap_grid",
+                "model": {
+                    "rows": diagram.get("rows"),
+                    "cols": diagram.get("cols"),
+                    "tray": diagram.get("tray"),
+                },
+                "task": {"action": "arrange", "ask": "observe", "prompt": prompt},
+                "view": {"reveal": "empty_grid_and_tiles"},
+            }
+        )
+    if representation in STATIC_DIAGRAM_TYPES:
+        if not isinstance(diagram, dict) or str(diagram.get("type") or "") != representation:
+            return None
+        return normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {"diagram": diagram},
+                "task": {"action": "observe", "ask": "notice", "prompt": prompt},
+                "view": {"reveal": "model_only"},
+            }
+        )
+    return None
+
+
+def first_question_for_v3(board: dict[str, Any]) -> str:
+    normalized = normalize_board_v3(board)
+    if not normalized:
+        return ""
+    kind = normalized["kind"]
+    model = normalized["model"]
+    if kind == "layer_sum":
+        return first_question_for_board(
+            {
+                "kind": kind,
+                "layers": model["layers"],
+                "item": model["item"],
+            }
+        )
+    if kind == "path_count":
+        return first_question_for_board(
+            {
+                "kind": kind,
+                "start": model["start"],
+                "target": model["target"],
+                "moves": model["moves"],
+            }
+        )
+    if kind == "geometry_compass":
+        a, b, p = model["labels"]
+        return (
+            f"保持圆规宽度等于线段 {a}{b}，分别以 {a} 和 {b} 为圆心画圆。"
+            f"两个圆的交点记作 {p}，你觉得 {p}{a}、{p}{b} 和 {a}{b} 谁更长，还是一样长？"
+        )
+    return normalized["task"]["prompt"]
