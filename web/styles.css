@@ -1090,6 +1090,13 @@ button, input, select, textarea { font-family: inherit; }
 .layer-square-cell.is-new {
   background: linear-gradient(145deg, #f0c56b, #e09a2c);
 }
+.layer-square-cell.is-emphasis {
+  box-shadow: 0 0 0 3px rgba(224, 154, 44, .45), 0 4px 8px rgba(63, 91, 214, .18);
+}
+.layer-square-cell.is-empty {
+  background: transparent;
+  box-shadow: none;
+}
 .layer-pile-board.is-term-lit .layer-square-cell {
   animation: term-board-flash .7s ease;
 }

@@ -329,6 +329,31 @@ SEMANTIC_BOARD_GUIDE = """\
 - 第一次用到圆规、圆心、半径、交点、线段、正三角形、正方形、规律、排列、组合这些词时，先说孩子能看见的意思，再给出名字，例如：圆最中间的那个点，叫“圆心”。一次只带出一个新词，不要写成词典。"""
 
 
+AGENT_TOOLS_GUIDE = """\
+# 你是 Tutor Agent（孩子看不见这个身份）
+你有 Skills 和受控数学 Tools。程序负责校验动作，你负责像数学家和老师一样判断下一步。
+
+## 这一轮怎么做
+1. 先看当前可见工作区。不必每轮都改画板。
+2. 需要时调用 0～3 个写工具：高亮、隐藏、添加积木、摆放、记录猜想。
+3. 工具返回 ok 之后，再对孩子说一句口语。一次只问一个问题。
+4. 不要输出任何 xiaoou-draw、SVG、Canvas、Konva、HTML 或画图 JSON。
+5. 不要向孩子提起工具、工作区、skill、JSON、version 这些词。
+
+## 积木与正方形
+- 初始往往只有最中间一块。不要把还没出现的 3、5 层提前说出来。
+- 孩子说「再加一层 / 围一圈 / 三块」且视觉能帮助思考时，先 board_add_tiles，再 board_arrange(layout=outer_ring)。
+- 只有工具确认 shape=square 后，才能说「现在是正方形」。
+- 也可以请孩子自己点画板上的「加上下一层」；那也是合法路径，不要抢着代替。
+- 工具失败时，不要假装画面已经改变，改用一句话澄清或换一个合法动作。
+
+## 注意
+- 只引用孩子看得见的对象。
+- 不要直接给最终答案或完整解题步骤。
+- 涂鸦请直接看图，不要当成作业本读题。
+- 第一次用到圆规、圆心、半径、交点、线段、正三角形、正方形、规律、排列、组合这些词时，先说看见的意思，再给名字。一次一个新词。"""
+
+
 def _board_controlled_prompt(text: str) -> str:
     """去掉和程序画板冲突的“每轮输出画图代码”要求。"""
     replacement = (
@@ -373,6 +398,7 @@ def build_system_prompt(
     mode: str = DEFAULT_MODE,
     card: dict | None = None,
     seen_terms: list[str] | None = None,
+    agent: bool = False,
 ) -> str:
     topic = TOPICS_BY_KEY.get(topic_key, TOPICS_BY_KEY[DEFAULT_TOPIC_KEY])
     level_desc = LEVELS.get(level, LEVELS[DEFAULT_LEVEL])
@@ -401,7 +427,12 @@ def build_system_prompt(
     if mode == "explore" and isinstance(card, dict) and card:
         from .author import card_guidance
         card_block = "\n" + card_guidance(card) + "\n"
-    drawing_guide = SEMANTIC_BOARD_GUIDE if board_controlled else DRAWING_GUIDE
+    if agent and board_controlled:
+        drawing_guide = AGENT_TOOLS_GUIDE
+    elif board_controlled:
+        drawing_guide = SEMANTIC_BOARD_GUIDE
+    else:
+        drawing_guide = DRAWING_GUIDE
     core_block = CORE_PHILOSOPHY
     if board_controlled:
         core_block = _board_controlled_prompt(core_block)
@@ -439,8 +470,9 @@ EXPLORE_KICKOFF = (
 )
 
 EXPLORE_KICKOFF_WITH_CARD = (
-    "（请按照系统提示里的题卡开始：先问第一问。前端已经显示经过校验的 V3 数学画板，"
+    "（请按照系统提示里的题卡开始：先问第一问。前端已经显示当前工作区里孩子看得见的图，"
     "你只输出孩子能看到的自然语言，不要输出任何画图代码、JSON、schema 或 kind。"
+    "需要时可以用工具改画板，但开场通常先问、不必先改图。"
     "不要另出一道题，不要改终点。一次只问一个问题，绝不直接给答案。）"
 )
 

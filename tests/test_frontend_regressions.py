@@ -95,6 +95,16 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("semantic_board_test.js ok", proc.stdout)
 
+    def test_agent_workspace_js_rules(self):
+        proc = subprocess.run(
+            ["node", str(ROOT / "tests" / "agent_workspace_test.js")],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("agent_workspace_test.js ok", proc.stdout)
+
     def test_activity_state_js_has_no_konva(self):
         src = read("web/activity/state.js")
         self.assertNotIn("Konva", src)
@@ -210,7 +220,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260816-boardv3m", html)
+        self.assertIn("v=20260816-agentv1", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -298,6 +308,7 @@ class FrontendRegressionTests(unittest.TestCase):
         geometry_board = read("web/board/geometry-compass.js")
         color_seq = read("web/board/color-sequence.js")
         self.assertIn("/board/state.js", html)
+        self.assertIn("/board/workspace.js", html)
         self.assertIn("/board/layer-pile.js", html)
         self.assertIn("/board/path-board.js", html)
         self.assertIn("/board/geometry-compass.js", html)
@@ -306,12 +317,15 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("/terms/scaffold.js", html)
         self.assertLess(html.find("/terms/glossary.js"), html.find("/terms/scaffold.js"))
         self.assertLess(html.find("/terms/scaffold.js"), html.find("/app.js"))
-        self.assertLess(html.find("/board/state.js"), html.find("/board/layer-pile.js"))
+        self.assertLess(html.find("/board/state.js"), html.find("/board/workspace.js"))
+        self.assertLess(html.find("/board/workspace.js"), html.find("/board/layer-pile.js"))
         self.assertLess(html.find("/board/layer-pile.js"), html.find("/board/path-board.js"))
         self.assertLess(html.find("/board/path-board.js"), html.find("/board/geometry-compass.js"))
         self.assertLess(html.find("/board/geometry-compass.js"), html.find("/board/color-sequence.js"))
         self.assertLess(html.find("/board/color-sequence.js"), html.find("/app.js"))
         self.assertIn("function mountBoardV3(", app)
+        self.assertIn("function applyMathWorkspace(", app)
+        self.assertIn("payload.workspace", app)
         self.assertIn("card.board", app)
         self.assertIn("upgradeLegacyPatternBoard", app)
         self.assertNotIn("function coerceStairsSpec(", app)
@@ -358,6 +372,7 @@ class FrontendRegressionTests(unittest.TestCase):
         tutor = read("server/tutor.py")
         author = read("server/author.py")
         self.assertIn("SEMANTIC_BOARD_GUIDE", tutor)
+        self.assertIn("AGENT_TOOLS_GUIDE", tutor)
         self.assertIn("不要输出任何 xiaoou-draw", tutor)
         self.assertIn("涂鸦直接发给你", tutor)
         self.assertIn("数学画板 V3", author)
@@ -379,6 +394,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("board-safe-fallback", app)
         self.assertIn("validate_board_v3", author)
         self.assertIn("_board_controlled_prompt", tutor)
+        self.assertIn("run_tutor_agent", read("server/app.py"))
+        self.assertIn("board_add_tiles", read("server/agent/tools.py"))
 
     def test_static_block_diagrams_use_rounded_squares(self):
         app = read("web/app.js")
@@ -420,7 +437,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260816-boardv3m", html)
+        self.assertIn("v=20260816-agentv1", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

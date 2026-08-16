@@ -22,6 +22,7 @@ from . import config as teaching_config
 from .config import WEB_DIR, settings
 from . import gate
 from . import tutor
+from .agent import runtime as agent_runtime
 
 app = FastAPI(title="小欧 · 启发式数学老师")
 
@@ -84,6 +85,9 @@ class ChatRequest(BaseModel):
     show_reasoning: Optional[bool] = None
     card: Optional[dict[str, Any]] = None
     seen_terms: list[str] = Field(default_factory=list)
+    workspace: Optional[dict[str, Any]] = None
+    workspace_id: str = ""
+    expected_workspace_version: Optional[int] = None
 
 
 class UnlockRequest(BaseModel):
@@ -308,6 +312,36 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                 teaching_messages = teaching_messages + [
                     {"role": "user", "content": kickoff}
                 ]
+
+            use_agent = req.mode == "explore" and isinstance(card, dict) and isinstance(card.get("board"), dict)
+            if use_agent:
+                client_ws = req.workspace if isinstance(req.workspace, dict) else None
+                if client_ws is None and req.workspace_id:
+                    client_ws = {"id": req.workspace_id, "version": req.expected_workspace_version or 1, "objects": []}
+                try:
+                    async for event in agent_runtime.run_tutor_agent(
+                        client=client,
+                        headers=text_headers,
+                        teaching_messages=teaching_messages,
+                        topic=req.topic,
+                        level=req.level,
+                        child_name=req.child_name,
+                        mode=req.mode,
+                        card=card,
+                        seen_terms=req.seen_terms,
+                        client_workspace=client_ws,
+                        thinking_on=thinking_on,
+                        show_reasoning=show_reasoning,
+                    ):
+                        if event.get("board_patch") is None and "board_patch" in event:
+                            event = {k: v for k, v in event.items() if k != "board_patch"}
+                        yield _sse(event)
+                    yield _sse({"done": True})
+                    return
+                except agent_runtime.ToolsUnsupportedError:
+                    system_prompt = tutor.build_system_prompt(
+                        req.topic, req.level, req.child_name, req.mode, card, req.seen_terms, agent=False
+                    )
 
             payload = {
                 "model": settings.model,

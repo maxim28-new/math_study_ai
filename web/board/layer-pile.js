@@ -4,6 +4,9 @@
   const B = root.XiaoouSemanticBoard || {};
 
   function isOddSquareLayers(layers) {
+    if (root.XiaoouMathWorkspace && XiaoouMathWorkspace.isOddSquareLayers) {
+      return XiaoouMathWorkspace.isOddSquareLayers(layers);
+    }
     return Array.isArray(layers) && layers.length >= 2
       && layers.every((n, i) => n === 2 * i + 1);
   }
@@ -14,6 +17,10 @@
     const item = model.item || "块";
     const oddSquare = isOddSquareLayers(model.layers);
     const stepwise = spec.view.reveal === "stepwise" || oddSquare;
+    const W = root.XiaoouMathWorkspace;
+    let workspace = (oddSquare && W && options.workspace && W.fromDict(options.workspace))
+      ? options.workspace
+      : (oddSquare && W && options.card ? W.seedFromCard(options.card, options.topic) : null);
     let step = 0;
     const maxStep = stepwise ? model.layers.length - 1 : 0;
     let frozen = false;
@@ -50,7 +57,13 @@
     }
     host.appendChild(board);
 
+    function workspaceSide() {
+      if (!workspace || !W) return 0;
+      return W.formsSquare(workspace).side || 0;
+    }
+
     function visibleCount() {
+      if (workspace && oddSquare) return Math.max(1, workspaceSide());
       return stepwise ? step + 1 : model.layers.length;
     }
 
@@ -58,6 +71,7 @@
       const shown = model.layers.slice(0, visibleCount());
       const remaining = model.layers.slice(visibleCount());
       const side = oddSquare ? visibleCount() : 0;
+      const added = oddSquare && side > 1 ? model.layers[side - 1] : 0;
       return {
         kind: "layer_sum",
         layers: model.layers.slice(),
@@ -65,9 +79,10 @@
         visible_layers: shown,
         remaining,
         side,
-        added: oddSquare && step > 0 ? model.layers[step] : 0,
-        completed: !stepwise || step >= maxStep,
-        step,
+        added,
+        completed: !stepwise || visibleCount() >= model.layers.length,
+        step: Math.max(0, visibleCount() - 1),
+        workspace: workspace || null,
       };
     }
 
@@ -108,8 +123,58 @@
       return grid;
     }
 
+    function renderWorkspaceTiles() {
+      const snap = W.visibleSnapshot(workspace);
+      const hidden = new Set((snap.visibility.hidden || []));
+      const marked = new Set(snap.marked || []);
+      const emphasis = new Set(snap.emphasis || []);
+      const tiles = (snap.objects || []).filter((obj) => obj.type === "tile" && !hidden.has(obj.id));
+      const placed = tiles.filter((obj) => obj.attrs && obj.attrs.gx != null && obj.attrs.gy != null);
+      let maxX = 0;
+      let maxY = 0;
+      placed.forEach((obj) => {
+        maxX = Math.max(maxX, obj.attrs.gx);
+        maxY = Math.max(maxY, obj.attrs.gy);
+      });
+      const cols = placed.length ? maxX + 1 : 1;
+      const rows = placed.length ? maxY + 1 : 1;
+      const byPos = {};
+      placed.forEach((obj) => { byPos[obj.attrs.gx + "," + obj.attrs.gy] = obj; });
+      const grid = document.createElement("div");
+      grid.className = "layer-square";
+      grid.style.setProperty("--side", String(Math.max(cols, rows)));
+      for (let gy = 0; gy < rows; gy += 1) {
+        for (let gx = 0; gx < cols; gx += 1) {
+          const obj = byPos[gx + "," + gy];
+          const cell = document.createElement("span");
+          cell.className = "layer-square-cell";
+          if (obj && marked.has(obj.id) && snap.side > 1) cell.classList.add("is-new");
+          if (obj && emphasis.has(obj.id)) cell.classList.add("is-emphasis");
+          if (!obj) cell.classList.add("is-empty");
+          cell.setAttribute("aria-hidden", "true");
+          grid.appendChild(cell);
+        }
+      }
+      return { grid, snap };
+    }
+
     function render() {
       canvas.innerHTML = "";
+      if (workspace && oddSquare && W) {
+        const drawn = renderWorkspaceTiles();
+        canvas.appendChild(drawn.grid);
+        const snap = drawn.snap;
+        if (snap.side <= 1) status.textContent = `先看最中间这一块${item}。`;
+        else status.textContent = `外面新加的是金色，现在是每边 ${snap.side} 块的正方形。`;
+        board.setAttribute("aria-label", `每边 ${snap.side || 1} 块的正方形`);
+        const maxSide = model.layers.length;
+        next.textContent = snap.side >= maxSide ? "已经围好" : "加上下一层";
+        next.disabled = frozen || snap.side >= maxSide;
+        reset.disabled = frozen || snap.side <= 1;
+        status.hidden = false;
+        board.classList.toggle("is-term-lit", lit === "square");
+        return;
+      }
       const shown = visibleCount();
       if (oddSquare) {
         canvas.appendChild(renderSquare(shown, step > 0));
@@ -145,13 +210,30 @@
 
     if (stepwise) {
       next.addEventListener("click", () => {
-        if (frozen || step >= maxStep) return;
+        if (frozen) return;
+        if (workspace && W) {
+          const result = W.addNextOddRing(workspace);
+          if (!result.ok) return;
+          workspace = result.workspace;
+          render();
+          emit(snapshot().completed ? "layer_completed" : "layer_advanced");
+          return;
+        }
+        if (step >= maxStep) return;
         step += 1;
         render();
         emit(step >= maxStep ? "layer_completed" : "layer_advanced");
       });
       reset.addEventListener("click", () => {
         if (frozen) return;
+        if (workspace && W) {
+          const result = W.resetToSeed(workspace, options.card, options.topic);
+          if (!result.ok) return;
+          workspace = result.workspace;
+          render();
+          emit("layer_reset");
+          return;
+        }
         step = 0;
         render();
         emit("layer_reset");
@@ -172,10 +254,28 @@
         render();
       },
       apply(action) {
-        if (!stepwise || !action || action.type !== "next" || frozen || step >= maxStep) return false;
+        if (!stepwise || !action || action.type !== "next" || frozen) return false;
+        if (workspace && W) {
+          const result = W.addNextOddRing(workspace);
+          if (!result.ok) return false;
+          workspace = result.workspace;
+          render();
+          emit(snapshot().completed ? "layer_completed" : "layer_advanced");
+          return true;
+        }
+        if (step >= maxStep) return false;
         step += 1;
         render();
         emit(step >= maxStep ? "layer_completed" : "layer_advanced");
+        return true;
+      },
+      applyWorkspace(nextWs) {
+        if (!W || !nextWs) return false;
+        const parsed = W.fromDict(nextWs);
+        if (!parsed) return false;
+        workspace = parsed;
+        render();
+        emit("workspace_applied");
         return true;
       },
     };

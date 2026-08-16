@@ -34,6 +34,7 @@ const state = {
   caption: "",
   seenTerms: [],
   authorGen: 0,
+  mathWorkspace: null,
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -51,7 +52,7 @@ function sanitizeForStore(messages) {
   });
 }
 function emptyWorkspace() {
-  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [] };
+  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [], mathWorkspace: null };
 }
 
 function messagePlainText(m) {
@@ -127,6 +128,7 @@ function snapshotWorkspace() {
     boards: collectBoards(),
     caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
+    mathWorkspace: state.mathWorkspace || null,
   };
 }
 
@@ -138,6 +140,9 @@ function applyWorkspace(ws) {
   const savedCap = String(next.caption || "").trim();
   state.caption = isIdleCaption(savedCap) ? lastTutorCaption() : savedCap;
   state.seenTerms = Array.isArray(next.seenTerms) ? next.seenTerms.slice() : [];
+  const W = window.XiaoouMathWorkspace;
+  const savedWs = next.mathWorkspace;
+  state.mathWorkspace = (W && W.fromDict(savedWs)) ? savedWs : null;
 }
 
 function rememberCurrentWorkspace() {
@@ -160,6 +165,7 @@ function saveSession() {
     problemCard: state.problemCard,
     caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
+    mathWorkspace: state.mathWorkspace || null,
     topics: state.topicWorkspaces || {},
     authorEngine: state.authorEngine,
     recentHooks: state.recentHooks || [],
@@ -1141,7 +1147,31 @@ function mountBoardFallback(message) {
   host.appendChild(note);
 }
 
-function mountBoardV3(raw) {
+function ensureMathWorkspace(card) {
+  const W = window.XiaoouMathWorkspace;
+  if (!W || !card) return null;
+  if (state.mathWorkspace && W.matchesCard(state.mathWorkspace, card)) return state.mathWorkspace;
+  state.mathWorkspace = W.seedFromCard(card, state.topicKey);
+  return state.mathWorkspace;
+}
+
+function applyMathWorkspace(ws) {
+  const W = window.XiaoouMathWorkspace;
+  const parsed = W && W.fromDict(ws);
+  if (!parsed) return;
+  state.mathWorkspace = parsed;
+  const handle = state.semanticBoardHandle;
+  if (handle && typeof handle.applyWorkspace === "function") {
+    handle.applyWorkspace(parsed);
+  } else if (handle && typeof handle.highlight === "function") {
+    const vis = W.visibleSnapshot(parsed);
+    handle.highlight(((vis.emphasis || [])[0]) || "");
+  }
+  if (handle && handle.getSnapshot) state.semanticBoardSnapshot = handle.getSnapshot();
+  saveSession();
+}
+
+function mountBoardV3(raw, card) {
   hideStartPlay();
   destroyMountedActivities();
   state.stageSpec = null;
@@ -1186,12 +1216,20 @@ function mountBoardV3(raw) {
     mountBoardFallback();
     return;
   }
+  const mathWs = card ? ensureMathWorkspace(card) : state.mathWorkspace;
   const handle = engine.mount(host, spec, {
+    workspace: mathWs,
+    card: card || state.problemCard,
+    topic: state.topicKey,
     onChange(snapshot, eventName) {
       if (eventName === "path_found") showStageToast("找到一种走法");
       if (eventName === "layer_advanced") showStageToast("加上一层了");
       if (eventName === "layer_completed") showStageToast("围成正方形了");
       state.semanticBoardSnapshot = snapshot;
+      if (snapshot && snapshot.workspace) {
+        state.mathWorkspace = snapshot.workspace;
+        saveSession();
+      }
     },
   });
   if (!handle) {
@@ -1200,6 +1238,9 @@ function mountBoardV3(raw) {
   }
   state.semanticBoardHandle = handle;
   state.semanticBoardSnapshot = handle.getSnapshot ? handle.getSnapshot() : null;
+  if (state.semanticBoardSnapshot && state.semanticBoardSnapshot.workspace) {
+    state.mathWorkspace = state.semanticBoardSnapshot.workspace;
+  }
 }
 
 function mountSemanticBoard(raw) {
@@ -1213,7 +1254,7 @@ function mountFromCard(card) {
   }
   hideStartPlay();
   if (card.board) {
-    mountBoardV3(card.board);
+    mountBoardV3(card.board, card);
     return;
   }
   if (card.semantic_board) {
@@ -1820,6 +1861,7 @@ async function loadConfig() {
       boards: Array.isArray(saved.boards) ? saved.boards : [],
       caption: saved.caption || "",
       seenTerms: Array.isArray(saved.seenTerms) ? saved.seenTerms : [],
+      mathWorkspace: saved.mathWorkspace || null,
     };
   }
   applyWorkspace(state.topicWorkspaces[state.topicKey]);
@@ -2030,7 +2072,9 @@ async function sendMessage(text) {
   if (!image && typeof content === "string") {
     const semantic = state.semanticBoardHandle;
     if (semantic && semantic.getSnapshot && window.XiaoouSemanticBoard && XiaoouSemanticBoard.formatSnapshot) {
-      const note = XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot());
+      const note = (state.mathWorkspace && window.XiaoouMathWorkspace && XiaoouMathWorkspace.formatNote)
+        ? XiaoouMathWorkspace.formatNote(state.mathWorkspace)
+        : XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot());
       contentForModel = note ? typed + "\n\n" + note : typed;
     } else {
       const live = state.liveActivities[state.liveActivities.length - 1];
@@ -2059,6 +2103,7 @@ async function startExplore() {
   clearDoodle();
   bumpAuthorGen();
   state.messages = [];
+  state.mathWorkspace = null;
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   setCaption(THINKING_CAPTION);
@@ -2098,6 +2143,9 @@ async function streamAssistant(kickoff) {
         show_reasoning: state.showReasoning,
         card: state.problemCard || null,
         seen_terms: state.seenTerms || [],
+        workspace: state.mathWorkspace || null,
+        workspace_id: state.mathWorkspace && state.mathWorkspace.id ? state.mathWorkspace.id : "",
+        expected_workspace_version: state.mathWorkspace ? state.mathWorkspace.version : null,
       }),
     });
     if (res.status === 401) {
@@ -2118,7 +2166,9 @@ async function streamAssistant(kickoff) {
         const line = part.trim();
         if (!line.startsWith("data:")) continue;
         const payload = JSON.parse(line.slice(5).trim());
-        if (payload.delta) {
+        if (payload.workspace) {
+          applyMathWorkspace(payload.workspace);
+        } else if (payload.delta) {
           acc += payload.delta;
           const visible = state.mode === "explore" ? stripBoardProtocol(acc) : acc;
           tutorBubble.innerHTML = renderMarkdown(visible);
@@ -2858,6 +2908,7 @@ function bindEvents() {
     state.problemCard = null;
     state.caption = "";
     state.seenTerms = [];
+    state.mathWorkspace = null;
     bumpAuthorGen();
     clearPendingImage();
     clearActivitySession();

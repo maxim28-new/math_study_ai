@@ -2,7 +2,9 @@
 
 ## 状态
 
-提案。本文定义 BoardSpec V3 之后的目标架构，不代表当前代码已经具备这些能力。
+落地中。第一版已实现：Math Workspace、只读/注意类工具、积木 `add_tiles` + `arrange(outer_ring)`、
+有上限的 Tutor Agent loop，以及孩子「加上下一层」与 Agent 共用同一套 reducer。
+V3 renderer 仍作为适配器保留。本文其余部分仍是目标架构。
 
 ## 一句话原则
 
