@@ -73,12 +73,15 @@
     function render() {
       canvas.innerHTML = "";
       const svg = svgEl("svg", {
-        viewBox: "-55 -15 470 380",
+        viewBox: "-70 -20 500 360",
+        preserveAspectRatio: "xMidYMid meet",
         role: "img",
         "aria-label": `${labels[0]}${labels[1]} 为圆规宽度，两圆相交于 ${labels[2]}`,
       });
-      const ax = 105, bx = 255, baseY = 160, radius = 150;
-      const px = 180, py = 160 - Math.sqrt(radius * radius - 75 * 75);
+      const ax = 110, bx = 250, baseY = 170, radius = 140;
+      const px = (ax + bx) / 2;
+      const half = (bx - ax) / 2;
+      const py = baseY - Math.sqrt(radius * radius - half * half);
 
       svg.appendChild(line(ax, baseY, bx, baseY, "geometry-base"));
       svg.appendChild(svgEl("circle", { cx: ax, cy: baseY, r: 4, class: "geometry-point" }));
