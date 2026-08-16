@@ -889,7 +889,34 @@ button, input, select, textarea { font-family: inherit; }
 }
 .play-stage.is-playing .stage-host { display: flex; }
 .stage-host:has(.semantic-board) { align-items: stretch; }
-.play-stage.is-drawing .stage-host { padding-bottom: 54px; }
+.explore-stage.is-drawing .caption-bar { flex: 1.4 1 0; }
+.explore-stage.is-drawing .play-stage { flex: 8.6 1 0; }
+.board-viewport {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+.play-stage:not(.is-playing) .board-viewport { display: none; }
+.board-world {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.board-world .stage-host {
+  position: absolute;
+  inset: 0;
+  flex: none;
+  width: 100%;
+  height: 100%;
+}
+.play-stage.is-drawing .stage-host {
+  overflow: hidden;
+  pointer-events: none;
+}
 .stage-host .snap-grid,
 .stage-host .diagram {
   width: min(100%, 320px);
@@ -1192,22 +1219,28 @@ button, input, select, textarea { font-family: inherit; }
   position: absolute;
   left: 8px;
   right: 8px;
-  bottom: 10px;
+  bottom: 8px;
   z-index: 4;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 7px 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
   border: 1px solid rgba(234, 223, 206, .95);
-  border-radius: 999px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, .94);
   box-shadow: 0 4px 12px rgba(62, 48, 24, .08);
 }
 .doodle-toolbar.hidden { display: none; }
+.doodle-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 .doodle-color {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 2px solid rgba(255, 255, 255, .9);
   border-radius: 50%;
@@ -1220,18 +1253,36 @@ button, input, select, textarea { font-family: inherit; }
 .doodle-color[data-color="#2f9d6a"] { --swatch: #2f9d6a; }
 .doodle-color[data-color="#e09a2c"] { --swatch: #e09a2c; }
 .doodle-color.is-active { box-shadow: 0 0 0 2px var(--primary); }
+.doodle-tool,
 .doodle-eraser,
-.doodle-reset-btn {
+.doodle-reset-btn,
+.doodle-width {
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 5px 10px;
+  padding: 5px 9px;
   color: var(--ink);
   background: #fff;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
-.doodle-eraser.is-active {
+.doodle-width {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.doodle-width-dot {
+  display: block;
+  width: var(--w, 4px);
+  height: var(--w, 4px);
+  border-radius: 50%;
+  background: var(--ink);
+}
+.doodle-tool.is-active,
+.doodle-eraser.is-active,
+.doodle-width.is-active {
   color: var(--primary);
   border-color: rgba(63, 91, 214, .28);
   background: var(--primary-soft);

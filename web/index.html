@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260816-boardv3f" />
+  <link rel="stylesheet" href="/styles.css?v=20260816-boardv3g" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -64,15 +64,33 @@
           <p class="start-kicker">点开始玩，小欧会先想一道题</p>
           <button type="button" id="startPlayBtn" class="start-play-btn">开始玩</button>
         </div>
-        <div id="stageHost" class="stage-host"></div>
-        <canvas id="doodleCanvas" class="doodle-canvas" aria-hidden="true"></canvas>
+        <div id="boardViewport" class="board-viewport">
+          <div id="boardWorld" class="board-world">
+            <div id="stageHost" class="stage-host"></div>
+            <canvas id="doodleCanvas" class="doodle-canvas" aria-hidden="true"></canvas>
+          </div>
+        </div>
         <div id="doodleToolbar" class="doodle-toolbar hidden">
-          <button type="button" class="doodle-color is-active" data-color="#2f4ab8" aria-label="蓝色"></button>
-          <button type="button" class="doodle-color" data-color="#d94b4b" aria-label="红色"></button>
-          <button type="button" class="doodle-color" data-color="#2f9d6a" aria-label="绿色"></button>
-          <button type="button" class="doodle-color" data-color="#e09a2c" aria-label="橙色"></button>
-          <button type="button" id="doodleEraserBtn" class="doodle-eraser">橡皮</button>
-          <button type="button" id="doodleResetBtn" class="doodle-reset-btn">重置</button>
+          <div class="doodle-tool-group">
+            <button type="button" id="doodlePenBtn" class="doodle-tool is-active" aria-pressed="true">画笔</button>
+            <button type="button" id="doodleLineBtn" class="doodle-tool" aria-pressed="false">直线</button>
+            <button type="button" id="doodleEraserBtn" class="doodle-eraser">橡皮</button>
+          </div>
+          <div class="doodle-tool-group" role="group" aria-label="颜色">
+            <button type="button" class="doodle-color is-active" data-color="#2f4ab8" aria-label="蓝色"></button>
+            <button type="button" class="doodle-color" data-color="#d94b4b" aria-label="红色"></button>
+            <button type="button" class="doodle-color" data-color="#2f9d6a" aria-label="绿色"></button>
+            <button type="button" class="doodle-color" data-color="#e09a2c" aria-label="橙色"></button>
+          </div>
+          <div class="doodle-tool-group" role="group" aria-label="粗细">
+            <button type="button" class="doodle-width" data-width="2.4" aria-label="细"><i class="doodle-width-dot" style="--w:2px"></i></button>
+            <button type="button" class="doodle-width is-active" data-width="4.5" aria-label="中"><i class="doodle-width-dot" style="--w:4px"></i></button>
+            <button type="button" class="doodle-width" data-width="8" aria-label="粗"><i class="doodle-width-dot" style="--w:7px"></i></button>
+          </div>
+          <div class="doodle-tool-group">
+            <button type="button" id="doodleFitBtn" class="doodle-reset-btn">看全图</button>
+            <button type="button" id="doodleResetBtn" class="doodle-reset-btn">重置</button>
+          </div>
         </div>
         <div id="stageToast" class="stage-toast hidden">摆好了</div>
       </div>
@@ -256,13 +274,13 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260816-boardv3f"></script>
-  <script src="/activity/snap-grid.js?v=20260816-boardv3f"></script>
-  <script src="/board/state.js?v=20260816-boardv3f"></script>
-  <script src="/board/layer-pile.js?v=20260816-boardv3f"></script>
-  <script src="/board/path-board.js?v=20260816-boardv3f"></script>
-  <script src="/board/geometry-compass.js?v=20260816-boardv3f"></script>
-  <script src="/board/color-sequence.js?v=20260816-boardv3f"></script>
-  <script src="/app.js?v=20260816-boardv3f"></script>
+  <script src="/activity/state.js?v=20260816-boardv3g"></script>
+  <script src="/activity/snap-grid.js?v=20260816-boardv3g"></script>
+  <script src="/board/state.js?v=20260816-boardv3g"></script>
+  <script src="/board/layer-pile.js?v=20260816-boardv3g"></script>
+  <script src="/board/path-board.js?v=20260816-boardv3g"></script>
+  <script src="/board/geometry-compass.js?v=20260816-boardv3g"></script>
+  <script src="/board/color-sequence.js?v=20260816-boardv3g"></script>
+  <script src="/app.js?v=20260816-boardv3g"></script>
 </body>
 </html>
