@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -17,6 +18,8 @@ AUTHOR_ENGINES = ("deepseek", "glm")
 
 LADDER_RUNGS = ("do", "see", "why")
 REPRESENTATIONS = {"board_v3"}
+GENERATED_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "seed_catalog.json"
+GEOMETRY_SEED_KINDS = frozenset({"geometry_compass", "snap_grid"})
 
 AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看不到你。你只输出一张 JSON 题卡，不要讲解、不要 Markdown 前言。
 
@@ -60,7 +63,7 @@ board 只允许下面六种严格结构，字段名和值都不要改：
 - 允许步长的走法用 path_count。
 - 需要孩子摆方块用 snap_grid。
 - 数轴、线段图、点阵和正方形变化用 static_diagram。
-- 几何主题优先出“两圆交点作正三角形”，使用 geometry_compass。
+- 几何主题必须对准点、线、圆、角、平行、垂直、全等、对称或拼图形/面积；画板只用 geometry_compass 或 snap_grid。禁止数轴、刻度尺数格、加减求长度。尺规正三角形全组最多一题，不能靠换字母再出两道。
 - 找规律、按颜色重复排队必须用 color_sequence，禁止用单色 dots 代替花朵或珠子。
 - 不允许 board=null，不允许输出旧 semantic_board 或 diagram 顶层字段。
 - board 必须描述第一问的同一个规模；程序会按已校验 board 统一第一问。
@@ -198,9 +201,24 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
     return card
 
 
-def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
-    seeds = {
-        "arithmetic": {
+def topic_board_issues(topic: str, card: dict[str, Any], index: int = 1) -> list[str]:
+    """主题和画板是否匹配。程序校验用，避免几何题滑成数轴计数。"""
+    board = card.get("board") if isinstance(card.get("board"), dict) else {}
+    kind = str(board.get("kind") or "")
+    if topic != "geometry":
+        return []
+    if kind in GEOMETRY_SEED_KINDS:
+        return []
+    label = kind or "空的"
+    return [
+        f"第 {index} 题的画板是 {label}，几何与图形只接受尺规作图或拼方块图形，"
+        "不能用数轴、楼梯、点阵或颜色排队冒充几何"
+    ]
+
+
+SEED_VARIANTS: dict[str, list[dict[str, Any]]] = {
+    "arithmetic": [
+        {
             "hook": "一圈一圈围成正方形",
             "insight": "连续奇数一层一层加在外面，会围成越来越大的正方形",
             "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
@@ -215,31 +233,148 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
                 },
                 "view": {"reveal": "stepwise"},
             },
-            "first_question": "先看最中间这一块积木。点「加上下一层」，外面那一圈是几块？",
             "ladder": [
                 {"rung": "do", "ask": "先数最中间有几块。"},
                 {"rung": "see", "ask": "外面加上 3 块以后，是不是正方形？每边几块？"},
                 {"rung": "why", "ask": "再加一圈 5 块，为什么还是正方形？"},
             ],
+            "misconceptions": ["把 1、3、5 一次性倒成一座塔，而不是一圈一圈围"],
         },
-        "wordproblems": {
+        {
+            "hook": "罐子小山一层一层往下加",
+            "insight": "每一层都比上一层多 1，把看见的层加起来就是总数",
+            "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
+            "board": {
+                "schema": 3,
+                "kind": "layer_sum",
+                "model": {"layers": [1, 2, 3, 4], "item": "罐"},
+                "task": {
+                    "action": "count",
+                    "ask": "total",
+                    "prompt": "数一数每层，再想一共多少罐。",
+                },
+                "view": {"reveal": "items_without_total"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先数最上面一层有几罐。"},
+                {"rung": "see", "ask": "每一层比上一层多几罐？"},
+                {"rung": "why", "ask": "为什么把各层加起来就是全部？"},
+            ],
+            "misconceptions": ["只数最底下一层，忘了上面还有"],
+        },
+        {
+            "hook": "六块积木能铺满小格子吗",
+            "insight": "一样大的方块铺进格子，铺满时块数就是格子数",
+            "axiom": "数是用来数东西的：每个东西数一次，不多不少。",
+            "board": {
+                "schema": 3,
+                "kind": "snap_grid",
+                "model": {"rows": 2, "cols": 3, "tray": 6},
+                "task": {
+                    "action": "arrange",
+                    "ask": "observe",
+                    "prompt": "把 6 块放进格子，看看会变成什么。",
+                },
+                "view": {"reveal": "empty_grid_and_tiles"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先放进一块，数数空着几格。"},
+                {"rung": "see", "ask": "全部放进去以后，块数和格子数一样吗？"},
+                {"rung": "why", "ask": "为什么铺满时不用再数一遍格子？"},
+            ],
+            "misconceptions": ["以为格子比积木多，就一定铺不满"],
+        },
+    ],
+    "wordproblems": [
+        {
             "hook": "小明和小红分糖",
             "insight": "多出来的那一截，就是两人相差的数量",
             "axiom": "'一共''还剩''每份''平均''多几''少几'这些词，是在提示我该合起来、拿走、平分还是比较。",
-            "representation": "bars",
-            "diagram": {
-                "type": "bars",
-                "items": [{"label": "小明", "value": 8}, {"label": "小红", "value": 5}],
-                "caption": "谁的糖更多？多的是哪一截？",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "小明", "value": 8}, {"label": "小红", "value": 5}],
+                        "caption": "谁的糖更多？多的是哪一截？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "小明有 8 颗糖，小红有 5 颗，多的到底是哪一段？",
+                },
+                "view": {"reveal": "model_only"},
             },
-            "first_question": "小明有 8 颗糖，小红有 5 颗，多的到底是哪一段？",
             "ladder": [
                 {"rung": "do", "ask": "先在图上指一指，哪一段是两人都有的？"},
                 {"rung": "see", "ask": "多出来的那截有几颗？"},
                 {"rung": "why", "ask": "为什么用减法就能找到这一截？"},
             ],
+            "misconceptions": ["把两人的糖加起来，当成相差的数量"],
         },
-        "geometry": {
+        {
+            "hook": "小华排队买面包",
+            "insight": "前面的人加上自己，才是他在队伍里的位置",
+            "axiom": "先把题目读懂：它到底告诉了我什么？又在问我什么？用自己的话说一遍。",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "numberline",
+                        "from": 0,
+                        "to": 10,
+                        "marks": [3, 8],
+                        "caption": "从 3 走到 8，中间过了几步？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "小华前面有 3 个人，队伍一共 8 人，他后面还有几人？",
+                },
+                "view": {"reveal": "model_only"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先在数轴上指出 3 和 8。"},
+                {"rung": "see", "ask": "从 3 到 8 要走几格？"},
+                {"rung": "why", "ask": "为什么不能把 8 减 3 以后再随便减一个人？"},
+            ],
+            "misconceptions": ["忘了小华自己也占一个位置"],
+        },
+        {
+            "hook": "两箱苹果差多少",
+            "insight": "先对齐较短的那一段，多出来的才是相差",
+            "axiom": "'一共''还剩''每份''平均''多几''少几'这些词，是在提示我该合起来、拿走、平分还是比较。",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "大箱", "value": 12}, {"label": "小箱", "value": 7}],
+                        "caption": "大箱比小箱多的是哪一截？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "大箱 12 个苹果，小箱 7 个，多的是哪一段？",
+                },
+                "view": {"reveal": "model_only"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先比一比两条谁更长。"},
+                {"rung": "see", "ask": "多出来的那截是几个？"},
+                {"rung": "why", "ask": "为什么比较多少时要先对齐较短的一段？"},
+            ],
+            "misconceptions": ["把 12 和 7 加起来当成相差"],
+        },
+    ],
+    "geometry": [
+        {
             "hook": "圆规的宽度不变，也能画出正三角形",
             "insight": "同一个圆上的点到圆心一样远，两圆交点到两个圆心都等于半径",
             "axiom": "以任意一点为圆心、任意长为半径，可以画一个圆。",
@@ -254,48 +389,232 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
                 },
                 "view": {"reveal": "stepwise"},
             },
-            "first_question": "保持圆规宽度不变，两个圆的交点能帮我们得到三条一样长的边吗？",
             "ladder": [
                 {"rung": "do", "ask": "先把圆规夹成线段 AB 那么宽。"},
                 {"rung": "see", "ask": "交点 P 到 A、B 的距离分别是多少？"},
                 {"rung": "why", "ask": "为什么 PA、PB、AB 一定一样长？"},
             ],
+            "misconceptions": ["以为交点离两个圆心可以不一样远"],
         },
-        "algebra": {
+        {
+            "hook": "篱笆桩 C 和 D 也能围出正三角形",
+            "insight": "半径相等时，交点到两个圆心的距离都等于那条给定的边",
+            "axiom": "以任意一点为圆心、任意长为半径，可以画一个圆。",
+            "board": {
+                "schema": 3,
+                "kind": "geometry_compass",
+                "model": {"construction": "equilateral_triangle", "labels": ["C", "D", "Q"]},
+                "task": {
+                    "action": "construct",
+                    "ask": "compare_three_sides",
+                    "prompt": "按顺序画两个圆，再比较三条边。",
+                },
+                "view": {"reveal": "stepwise"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先夹住 CD，再分别以 C、D 为圆心画圆。"},
+                {"rung": "see", "ask": "交点 Q 到 C、到 D，哪一段更长？"},
+                {"rung": "why", "ask": "为什么换了字母，三条边仍然一样长？"},
+            ],
+            "misconceptions": ["觉得换了点的名字，道理就变了"],
+        },
+        {
+            "hook": "绳子两端 M、N，第三点在哪儿",
+            "insight": "两圆相交的点，正好让三条边都等于绳子的长度",
+            "axiom": "任意两点之间，可以画一条直线段。",
+            "board": {
+                "schema": 3,
+                "kind": "geometry_compass",
+                "model": {"construction": "equilateral_triangle", "labels": ["M", "N", "R"]},
+                "task": {
+                    "action": "construct",
+                    "ask": "compare_three_sides",
+                    "prompt": "按顺序画两个圆，再比较三条边。",
+                },
+                "view": {"reveal": "stepwise"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先把绳子当成线段 MN。"},
+                {"rung": "see", "ask": "交点 R 出现以后，你看见几条一样长的边？"},
+                {"rung": "why", "ask": "为什么不用尺子量，也能知道三边相等？"},
+            ],
+            "misconceptions": ["以为一定要用尺子量，才能说相等"],
+        },
+    ],
+    "algebra": [
+        {
             "hook": "天平两边要一样重",
             "insight": "两边同时做一样的事，天平仍然平衡",
             "axiom": "等式就像一架平衡的天平，两边一样重。",
-            "representation": "bars",
-            "diagram": {
-                "type": "bars",
-                "items": [{"label": "左边", "value": 7}, {"label": "右边", "value": 7}],
-                "caption": "两边一样重。如果两边都拿走 2，还会平吗？",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "左边", "value": 7}, {"label": "右边", "value": 7}],
+                        "caption": "两边一样重。如果两边都拿走 2，还会平吗？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "天平两边都是 7。两边同时拿走 2，还会平吗？",
+                },
+                "view": {"reveal": "model_only"},
             },
-            "first_question": "天平两边都是 7。两边同时拿走 2，还会平吗？",
             "ladder": [
                 {"rung": "do", "ask": "先用手比一比，两边都拿走 2，还剩几？"},
                 {"rung": "see", "ask": "两边剩的还一样多吗？"},
                 {"rung": "why", "ask": "为什么两边做同一件事，平衡不会被破坏？"},
             ],
+            "misconceptions": ["只在一边拿走，还以为天平仍会平"],
         },
-        "fractions": {
+        {
+            "hook": "两边都加上同一袋豆子",
+            "insight": "两边同时加上同样多的东西，等式仍然成立",
+            "axiom": "两边同时做完全一样的事（都加、都减、都乘、都除以同一个数），天平依然平衡。",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "左边", "value": 4}, {"label": "右边", "value": 4}],
+                        "caption": "两边都是 4。两边再各加 3，还会平吗？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "天平两边都是 4。两边同时再放上 3，还会平吗？",
+                },
+                "view": {"reveal": "model_only"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先算一边 4 加 3 是多少。"},
+                {"rung": "see", "ask": "另一边做同样的加法，结果一样吗？"},
+                {"rung": "why", "ask": "为什么加的是同一袋，天平不会歪？"},
+            ],
+            "misconceptions": ["以为加上东西后天平一定会歪"],
+        },
+        {
+            "hook": "右边轻了，怎样才能重新平",
+            "insight": "差几就补几，两边才能重新一样重",
+            "axiom": "等式就像一架平衡的天平，两边一样重。",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "左边", "value": 9}, {"label": "右边", "value": 5}],
+                        "caption": "左边 9，右边 5。右边还要放几才平？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "左边 9，右边 5，右边还要放几才能平？",
+                },
+                "view": {"reveal": "model_only"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先指一指哪一边更长。"},
+                {"rung": "see", "ask": "短的那一边差几？"},
+                {"rung": "why", "ask": "为什么补上相差的数量，两边就会平？"},
+            ],
+            "misconceptions": ["把 9 和 5 加起来当成要补的数"],
+        },
+    ],
+    "fractions": [
+        {
             "hook": "一块饼切成两半和四份",
             "insight": "切的份数变了，但拿走的饼可以还是一样多",
             "axiom": "分子分母同时乘或除以同一个数，分数的大小不变（还是同样多的饼）。",
-            "representation": "bars",
-            "diagram": {
-                "type": "bars",
-                "items": [{"label": "一半", "value": 2}, {"label": "四份里的两份", "value": 2}],
-                "caption": "这两种切法，拿走的饼一样多吗？",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "一半", "value": 2}, {"label": "四份里的两份", "value": 2}],
+                        "caption": "这两种切法，拿走的饼一样多吗？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "一块饼切成 2 份拿 1 份，和切成 4 份拿 2 份，哪个更多？",
+                },
+                "view": {"reveal": "model_only"},
             },
-            "first_question": "一块饼切成 2 份拿 1 份，和切成 4 份拿 2 份，哪个更多？",
             "ladder": [
                 {"rung": "do", "ask": "先把饼画成一样长的两条，标出拿走的部分。"},
                 {"rung": "see", "ask": "两条上涂黑的长度一样吗？"},
                 {"rung": "why", "ask": "为什么份数变了，拿走的却可以一样多？"},
             ],
+            "misconceptions": ["看到 4 份里拿 2 份，就觉得一定比一半多"],
         },
-        "reasoning": {
+        {
+            "hook": "巧克力掰成三份和六份",
+            "insight": "把每份再对切，拿走的份数也跟着加倍，总量不变",
+            "axiom": "同一个东西，切的份数越多，每一份就越小。",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "三份里一份", "value": 2}, {"label": "六份里两份", "value": 2}],
+                        "caption": "1/3 和 2/6 谁更大？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "巧克力切成 3 份拿 1 份，和切成 6 份拿 2 份，哪个更多？",
+                },
+                "view": {"reveal": "model_only"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先把两条画得一样长。"},
+                {"rung": "see", "ask": "涂黑的两段一样长吗？"},
+                {"rung": "why", "ask": "为什么份数变多了，拿走的却可以一样？"},
+            ],
+            "misconceptions": ["只看分母变大，就说巧克力变少了"],
+        },
+        {
+            "hook": "两杯果汁谁更满",
+            "insight": "比较分数前，要先想它们是不是同样大小的一杯",
+            "axiom": "比较或相加分数前，要先把它们切成一样大的份。",
+            "board": {
+                "schema": 3,
+                "kind": "static_diagram",
+                "model": {
+                    "diagram": {
+                        "type": "bars",
+                        "items": [{"label": "甲杯", "value": 3}, {"label": "乙杯", "value": 2}],
+                        "caption": "两杯一样大。甲杯更满一些吗？",
+                    }
+                },
+                "task": {
+                    "action": "observe",
+                    "ask": "notice",
+                    "prompt": "两杯一样大，甲杯装到 3 格，乙杯装到 2 格，谁更满？",
+                },
+                "view": {"reveal": "model_only"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先确认两杯是一样大的。"},
+                {"rung": "see", "ask": "哪一条涂得更长？"},
+                {"rung": "why", "ask": "为什么杯子一样大，才能直接比格子？"},
+            ],
+            "misconceptions": ["杯子不一样大，也直接比格子"],
+        },
+    ],
+    "reasoning": [
+        {
             "hook": "花朵颜色的规律",
             "insight": "先多看几个例子再猜，再用下一个去验证",
             "axiom": "找规律时，先多列几个具体例子，再猜规律，最后想办法验证。",
@@ -310,43 +629,163 @@ def seed_card(topic: str, level: str = "middle") -> dict[str, Any]:
                 },
                 "view": {"reveal": "hide_last"},
             },
-            "first_question": "红红蓝、红红蓝……第六朵会是什么颜色？",
             "ladder": [
                 {"rung": "do", "ask": "先把前五朵的颜色按顺序说出来。"},
                 {"rung": "see", "ask": "每几朵重复一次？"},
                 {"rung": "why", "ask": "你怎么证明第六朵一定是这个颜色，而不是猜的？"},
             ],
+            "misconceptions": ["只看最后一朵的前一朵，就猜下一个"],
         },
+        {
+            "hook": "珠子蓝黄蓝黄地排",
+            "insight": "两个一组重复时，位置的单双能帮我们判断颜色",
+            "axiom": "找规律时，先多列几个具体例子，再猜规律，最后想办法验证。",
+            "board": {
+                "schema": 3,
+                "kind": "color_sequence",
+                "model": {"item": "珠", "unit": ["blue", "yellow"], "count": 5},
+                "task": {
+                    "action": "predict",
+                    "ask": "color_at_end",
+                    "prompt": "按蓝、黄的规律排下去，第五颗会是什么颜色？",
+                },
+                "view": {"reveal": "hide_last"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先说出前四颗的颜色。"},
+                {"rung": "see", "ask": "第 1、3 颗是不是同一种颜色？"},
+                {"rung": "why", "ask": "为什么第五颗会跟第一颗一样？"},
+            ],
+            "misconceptions": ["以为会突然换成第三种颜色"],
+        },
+        {
+            "hook": "一次可以走 1 级或 2 级",
+            "insight": "把不同走法都试一遍，不要漏掉，也不要重复算",
+            "axiom": "举一个反例，就能推翻一句'所有……都……'的话。",
+            "board": {
+                "schema": 3,
+                "kind": "path_count",
+                "model": {"start": 0, "target": 4, "moves": [1, 2]},
+                "task": {
+                    "action": "enumerate",
+                    "ask": "number_of_paths",
+                    "prompt": "试着走到第 4 级，找出不同走法。",
+                },
+                "view": {"reveal": "rules_only"},
+            },
+            "ladder": [
+                {"rung": "do", "ask": "先走一步看看能到哪。"},
+                {"rung": "see", "ask": "有没有两种走法最后都到 4？"},
+                {"rung": "why", "ask": "怎样知道自己没有漏掉一种走法？"},
+            ],
+            "misconceptions": ["把同一种走法的左右顺序当成两种"],
+        },
+    ],
+}
+
+
+def _materialize_seed(topic: str, raw: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "topic": topic,
+        "hook": raw.get("hook"),
+        "insight": raw.get("insight"),
+        "axiom": raw.get("axiom"),
+        "board": raw.get("board"),
+        "ladder": raw.get("ladder"),
+        "misconceptions": raw.get("misconceptions") or ["只看表面数字，没先画出来"],
+        "first_question": raw.get("first_question") or "",
     }
-    base = seeds.get(topic) or seeds["arithmetic"]
-    legacy_representation = str(base.get("representation") or "")
-    legacy_diagram = base.get("diagram")
-    board = base.get("board") or semantic_board.board_v3_from_legacy(
-        None,
-        legacy_representation,
-        legacy_diagram,
-        str(base.get("first_question") or ""),
-    )
-    board = semantic_board.normalize_board_v3(board) or board
-    card = {
-        "topic": topic if topic in seeds else "arithmetic",
-        "misconceptions": ["只看表面数字，没先画出来"],
+    card = normalize_card(payload, topic)
+    if card:
+        return card
+    board = semantic_board.normalize_board_v3(raw.get("board"))
+    return {
+        "topic": topic,
+        "hook": str(raw.get("hook") or ""),
+        "insight": str(raw.get("insight") or ""),
+        "axiom": str(raw.get("axiom") or ""),
         "representation": "board_v3",
         "board": board,
         "semantic_board": None,
         "diagram": None,
-        **base,
+        "first_question": semantic_board.first_question_for_v3(board or {}) if board else "",
+        "ladder": raw.get("ladder") or [],
+        "misconceptions": raw.get("misconceptions") or [],
     }
-    card["representation"] = "board_v3"
-    card["board"] = board
-    card["semantic_board"] = None
-    card["diagram"] = None
-    card["first_question"] = semantic_board.first_question_for_v3(board) or str(
-        base.get("first_question") or ""
-    )
-    if topic not in seeds:
-        card["topic"] = "arithmetic"
-    return card
+
+
+def seed_variants(topic: str) -> list[dict[str, Any]]:
+    topic = topic if topic in SEED_VARIANTS else "arithmetic"
+    catalog = generated_seed_catalog()
+    source = (catalog.get("topics") or {}).get(topic) if catalog else None
+    raws = source if isinstance(source, list) and len(source) == 3 else SEED_VARIANTS[topic]
+    return [_materialize_seed(topic, raw) for raw in raws]
+
+
+def seed_cards_payload() -> dict[str, list[dict[str, Any]]]:
+    return {key: seed_variants(key) for key in SEED_VARIANTS}
+
+
+def generated_seed_catalog() -> dict[str, Any]:
+    """只接受 GLM Author Agent 产出的完整 6×3 目录；损坏时安全退回内置题。"""
+    try:
+        payload = json.loads(GENERATED_SEED_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != 1
+        or payload.get("generator") != "author-agent"
+        or payload.get("author_model") != "glm-5.3"
+        or payload.get("complete") is not True
+    ):
+        return {}
+    topics = payload.get("topics")
+    if not isinstance(topics, dict) or set(topics) != set(SEED_VARIANTS):
+        return {}
+    for topic, raws in topics.items():
+        if not isinstance(raws, list) or len(raws) != 3:
+            return {}
+        cards = [_materialize_seed(topic, raw) for raw in raws]
+        if any(validate_card(card, topic) for card in cards):
+            return {}
+        if any(topic_board_issues(topic, card, index) for index, card in enumerate(cards, 1)):
+            return {}
+        if topic == "geometry":
+            compass = sum(1 for card in cards if card["board"]["kind"] == "geometry_compass")
+            if compass > 1:
+                return {}
+    return payload
+
+
+def seed_catalog_meta() -> dict[str, Any]:
+    payload = generated_seed_catalog()
+    if not payload:
+        return {"source": "builtin", "author_model": "", "generated_at": ""}
+    return {
+        "source": payload.get("generator"),
+        "author_model": payload.get("author_model"),
+        "tutor_model": payload.get("tutor_model"),
+        "generated_at": payload.get("generated_at"),
+    }
+
+
+def seed_card(
+    topic: str,
+    level: str = "middle",
+    recent: list[str] | None = None,
+) -> dict[str, Any]:
+    del level  # 种子题按主题分，不按年级改画板。
+    cards = seed_variants(topic)
+    recent_hooks = [str(item).strip() for item in (recent or []) if str(item).strip()]
+    unused = [card for card in cards if card.get("hook") not in recent_hooks]
+    if unused:
+        return unused[0]
+    current = recent_hooks[-1] if recent_hooks else None
+    for index, card in enumerate(cards):
+        if card.get("hook") == current:
+            return cards[(index + 1) % len(cards)]
+    return cards[0]
 
 
 def build_author_prompt(topic_key: str, level: str, recent: list[str]) -> str:
@@ -425,7 +864,13 @@ def _author_client_conf(engine: str) -> tuple[str, str, str]:
     )
 
 
-async def request_author_card(topic: str, level: str, recent: list[str], engine: str) -> dict[str, Any]:
+async def request_author_card(
+    topic: str,
+    level: str,
+    recent: list[str],
+    engine: str,
+    timeout: float = 120.0,
+) -> dict[str, Any]:
     endpoint, api_key, model = _author_client_conf(engine)
     if not api_key:
         raise ValueError("还没有接上出题大脑的密钥。")
@@ -445,7 +890,7 @@ async def request_author_card(topic: str, level: str, recent: list[str], engine:
     if engine == "deepseek":
         payload["response_format"] = {"type": "json_object"}
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(50.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
         resp = await client.post(endpoint, json=payload, headers=headers)
         resp.raise_for_status()
         data = resp.json()
@@ -479,5 +924,5 @@ async def author_problem(
         except (httpx.HTTPError, ValueError) as exc:
             last_error = str(exc)
     if engine_ready(chosen):
-        return seed_card(topic, level)
+        return seed_card(topic, level, recent)
     raise ValueError(last_error if last_error else "还没有接上出题大脑。")

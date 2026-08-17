@@ -10,7 +10,7 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from server.app import app
-from server import author, tutor
+from server import author, author_jobs, tutor
 from server.config import thinking_request_extras, load_settings
 
 
@@ -221,10 +221,9 @@ class AuthorCardTests(unittest.TestCase):
     def test_reasoning_seed_uses_color_sequence(self):
         card = author.seed_card("reasoning", "middle")
         self.assertEqual(card["board"]["kind"], "color_sequence")
-        self.assertEqual(card["board"]["model"]["unit"], ["red", "red", "blue"])
+        self.assertGreaterEqual(len(card["board"]["model"]["unit"]), 2)
         self.assertEqual(card["board"]["view"]["reveal"], "hide_last")
         self.assertIn("红", card["first_question"])
-        self.assertIn("蓝", card["first_question"])
 
     def test_legacy_pattern_dots_card_upgrades_to_color_sequence(self):
         raw = {
@@ -258,9 +257,23 @@ class AuthorCardTests(unittest.TestCase):
         self.assertEqual(card["board"]["schema"], 3)
         self.assertEqual(card["board"]["kind"], "geometry_compass")
 
+    def test_geometry_catalog_stays_on_shape_boards(self):
+        cards = author.seed_variants("geometry")
+        for card in cards:
+            self.assertIn(card["board"]["kind"], author.GEOMETRY_SEED_KINDS, card["hook"])
+            diagram = ((card.get("board") or {}).get("model") or {}).get("diagram") or {}
+            self.assertNotEqual(diagram.get("type"), "numberline", card["hook"])
+        self.assertLessEqual(
+            sum(1 for card in cards if card["board"]["kind"] == "geometry_compass"),
+            1,
+        )
+        hooks = [card["hook"] for card in cards]
+        self.assertEqual(len(set(hooks)), 3)
+
     def test_author_falls_back_to_seed_after_one_short_attempt(self):
         src = Path(__file__).resolve().parents[1].joinpath("server/author.py").read_text(encoding="utf-8")
-        self.assertIn("httpx.Timeout(50.0)", src)
+        self.assertIn("httpx.Timeout(timeout)", src)
+        self.assertIn("timeout: float = 120.0", src)
         self.assertNotIn("for _ in range(2):", src)
 
     def test_v3_tutor_prompt_has_no_competing_draw_command(self):
@@ -285,9 +298,55 @@ class AuthorCardTests(unittest.TestCase):
             self.assertFalse(author.is_nine_square(card))
         arithmetic = author.seed_card("arithmetic", "middle")
         self.assertEqual(arithmetic["board"]["kind"], "layer_sum")
-        self.assertEqual(arithmetic["board"]["model"]["layers"], [1, 3, 5])
-        self.assertEqual(arithmetic["board"]["view"]["reveal"], "stepwise")
         self.assertNotEqual(arithmetic["board"]["kind"], "static_diagram")
+
+    def test_runtime_uses_complete_agent_generated_catalog(self):
+        catalog = author.generated_seed_catalog()
+        self.assertTrue(catalog.get("complete"))
+        self.assertEqual(catalog.get("generator"), "author-agent")
+        self.assertEqual(catalog.get("author_model"), "glm-5.3")
+        self.assertEqual(set(catalog["topics"]), set(author.SEED_VARIANTS))
+        self.assertEqual(sum(len(cards) for cards in catalog["topics"].values()), 18)
+        for topic, report in catalog["reports"].items():
+            self.assertTrue(report["review"]["approved"], topic)
+            self.assertEqual(len(report["tutor_probes"]), 3, topic)
+            self.assertTrue(all(probe["ok"] for probe in report["tutor_probes"]), topic)
+            recent = []
+            rotated = []
+            for _ in range(3):
+                card = author.seed_card(topic, "middle", recent)
+                rotated.append(card["hook"])
+                recent.append(card["hook"])
+            self.assertEqual(len(set(rotated)), 3, topic)
+        arith = author.seed_variants("arithmetic")
+        used = [card["hook"] for card in arith]
+        fourth = author.seed_card("arithmetic", "middle", used)
+        fifth = author.seed_card("arithmetic", "middle", used + [fourth["hook"]])
+        self.assertEqual(fourth["hook"], arith[0]["hook"])
+        self.assertEqual(fifth["hook"], arith[1]["hook"])
+        stuck_on_last = [arith[(index + 1) % 3]["hook"] for index in range(8)]
+        after_eight = author.seed_card("arithmetic", "middle", stuck_on_last)
+        self.assertEqual(after_eight["hook"], arith[0]["hook"])
+        self.assertEqual(author.seed_catalog_meta()["source"], "author-agent")
+
+    def test_each_topic_has_three_distinct_seed_variants(self):
+        for topic, raws in author.SEED_VARIANTS.items():
+            self.assertEqual(len(raws), 3, topic)
+            cards = author.seed_variants(topic)
+            self.assertEqual(len(cards), 3, topic)
+            hooks = [card["hook"] for card in cards]
+            self.assertEqual(len(set(hooks)), 3, hooks)
+            for card in cards:
+                self.assertEqual(card["topic"], topic)
+                self.assertIsNone(author.validate_card(card, topic), card.get("hook"))
+                self.assertFalse(author.is_nine_square(card))
+                self.assertTrue(card.get("first_question"))
+        first = author.seed_card("arithmetic", "middle")
+        second = author.seed_card("arithmetic", "middle", [first["hook"]])
+        third = author.seed_card("arithmetic", "middle", [first["hook"], second["hook"]])
+        self.assertNotEqual(first["hook"], second["hook"])
+        self.assertNotEqual(second["hook"], third["hook"])
+        self.assertNotEqual(first["hook"], third["hook"])
 
     def test_glm_thinking_cannot_be_disabled(self):
         extras = thinking_request_extras(
@@ -320,10 +379,17 @@ class AuthorHttpTests(unittest.TestCase):
     def setUp(self):
         from server.gate import reset_unlock_limiter
         reset_unlock_limiter()
+        author_jobs.reset()
         self.client = TestClient(app, follow_redirects=False)
 
     def test_author_requires_gate(self):
         resp = self.client.post("/api/author", json={"topic": "geometry"})
+        self.assertEqual(resp.status_code, 401)
+
+    def test_author_jobs_require_gate(self):
+        resp = self.client.post("/api/author/jobs", json={"topic": "geometry"})
+        self.assertEqual(resp.status_code, 401)
+        resp = self.client.get("/api/author/jobs/job_missing")
         self.assertEqual(resp.status_code, 401)
 
     def test_config_lists_author_engines_after_unlock(self):
@@ -332,6 +398,11 @@ class AuthorHttpTests(unittest.TestCase):
         keys = [e["key"] for e in cfg["author_engines"]]
         self.assertEqual(keys, ["glm", "deepseek"])
         self.assertIn(cfg["default_author"], ("glm", "deepseek"))
+        self.assertEqual(len(cfg["seed_cards"]), 6)
+        for topic, cards in cfg["seed_cards"].items():
+            self.assertEqual(len(cards), 3, topic)
+        self.assertEqual(cfg["seed_catalog"]["source"], "author-agent")
+        self.assertEqual(cfg["seed_catalog"]["author_model"], "glm-5.3")
 
     def test_seed_only_returns_seed_card(self):
         self.client.post("/api/unlock", json={"code": "maxim"})
@@ -342,6 +413,80 @@ class AuthorHttpTests(unittest.TestCase):
         self.assertEqual(data["engine"], "seed")
         self.assertEqual(data["card"]["topic"], "reasoning")
         self.assertFalse(author.is_nine_square(data["card"]))
+        self.assertIsNone(data.get("job_id"))
+
+    def test_author_returns_seed_immediately_and_starts_job(self):
+        self.client.post("/api/unlock", json={"code": "maxim"})
+        called = {}
+
+        async def fake_request(topic, level, recent, engine, timeout=120.0):
+            called["timeout"] = timeout
+            called["topic"] = topic
+            return author.seed_card(topic, level, list(recent or []) + ["__used__"])
+
+        with mock.patch.object(author, "engine_ready", return_value=True), mock.patch.object(
+            author, "request_author_card", side_effect=fake_request
+        ):
+            resp = self.client.post("/api/author", json={"topic": "geometry", "recent": ["旧题"]})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["engine"], "seed")
+            self.assertTrue(data["job_id"])
+            self.assertEqual(data["card"]["topic"], "geometry")
+            job = self.client.get("/api/author/jobs/" + data["job_id"])
+            self.assertEqual(job.status_code, 200)
+            body = job.json()
+            self.assertEqual(body["status"], "done")
+            self.assertTrue(body["card"])
+            self.assertEqual(called.get("timeout"), 120.0)
+            self.assertEqual(called.get("topic"), "geometry")
+
+    def test_author_job_poll_returns_generated_card(self):
+        self.client.post("/api/unlock", json={"code": "maxim"})
+
+        async def fake_request(topic, level, recent, engine, timeout=120.0):
+            return author.seed_card(topic, level, list(recent or []) + ["__used__"])
+
+        with mock.patch.object(author, "engine_ready", return_value=True), mock.patch.object(
+            author, "request_author_card", side_effect=fake_request
+        ):
+            started = self.client.post("/api/author/jobs", json={"topic": "reasoning", "level": "middle"})
+            self.assertEqual(started.status_code, 200)
+            job_id = started.json()["job_id"]
+            self.assertTrue(job_id)
+            polled = self.client.get("/api/author/jobs/" + job_id)
+            self.assertEqual(polled.status_code, 200)
+            body = polled.json()
+            self.assertEqual(body["status"], "done")
+            self.assertEqual(body["card"]["topic"], "reasoning")
+            self.assertIsNone(author.validate_card(body["card"], "reasoning"))
+
+    def test_failed_author_job_never_substitutes_a_seed(self):
+        self.client.post("/api/unlock", json={"code": "maxim"})
+
+        async def fail_request(*args, **kwargs):
+            raise ValueError("GLM failed")
+
+        with mock.patch.object(author, "engine_ready", return_value=True), mock.patch.object(
+            author, "request_author_card", side_effect=fail_request
+        ):
+            started = self.client.post(
+                "/api/author/jobs", json={"topic": "geometry", "level": "middle"}
+            )
+            job_id = started.json()["job_id"]
+            body = self.client.get("/api/author/jobs/" + job_id).json()
+            self.assertFalse(body["ok"])
+            self.assertEqual(body["status"], "failed")
+            self.assertNotIn("card", body)
+            self.assertNotEqual(body.get("engine"), "seed")
+
+    def test_pending_jobs_are_reused_for_same_topic(self):
+        first = author_jobs.create("geometry", "middle", ["a"], "glm")
+        second = author_jobs.create("geometry", "middle", ["b"], "glm")
+        self.assertEqual(first["id"], second["id"])
+        other = author_jobs.create("arithmetic", "middle", [], "glm")
+        self.assertNotEqual(first["id"], other["id"])
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ const state = {
   pendingImage: null, // 待发送的题目照片或画板涂鸦（dataURL）
   pendingImageKind: "", // photo | doodle | draw
   streaming: false,
+  chatAbort: null,
   liveActivities: [],
   mountedActivities: [],
   semanticBoardHandle: null,
@@ -35,11 +36,20 @@ const state = {
   seenTerms: [],
   authorGen: 0,
   mathWorkspace: null,
+  authorJobId: "",
+  authorWaitStartedAt: 0,
+  authorWaitTimer: null,
+  waitSeqByTopic: {},
+  waitByTopic: {},
 };
 
 const STORE_KEY = "xiaoou.session.v1";
+const AUTHOR_JOB_KEY = "xiaoou.authorJob.v1";
 const START_CAPTION = "点开始玩，把方块拖进格子";
 const THINKING_CAPTION = "小欧在想一道有意思的题…";
+const AUTHOR_WAIT_CAPTION = "小欧在想一道新题，大约要 2 分钟…";
+const AUTHOR_WAIT_MS = 125000;
+const AUTHOR_POLL_MS = 2000;
 
 // ---------------- 本地存储 ----------------
 // 图片是很大的 base64，存进 localStorage 会撑爆配额，所以持久化时把图片换成占位文字。
@@ -52,7 +62,7 @@ function sanitizeForStore(messages) {
   });
 }
 function emptyWorkspace() {
-  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [], mathWorkspace: null };
+  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [], mathWorkspace: null, recentHooks: [], pendingKickoff: false };
 }
 
 function messagePlainText(m) {
@@ -82,7 +92,7 @@ function lastTutorCaption() {
 
 function isIdleCaption(text) {
   const s = String(text || "").trim();
-  return !s || s === START_CAPTION || s === THINKING_CAPTION;
+  return !s || s === START_CAPTION || s === THINKING_CAPTION || s === AUTHOR_WAIT_CAPTION;
 }
 
 function liveCaption() {
@@ -129,6 +139,8 @@ function snapshotWorkspace() {
     caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
     mathWorkspace: state.mathWorkspace || null,
+    recentHooks: (state.recentHooks || []).slice(),
+    pendingKickoff: false,
   };
 }
 
@@ -143,6 +155,7 @@ function applyWorkspace(ws) {
   const W = window.XiaoouMathWorkspace;
   const savedWs = next.mathWorkspace;
   state.mathWorkspace = (W && W.fromDict(savedWs)) ? savedWs : null;
+  state.recentHooks = Array.isArray(next.recentHooks) ? next.recentHooks.slice() : [];
 }
 
 function rememberCurrentWorkspace() {
@@ -471,8 +484,7 @@ function showStartPlay() {
   if (play) play.classList.remove("is-playing", "is-drawing");
   setBoardMode("interact");
   clearDoodle();
-  const tools = $("#stageTools");
-  if (tools) tools.classList.add("hidden");
+  updateTrayUi();
 }
 
 function hideStartPlay() {
@@ -492,12 +504,18 @@ function resetExploreEmpty() {
 function updateTrayUi() {
   const live = state.liveActivities[state.liveActivities.length - 1];
   const snap = live && live.getSnapshot ? live.getSnapshot() : null;
+  const playing = !!( $(".play-stage") && $(".play-stage").classList.contains("is-playing"));
+  const hasSnap = !!(playing && state.stageSpec && snap && typeof snap.tray_left === "number");
+  const tools = $("#stageTools");
+  if (tools) tools.classList.toggle("hidden", !hasSnap);
   const count = $("#trayCount");
-  if (count && window.XiaoouActivity && XiaoouActivity.trayCountLabel) {
-    count.textContent = XiaoouActivity.trayCountLabel(snap ? snap.tray_left : 0);
+  if (count) {
+    count.textContent = hasSnap && window.XiaoouActivity && XiaoouActivity.trayCountLabel
+      ? XiaoouActivity.trayCountLabel(snap.tray_left)
+      : "";
   }
   const undoBtn = $("#undoTileBtn");
-  if (undoBtn) undoBtn.disabled = !(live && live.canUndo && live.canUndo());
+  if (undoBtn) undoBtn.disabled = !(hasSnap && live && live.canUndo && live.canUndo());
 }
 
 function showStageToast(text) {
@@ -713,10 +731,15 @@ function hasDoodleInk() {
   });
 }
 
+function canSendBoard() {
+  const play = $(".play-stage");
+  return !!(play && play.classList.contains("is-playing") && !state.streaming);
+}
+
 function syncBoardSendButton() {
   const send = $("#doodleSendBtn");
   if (!send) return;
-  send.disabled = state.streaming || !doodle.dirty || !hasDoodleInk();
+  send.disabled = !canSendBoard();
 }
 
 function setDoodleToolboxOpen(open) {
@@ -896,10 +919,8 @@ async function captureBoardImage() {
 
 async function sendDoodleToTutor() {
   if (state.streaming) return;
-  if (!hasDoodleInk()) {
-    showStageToast("先画一点再发给小欧");
-    return;
-  }
+  const play = $(".play-stage");
+  if (!play || !play.classList.contains("is-playing")) return;
   showStageToast("正在发给小欧…");
   resetDoodleView();
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -912,7 +933,7 @@ async function sendDoodleToTutor() {
     showStageToast("这张画还没发出去，再试一次");
     return;
   }
-  setPendingImage(dataUrl, "doodle");
+  setPendingImage(dataUrl, hasDoodleInk() ? "doodle" : "board");
   doodle.dirty = false;
   syncBoardSendButton();
   await sendMessage("");
@@ -1175,6 +1196,7 @@ function mountBoardV3(raw, card) {
   hideStartPlay();
   destroyMountedActivities();
   state.stageSpec = null;
+  updateTrayUi();
   const host = $("#stageHost");
   const tools = $("#stageTools");
   if (tools) tools.classList.add("hidden");
@@ -1284,6 +1306,369 @@ function mountFromCard(card) {
   }
 }
 
+function topicSeedPool(topic) {
+  const key = topic || state.topicKey;
+  return ((state.config && state.config.seed_cards) || {})[key] || [];
+}
+
+function topicRecentHooks(topic) {
+  const key = topic || state.topicKey;
+  if (key === state.topicKey) return state.recentHooks || [];
+  const ws = (state.topicWorkspaces || {})[key];
+  return (ws && Array.isArray(ws.recentHooks)) ? ws.recentHooks : [];
+}
+
+function unusedSeedCard(topic) {
+  const key = topic || state.topicKey;
+  const used = {};
+  topicRecentHooks(key).forEach((hook) => { used[String(hook)] = true; });
+  if (key === state.topicKey && state.problemCard && state.problemCard.hook) {
+    used[String(state.problemCard.hook)] = true;
+  }
+  const pick = topicSeedPool(key).find((card) => card && card.hook && !used[card.hook]);
+  if (!pick) return null;
+  return key === state.topicKey ? topicCard(pick) : pick;
+}
+
+function pickSeedCard(topic) {
+  const key = topic || state.topicKey;
+  const unused = unusedSeedCard(key);
+  if (unused) return unused;
+  const pool = topicSeedPool(key).filter((card) => card && card.hook);
+  if (!pool.length) return null;
+  const currentHook = (key === state.topicKey && state.problemCard && state.problemCard.hook)
+    ? String(state.problemCard.hook)
+    : "";
+  const idx = pool.findIndex((card) => card.hook === currentHook);
+  const pick = pool[(idx < 0 ? 0 : idx + 1) % pool.length] || pool[0];
+  return key === state.topicKey ? topicCard(pick) : pick;
+}
+
+function abortChatStream() {
+  const ac = state.chatAbort;
+  state.chatAbort = null;
+  if (ac) {
+    try { ac.abort(); } catch (e) {}
+  }
+  if (state.streaming) setStreaming(false);
+}
+
+function formatWaitClock(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return "已经等了 " + minutes + " 分 " + seconds + " 秒";
+}
+
+function stopAuthorWaitClock() {
+  if (state.authorWaitTimer) {
+    clearInterval(state.authorWaitTimer);
+    state.authorWaitTimer = null;
+  }
+}
+
+function tickAuthorWaitClock() {
+  const el = $("#authorWaitTimer");
+  if (!el || !state.authorWaitStartedAt) return;
+  el.textContent = formatWaitClock(Date.now() - state.authorWaitStartedAt);
+}
+
+function showAuthorWait() {
+  hideStartPlay();
+  const wait = $("#authorWaitWrap");
+  if (wait) wait.classList.remove("hidden");
+  const vp = $("#boardViewport");
+  if (vp) vp.classList.add("hidden");
+  if (!state.authorWaitStartedAt) state.authorWaitStartedAt = Date.now();
+  setCaption(AUTHOR_WAIT_CAPTION);
+  tickAuthorWaitClock();
+  stopAuthorWaitClock();
+  state.authorWaitTimer = setInterval(tickAuthorWaitClock, 1000);
+  if (state.authorJobId) rememberAuthorJob(state.authorJobId);
+}
+
+function hideAuthorWait() {
+  stopAuthorWaitClock();
+  state.authorWaitStartedAt = 0;
+  const wait = $("#authorWaitWrap");
+  if (wait) wait.classList.add("hidden");
+  const vp = $("#boardViewport");
+  if (vp) vp.classList.remove("hidden");
+}
+
+function isAuthorWaitVisible() {
+  const wait = $("#authorWaitWrap");
+  return !!(wait && !wait.classList.contains("hidden"));
+}
+
+function waitSeqFor(topic) {
+  const key = topic || state.topicKey;
+  return (state.waitSeqByTopic || {})[key] || 0;
+}
+
+function bumpWaitSeq(topic) {
+  const key = topic || state.topicKey;
+  state.waitSeqByTopic = state.waitSeqByTopic || {};
+  state.waitSeqByTopic[key] = waitSeqFor(key) + 1;
+  return state.waitSeqByTopic[key];
+}
+
+function persistWaitByTopic() {
+  try {
+    sessionStorage.setItem(AUTHOR_JOB_KEY, JSON.stringify({
+      byTopic: state.waitByTopic || {},
+      topic: state.topicKey,
+      jobId: state.authorJobId,
+      startedAt: state.authorWaitStartedAt,
+      waiting: isAuthorWaitVisible(),
+    }));
+  } catch (e) {}
+}
+
+function rememberAuthorJob(jobId, topic) {
+  const key = topic || state.topicKey;
+  if (key === state.topicKey) state.authorJobId = jobId || "";
+  state.waitByTopic = state.waitByTopic || {};
+  if (!jobId) {
+    delete state.waitByTopic[key];
+    persistWaitByTopic();
+    return;
+  }
+  const prev = state.waitByTopic[key] || {};
+  state.waitByTopic[key] = {
+    jobId,
+    startedAt: (key === state.topicKey ? state.authorWaitStartedAt : 0) || prev.startedAt || Date.now(),
+  };
+  persistWaitByTopic();
+}
+
+function parkCurrentWait() {
+  if (!isAuthorWaitVisible() && !state.authorWaitStartedAt) return;
+  state.waitByTopic = state.waitByTopic || {};
+  state.waitByTopic[state.topicKey] = {
+    jobId: state.authorJobId || "",
+    startedAt: state.authorWaitStartedAt || Date.now(),
+  };
+  persistWaitByTopic();
+}
+
+function clearTopicWait(topic) {
+  if (!topic || !state.waitByTopic) return;
+  delete state.waitByTopic[topic];
+  persistWaitByTopic();
+}
+
+function restoreParkedWait(topic) {
+  const parked = (state.waitByTopic || {})[topic];
+  if (!parked || !parked.jobId) return false;
+  state.authorJobId = parked.jobId;
+  state.authorWaitStartedAt = parked.startedAt || Date.now();
+  showAuthorWait();
+  if (!((state.waitInflight || {})[topic])) resumeWaitingExplore();
+  return true;
+}
+
+function stashGeneratedCard(topic, card) {
+  if (!topic || !card) return;
+  clearTopicWait(topic);
+  const prev = (state.topicWorkspaces || {})[topic] || emptyWorkspace();
+  const hooks = Array.isArray(prev.recentHooks) ? prev.recentHooks.slice() : [];
+  if (card.hook) hooks.push(card.hook);
+  state.topicWorkspaces = state.topicWorkspaces || {};
+  state.topicWorkspaces[topic] = Object.assign({}, prev, {
+    messages: [],
+    problemCard: card,
+    boards: [],
+    caption: card.first_question || "",
+    mathWorkspace: null,
+    pendingKickoff: true,
+    recentHooks: hooks.filter(Boolean).slice(-8),
+  });
+  try { saveSession(); } catch (e) {}
+}
+
+function syncTopicSurface() {
+  const ws = (state.topicWorkspaces || {})[state.topicKey];
+  if (ws && ws.pendingKickoff) {
+    ws.pendingKickoff = false;
+    const card = topicCard(state.problemCard);
+    if (card) {
+      applyNewExploreCard(card, { topic: state.topicKey });
+      return;
+    }
+  }
+  prefetchAuthor();
+}
+
+function loadAuthorJob() {
+  try {
+    return JSON.parse(sessionStorage.getItem(AUTHOR_JOB_KEY) || "null");
+  } catch (e) {
+    return null;
+  }
+}
+
+function authorBody(topic) {
+  const key = topic || state.topicKey;
+  return {
+    topic: key,
+    level: state.level,
+    engine: state.authorEngine,
+    recent: topicRecentHooks(key),
+  };
+}
+
+async function peekAuthorJob(jobId) {
+  if (!jobId) return null;
+  const res = await fetch("/api/author/jobs/" + encodeURIComponent(jobId));
+  if (res.status === 401) {
+    window.location.replace("/gate.html");
+    return null;
+  }
+  if (res.status === 404) return null;
+  return res.json().catch(() => null);
+}
+
+async function startAuthorJob(topic) {
+  const key = topic || state.topicKey;
+  const res = await fetch("/api/author/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(authorBody(key)),
+  });
+  if (res.status === 401) {
+    window.location.replace("/gate.html");
+    return null;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!data.job_id) throw new Error(data.error || "出题还没开始。");
+  rememberAuthorJob(data.job_id, key);
+  return data;
+}
+
+function warmAuthorJob() {
+  if (state.mode !== "explore") return;
+  if (state.authorJobId) return;
+  startAuthorJob().catch(() => {});
+}
+
+function pollAuthorJob(jobId, deadline, isLive) {
+  return new Promise((resolve) => {
+    let timer = null;
+    let stopped = false;
+
+    function cleanup() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVis);
+    }
+
+    async function tick() {
+      if (stopped) return;
+      if (isLive && !isLive()) {
+        cleanup();
+        resolve({ cancelled: true });
+        return;
+      }
+      try {
+        const data = await peekAuthorJob(jobId);
+        if (data && data.status === "done" && data.card) {
+          cleanup();
+          resolve(data);
+          return;
+        }
+        if (data && data.status === "failed") {
+          cleanup();
+          resolve(data);
+          return;
+        }
+        if (!data) {
+          cleanup();
+          resolve({ missing: true });
+          return;
+        }
+      } catch (e) {}
+      if (Date.now() > deadline && !document.hidden) {
+        cleanup();
+        resolve(null);
+        return;
+      }
+      const delay = document.hidden ? 4000 : AUTHOR_POLL_MS;
+      timer = setTimeout(tick, delay);
+    }
+
+    function onVis() {
+      if (!document.hidden) tick();
+    }
+
+    document.addEventListener("visibilitychange", onVis);
+    tick();
+  });
+}
+
+function cardFromJob(data, currentHook) {
+  if (!data || data.cancelled || !data.card) return null;
+  if (currentHook && data.card.hook === currentHook) return null;
+  return data.card;
+}
+
+async function waitForNewCard() {
+  const topic = state.topicKey;
+  const seq = waitSeqFor(topic);
+  const isLive = () => seq === waitSeqFor(topic);
+  const mine = { seq };
+  state.waitInflight = state.waitInflight || {};
+  state.waitInflight[topic] = mine;
+  try {
+  const currentHook = state.problemCard && state.problemCard.hook;
+  let jobId = ((state.waitByTopic || {})[topic] || {}).jobId || (topic === state.topicKey ? state.authorJobId : "");
+  if (jobId) {
+    const snap = await peekAuthorJob(jobId).catch(() => null);
+    const ready = cardFromJob(snap, currentHook);
+    if (ready) {
+      rememberAuthorJob("", topic);
+      return ready;
+    }
+    if (!snap || snap.status === "done" || snap.missing) jobId = "";
+  }
+  if (state.topicKey === topic && isLive()) showAuthorWait();
+  if (!jobId) {
+    const started = await startAuthorJob(topic);
+    jobId = started && started.job_id;
+    const ready = cardFromJob(started, currentHook);
+    if (ready) {
+      rememberAuthorJob("", topic);
+      return ready;
+    }
+  } else {
+    rememberAuthorJob(jobId, topic);
+  }
+  if (!jobId) {
+    rememberAuthorJob("", topic);
+    throw new Error("GLM-5.3 没有开始生成新题，请再试一次。");
+  }
+  let done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS, isLive);
+  if (done && done.cancelled) return null;
+  if (done && done.missing) {
+    const started = await startAuthorJob(topic);
+    jobId = started && started.job_id;
+    const ready = cardFromJob(started, currentHook);
+    if (ready) {
+      rememberAuthorJob("", topic);
+      return ready;
+    }
+    if (jobId) done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS, isLive);
+    if (done && done.cancelled) return null;
+  }
+  rememberAuthorJob("", topic);
+  const ready = cardFromJob(done, currentHook);
+  if (ready) return ready;
+  throw new Error((done && done.error) || "GLM-5.3 这次没有生成合格的新题，请再试一次。");
+  } finally {
+    if (state.waitInflight && state.waitInflight[topic] === mine) delete state.waitInflight[topic];
+  }
+}
+
 function friendlyAuthorError(err) {
   const msg = String(err && err.message ? err.message : err || "");
   if (/load failed|failed to fetch|networkerror|abort|timeout|network/i.test(msg)) {
@@ -1310,6 +1695,7 @@ async function fetchAuthorOnce(body, timeoutMs) {
     if (!res.ok || !data.card) {
       throw new Error(data.error || "出题大脑这会儿有点忙，再试一次。");
     }
+    if (data.job_id) rememberAuthorJob(data.job_id);
     return data.card;
   } finally {
     if (timer) clearTimeout(timer);
@@ -1368,24 +1754,17 @@ function prefetchAuthor() {
   if (state.mode !== "explore") return;
   if (state.config && !state.config.configured) return;
   if (state.problemCard && state.problemCard.topic === state.topicKey) return;
-  const gen = state.authorGen;
-  const topic = state.topicKey;
-  state.authorPromise = fetchAuthorCard(false).then((card) => {
-    if (gen !== state.authorGen || state.topicKey !== topic) return null;
-    return card;
-  }).catch(() => null);
+  const seed = pickSeedCard();
+  if (seed) rememberAuthorCard(seed, { force: false, gen: state.authorGen });
 }
 
 async function startPlay() {
   if (state.streaming) return;
   if (state.config && !state.config.configured) return;
+  hideAuthorWait();
   hideStartPlay();
-  setCaption(THINKING_CAPTION);
-  let card = topicCard(state.problemCard);
+  let card = topicCard(state.problemCard) || pickSeedCard();
   try {
-    if (!card && state.authorPromise) {
-      card = topicCard(await state.authorPromise);
-    }
     if (!card) card = await fetchAuthorCard(false);
   } catch (e) {
     setCaption(friendlyAuthorError(e));
@@ -1397,6 +1776,7 @@ async function startPlay() {
     showStartPlay();
     return;
   }
+  rememberAuthorCard(card, { force: false, gen: state.authorGen });
   mountFromCard(card);
   if (card.first_question) setCaption(card.first_question);
   applyModeUI();
@@ -1770,8 +2150,12 @@ function renderContentInto(bubble, content) {
       img.addEventListener("click", () => window.open(img.src, "_blank"));
       bubble.appendChild(img);
     } else if (part.type === "text" && part.text) {
+      const liveMarker = "（当前学具盘面，这不是她打的字）";
+      const cut = part.text.indexOf(liveMarker);
+      const shown = cut >= 0 ? part.text.slice(0, cut).trim() : part.text;
+      if (!shown) continue;
       const div = document.createElement("div");
-      div.innerHTML = renderMarkdown(part.text);
+      div.innerHTML = renderMarkdown(shown);
       decorateTutorTerms(div);
       bubble.appendChild(div);
     }
@@ -1954,7 +2338,10 @@ async function loadConfig() {
   applyModeUI();
   renderHistory();
   refreshVoiceAvailability();
-  prefetchAuthor();
+  state.waitByTopic = {};
+  state.authorJobId = "";
+  try { sessionStorage.removeItem(AUTHOR_JOB_KEY); } catch (e) {}
+  syncTopicSurface();
 }
 
 // 思考模式关闭时，展示思考的选项不可用。
@@ -2013,6 +2400,8 @@ function applyModeUI() {
   if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
   const boardSend = $("#doodleSendBtn");
   if (boardSend) boardSend.classList.toggle("hidden", !explore || !started);
+  const dockNew = $("#dockNewQuestionBtn");
+  if (dockNew) dockNew.classList.toggle("hidden", !explore || !started);
   syncBoardSendButton();
   const hintBtn = $("#hintBtn");
   if (hintBtn) hintBtn.hidden = !explore;
@@ -2045,6 +2434,21 @@ function updateAxioms() {
   applyModeUI();
 }
 
+function currentBoardNote() {
+  const semantic = state.semanticBoardHandle;
+  if (semantic && semantic.getSnapshot && window.XiaoouSemanticBoard && XiaoouSemanticBoard.formatSnapshot) {
+    if (state.mathWorkspace && window.XiaoouMathWorkspace && XiaoouMathWorkspace.formatNote) {
+      return XiaoouMathWorkspace.formatNote(state.mathWorkspace) || "";
+    }
+    return XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot()) || "";
+  }
+  const live = state.liveActivities[state.liveActivities.length - 1];
+  if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
+    return XiaoouActivity.formatBoardNote(live.getSnapshot(), null) || "";
+  }
+  return "";
+}
+
 // ---------------- 发送 / 流式接收 ----------------
 async function sendMessage(text) {
   if (state.streaming) return;
@@ -2053,36 +2457,25 @@ async function sendMessage(text) {
   const imageKind = state.pendingImageKind || (image ? "photo" : "");
   if (!typed && !image) return;
 
-  // 组装本条消息：有图片时用多模态数组，否则用纯文字。
+  const note = currentBoardNote();
   let content;
   if (image) {
     const caption = typed || (imageKind === "doodle"
       ? "这是我在数学画板上画的，请直接看图里我画的内容。"
-      : "这是我作业本上的题目，你先帮我看看。");
+      : imageKind === "board"
+        ? "这是我现在的数学画板，请直接看图，也看盘面说明。"
+        : "这是我作业本上的题目，你先帮我看看。");
     content = [
-      { type: "text", text: caption },
+      { type: "text", text: note ? caption + "\n\n" + note : caption },
       { type: "image_url", image_url: { url: image } },
     ];
   } else {
     content = typed;
   }
 
-  // 显示孩子的消息
   let contentForModel = content;
   if (!image && typeof content === "string") {
-    const semantic = state.semanticBoardHandle;
-    if (semantic && semantic.getSnapshot && window.XiaoouSemanticBoard && XiaoouSemanticBoard.formatSnapshot) {
-      const note = (state.mathWorkspace && window.XiaoouMathWorkspace && XiaoouMathWorkspace.formatNote)
-        ? XiaoouMathWorkspace.formatNote(state.mathWorkspace)
-        : XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot());
-      contentForModel = note ? typed + "\n\n" + note : typed;
-    } else {
-      const live = state.liveActivities[state.liveActivities.length - 1];
-      if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
-        const note = XiaoouActivity.formatBoardNote(live.getSnapshot(), null);
-        contentForModel = typed + "\n\n" + note;
-      }
-    }
+    contentForModel = note ? typed + "\n\n" + note : typed;
   }
   state.messages.push({ role: "user", content: image ? content : contentForModel });
   const childBubble = addMessageEl("child");
@@ -2096,32 +2489,70 @@ async function sendMessage(text) {
   await streamAssistant(false);
 }
 
-// 探索模式：点"出个新题"，让小欧出题（不显示孩子气泡）。
-async function startExplore() {
+async function applyNewExploreCard(card, opts) {
+  const topic = (opts && opts.topic) || (card && card.topic) || state.topicKey;
+  if (state.topicKey !== topic) {
+    if (card) stashGeneratedCard(topic, card);
+    return false;
+  }
+  hideAuthorWait();
+  clearTopicWait(topic);
+  if (!card || !topicCard(card)) {
+    setCaption(friendlyAuthorError("这道题再想一会儿，点开始玩再试一次。"));
+    showStartPlay();
+    return false;
+  }
+  rememberAuthorCard(card, { force: true, gen: state.authorGen });
+  mountFromCard(card);
+  if (card.first_question) setCaption(card.first_question);
+  await streamAssistant(true);
+  return true;
+}
+
+async function resumeWaitingExplore() {
   if (state.streaming) return;
   setBoardMode("interact");
   clearDoodle();
+  const topic = state.topicKey;
+  try {
+    const card = await waitForNewCard();
+    if (state.topicKey !== topic) {
+      if (card) stashGeneratedCard(topic, card);
+      return;
+    }
+    if (!card) return;
+    await applyNewExploreCard(card, { topic });
+  } catch (e) {
+    if (state.topicKey !== topic || !isAuthorWaitVisible()) return;
+    hideAuthorWait();
+    setCaption(friendlyAuthorError(e));
+    showStartPlay();
+  }
+}
+
+// 探索模式：点"出个新题"，让小欧出题（不显示孩子气泡）。
+async function startExplore() {
+  abortChatStream();
+  setBoardMode("interact");
+  clearDoodle();
   bumpAuthorGen();
+  const topic = state.topicKey;
+  const seq = bumpWaitSeq(topic);
+  clearTopicWait(topic);
   state.messages = [];
   state.mathWorkspace = null;
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
-  setCaption(THINKING_CAPTION);
-  try {
-    const card = await fetchAuthorCard(true);
-    if (card) {
-      mountFromCard(card);
-      if (card.first_question) setCaption(card.first_question);
-    }
-  } catch (e) {
-    setCaption(friendlyAuthorError(e));
-    return;
-  }
-  await streamAssistant(true);
+  saveSession();
+  const card = pickSeedCard(topic);
+  if (seq !== waitSeqFor(topic) || state.topicKey !== topic) return;
+  await applyNewExploreCard(card, { topic });
 }
 
 // 共用的流式接收逻辑。kickoff=true 时请求小欧出题。
 async function streamAssistant(kickoff) {
+  const ac = new AbortController();
+  state.chatAbort = ac;
   setStreaming(true);
   const tutorBubble = addMessageEl("tutor");
   tutorBubble.classList.add("cursor-blink");
@@ -2132,6 +2563,7 @@ async function streamAssistant(kickoff) {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: ac.signal,
       body: JSON.stringify({
         messages: state.messages,
         topic: state.topicKey,
@@ -2203,38 +2635,44 @@ async function streamAssistant(kickoff) {
       }
     }
   } catch (err) {
+    if ((err && err.name === "AbortError") || ac.signal.aborted) return;
     acc += (acc ? "\n\n" : "") + "抱歉，连接出了点问题，请稍后再试。";
     tutorBubble.innerHTML = renderMarkdown(acc);
     decorateTutorTerms(tutorBubble);
-  }
-
-  tutorBubble.classList.remove("cursor-blink");
-  if (state.mode === "explore") {
-    acc = stripBoardProtocol(acc);
-    tutorBubble.innerHTML = renderMarkdown(acc);
-    decorateTutorTerms(tutorBubble);
-  }
-  if (acc.trim()) {
-    state.messages.push({ role: "assistant", content: acc });
-    saveSession();
-    if (state.mode === "explore") {
-      const cap = window.XiaoouActivity && XiaoouActivity.tutorCaption
-        ? XiaoouActivity.tutorCaption(acc)
-        : "";
-      if (cap) setCaption(cap);
-      // 探索画板只由已校验题卡驱动，陪练文字不能替换或清空它。
-    } else {
-      const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
-      if (hasGrid) freezeLiveActivities();
-      hydrateSnapGrids(tutorBubble, true);
+  } finally {
+    tutorBubble.classList.remove("cursor-blink");
+    if (state.chatAbort !== ac) return;
+    state.chatAbort = null;
+    if (ac.signal.aborted) {
+      setStreaming(false);
+      return;
     }
-    saveSession();
-  }
-  setStreaming(false);
-  if (state.queuedMilestone) {
-    const q = state.queuedMilestone;
-    state.queuedMilestone = null;
-    sendActivityMilestone(q.event, q.snapshot);
+    if (state.mode === "explore") {
+      acc = stripBoardProtocol(acc);
+      tutorBubble.innerHTML = renderMarkdown(acc);
+      decorateTutorTerms(tutorBubble);
+    }
+    if (acc.trim()) {
+      state.messages.push({ role: "assistant", content: acc });
+      saveSession();
+      if (state.mode === "explore") {
+        const cap = window.XiaoouActivity && XiaoouActivity.tutorCaption
+          ? XiaoouActivity.tutorCaption(acc)
+          : "";
+        if (cap) setCaption(cap);
+      } else {
+        const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
+        if (hasGrid) freezeLiveActivities();
+        hydrateSnapGrids(tutorBubble, true);
+      }
+      saveSession();
+    }
+    setStreaming(false);
+    if (state.queuedMilestone) {
+      const q = state.queuedMilestone;
+      state.queuedMilestone = null;
+      sendActivityMilestone(q.event, q.snapshot);
+    }
   }
 }
 
@@ -2249,6 +2687,8 @@ function setStreaming(on) {
   if (startBtn && state.config && state.config.configured) startBtn.disabled = on;
   const newQ = $("#newQuestionBtn");
   if (newQ) newQ.disabled = on;
+  const dockNew = $("#dockNewQuestionBtn");
+  if (dockNew) dockNew.disabled = on;
   document.querySelectorAll(".quick-actions button, #hintBtn").forEach((b) => (b.disabled = on));
   syncBoardSendButton();
 }
@@ -2721,6 +3161,7 @@ function chooseTopic(key) {
     if (sel) sel.value = state.topicKey;
     return;
   }
+  hideAuthorWait();
   rememberCurrentWorkspace();
   bumpAuthorGen();
   destroyMountedActivities();
@@ -2729,11 +3170,12 @@ function chooseTopic(key) {
   const sel = $("#topicSelect");
   if (sel) sel.value = key;
   applyWorkspace((state.topicWorkspaces || {})[key]);
+  state.authorJobId = "";
   clearPendingImage();
   updateAxioms();
   saveSession();
   renderHistory();
-  prefetchAuthor();
+  syncTopicSurface();
 }
 function openAttachSheet() {
   const sheet = $("#attachSheet");
@@ -2790,13 +3232,14 @@ function bindEvents() {
       if (e.target === historySheet) closeHistorySheet();
     });
   }
-  const newQuestionBtn = $("#newQuestionBtn");
-  if (newQuestionBtn) {
-    newQuestionBtn.addEventListener("click", () => {
-      closeAttachSheet();
-      startExplore();
-    });
+  function requestNewQuestion() {
+    closeAttachSheet();
+    startExplore();
   }
+  const newQuestionBtn = $("#newQuestionBtn");
+  if (newQuestionBtn) newQuestionBtn.addEventListener("click", requestNewQuestion);
+  const dockNewQuestionBtn = $("#dockNewQuestionBtn");
+  if (dockNewQuestionBtn) dockNewQuestionBtn.addEventListener("click", requestNewQuestion);
   const undoTileBtn = $("#undoTileBtn");
   if (undoTileBtn) {
     undoTileBtn.addEventListener("click", () => {
@@ -2904,17 +3347,11 @@ function bindEvents() {
 
   $("#resetBtn").addEventListener("click", () => {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
-    state.messages = [];
-    state.problemCard = null;
-    state.caption = "";
     state.seenTerms = [];
-    state.mathWorkspace = null;
-    bumpAuthorGen();
     clearPendingImage();
     clearActivitySession();
-    saveSession();
-    renderHistory();
-    prefetchAuthor();
+    closeDrawer();
+    startExplore();
   });
 }
 

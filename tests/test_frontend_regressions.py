@@ -122,12 +122,19 @@ class FrontendRegressionTests(unittest.TestCase):
         snap_at = html.find("/activity/snap-grid.js")
         app_at = html.find("/app.js")
         self.assertTrue(0 < konva_at < state_at < snap_at < app_at)
+        snap = read("web/activity/snap-grid.js")
+        self.assertIn("board-viewport", snap)
+        self.assertIn("spec.rows + trayRows", snap)
+        self.assertIn("还没放进去的方块", snap)
+        self.assertIn("trayWrapCols", read("web/activity/state.js"))
 
     def test_drawing_guide_teaches_snap_grid(self):
         guide = read("server/tutor.py")
         self.assertIn('"type":"snap_grid"', guide)
         self.assertIn("board_full", guide)
         self.assertIn("tiles_exhausted", guide)
+        self.assertIn("各行已放", guide)
+        self.assertIn("发画板", guide)
         self.assertIn("不要祝贺", guide)
         self.assertIn('{"type":"dots"', guide)
         self.assertIn('{"type":"stairs"', guide)
@@ -160,8 +167,17 @@ class FrontendRegressionTests(unittest.TestCase):
     def test_app_js_appends_board_note_on_typed_send(self):
         app = read("web/app.js")
         self.assertIn("当前学具盘面", app)
+        self.assertIn("function currentBoardNote(", app)
         self.assertIn("XiaoouSemanticBoard.formatSnapshot", app)
         self.assertIn("contentForModel", app)
+        self.assertIn('imageKind === "board"', app)
+        send = app[app.find("async function sendDoodleToTutor"):app.find("function initDoodle")]
+        self.assertIn("canSendBoard", app)
+        self.assertNotIn("先画一点再发给小欧", send)
+        self.assertIn('hasDoodleInk() ? "doodle" : "board"', send)
+        sync = app[app.find("function canSendBoard"):app.find("function setDoodleToolboxOpen")]
+        self.assertNotIn("hasDoodleInk()", sync)
+        self.assertIn("is-playing", sync)
 
     def test_explore_stage_shell(self):
         html = read("web/index.html")
@@ -180,6 +196,7 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="attachSheet"',
             'id="hintBtn"',
             'id="newQuestionBtn"',
+            'id="dockNewQuestionBtn"',
             'id="doodleCanvas"',
             'id="doodleToolbar"',
             'id="doodleSendBtn"',
@@ -199,6 +216,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("我有作业", html)
         self.assertNotIn("打开画板", html)
         self.assertIn(".layout-explore", css)
+        self.assertIn(".app.layout-explore:not(.talk-open) #inputRow", css)
+        self.assertIn(".app.layout-explore:not(.talk-open) #voiceDock { display: none; }", css)
+        self.assertIn(".app.layout-explore.talk-open .voice-hint { display: none; }", css)
         self.assertIn("solve-workspace", html)
         self.assertIn(".play-stage", css)
         self.assertIn(".play-stage.is-drawing", css)
@@ -211,7 +231,10 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".doodle-canvas", css)
         self.assertIn(".doodle-toolbar", css)
         self.assertIn(".child-dock", css)
+        self.assertIn("dock-new-btn", css)
         self.assertIn("function remountStage(", app)
+        self.assertIn("function requestNewQuestion(", app)
+        self.assertIn("typeof snap.tray_left", app)
         self.assertIn("function setBoardMode(", app)
         self.assertIn("function captureBoardImage(", app)
         self.assertIn("function sendDoodleToTutor(", app)
@@ -220,7 +243,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260816-agentv1", html)
+        self.assertIn("v=20260817-uxfix", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -274,13 +297,17 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('id="authorSelect"', html)
         self.assertIn("/api/author", app)
         self.assertIn("function fetchAuthorCard(", app)
+        self.assertIn("function pickSeedCard(", app)
         self.assertIn("function friendlyAuthorError(", app)
         self.assertIn("这道题再想一会儿，点开始玩再试一次。", app)
         self.assertIn("seed_only", app)
+        self.assertIn("点开始玩，马上就能开始", html)
         start = app[app.find("async function startPlay"):app.find("function placeMessages")]
+        self.assertIn("pickSeedCard", start)
         self.assertIn("fetchAuthorCard", start)
         self.assertIn("friendlyAuthorError", start)
         self.assertIn("alreadyStarted", start)
+        self.assertNotIn("warmAuthorJob", start)
         self.assertNotIn("DEFAULT_SNAP_GRID", start)
         self.assertIn("function rememberCurrentWorkspace(", app)
         self.assertIn("function applyWorkspace(", app)
@@ -293,8 +320,31 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("rememberCurrentWorkspace", choose)
         self.assertIn("applyWorkspace", choose)
         self.assertIn("bumpAuthorGen", choose)
-        self.assertIn("prefetchAuthor", choose)
+        self.assertIn("hideAuthorWait", choose)
+        self.assertIn("syncTopicSurface", choose)
         self.assertNotIn("problemCard = null", choose)
+        self.assertIn("function unusedSeedCard(", app)
+        self.assertIn("function pickSeedCard(", app)
+        pick = app[app.find("function pickSeedCard"):app.find("function abortChatStream")]
+        self.assertIn("unusedSeedCard(key)", pick)
+        self.assertIn("(idx < 0 ? 0 : idx + 1) % pool.length", pick)
+        self.assertNotIn("topicRecentHooks(key).length % pool.length", pick)
+        self.assertNotIn("topicSeedPool(key)[0] || null", pick)
+        self.assertIn("function abortChatStream(", app)
+        self.assertIn("AbortController", app)
+        self.assertIn("AbortError", app)
+        self.assertIn("function stashGeneratedCard(", app)
+        self.assertIn("function waitSeqFor(", app)
+        self.assertIn("waitSeqByTopic", app)
+        self.assertIn("waitByTopic", app)
+        start_ex = app[app.find("async function startExplore"):app.find("async function streamAssistant")]
+        self.assertIn("abortChatStream", start_ex)
+        self.assertIn("bumpWaitSeq", start_ex)
+        self.assertIn("waitSeqFor(topic)", start_ex)
+        self.assertIn("pickSeedCard", start_ex)
+        self.assertNotIn("if (state.streaming) return;", start_ex)
+        self.assertNotIn("waitForNewCard", start_ex)
+        self.assertNotIn("/api/author/jobs", start_ex)
         self.assertIn('location.replace("/gate.html")', app)
         self.assertNotIn("Load failed", start)
 
@@ -353,6 +403,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("mountColorSequence", color_seq)
         self.assertIn('unit: ["red", "red", "blue"]', color_seq)
         self.assertIn(".stage-host:has(.semantic-board) { align-items: stretch; }", css)
+        self.assertIn(".stage-host:has(figure.diagram:not(.snap-grid)) { align-items: center; }", css)
         self.assertIn("preserveAspectRatio", read("web/board/geometry-compass.js"))
         self.assertIn("function highlight(", geometry_board)
         self.assertIn(".term-chip", css)
@@ -437,7 +488,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260816-agentv1", html)
+        self.assertIn("v=20260817-uxfix", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

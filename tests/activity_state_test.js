@@ -56,6 +56,12 @@ assert.ok(note.includes("空格：0"));
 assert.ok(note.includes("托盘剩余：0"));
 assert.ok(note.includes("节点：board_full"));
 
+const rowSnap = A.makeSnapshot(spec({ cols: 8, rows: 2, tray: 12 }), 12, 0, [8, 4]);
+assert.deepStrictEqual(rowSnap.rows_filled, [8, 4]);
+const rowNote = A.formatBoardNote(rowSnap, "tiles_exhausted");
+assert.ok(rowNote.includes("各行已放：第1行8块，第2行4块"));
+assert.ok(rowNote.includes("节点：tiles_exhausted"));
+
 const liveNote = A.formatBoardNote(s8, null);
 assert.ok(liveNote.includes("（当前学具盘面，这不是她打的字）"));
 assert.ok(!liveNote.includes("节点："));
@@ -82,6 +88,9 @@ assert.strictEqual(A.sameSnapGrid(null, d), false);
 assert.strictEqual(A.trayCountLabel(4), "还剩 4 块");
 assert.strictEqual(A.trayCountLabel(0), "方块用完了");
 assert.strictEqual(A.trayCountLabel(-3), "方块用完了");
+assert.strictEqual(A.trayWrapCols({ cols: 8, tray: 12 }), 6);
+assert.strictEqual(A.trayWrapCols({ cols: 4, tray: 8 }), 4);
+assert.strictEqual(A.trayWrapCols({ cols: 3, tray: 3 }), 2);
 
 assert.strictEqual(
   A.tutorCaption("这 9 块，能摆成一个正方形吗？\n\n```xiaoou-draw\n{\"type\":\"snap_grid\",\"cols\":3,\"rows\":3,\"tray\":9}\n```"),
