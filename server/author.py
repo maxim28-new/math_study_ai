@@ -749,6 +749,12 @@ def generated_seed_catalog() -> dict[str, Any]:
         cards = [_materialize_seed(topic, raw) for raw in raws]
         if any(validate_card(card, topic) for card in cards):
             return {}
+        if any(topic_board_issues(topic, card, index) for index, card in enumerate(cards, 1)):
+            return {}
+        if topic == "geometry":
+            compass = sum(1 for card in cards if card["board"]["kind"] == "geometry_compass")
+            if compass > 1:
+                return {}
     return payload
 
 

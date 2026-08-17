@@ -257,6 +257,19 @@ class AuthorCardTests(unittest.TestCase):
         self.assertEqual(card["board"]["schema"], 3)
         self.assertEqual(card["board"]["kind"], "geometry_compass")
 
+    def test_geometry_catalog_stays_on_shape_boards(self):
+        cards = author.seed_variants("geometry")
+        for card in cards:
+            self.assertIn(card["board"]["kind"], author.GEOMETRY_SEED_KINDS, card["hook"])
+            diagram = ((card.get("board") or {}).get("model") or {}).get("diagram") or {}
+            self.assertNotEqual(diagram.get("type"), "numberline", card["hook"])
+        self.assertLessEqual(
+            sum(1 for card in cards if card["board"]["kind"] == "geometry_compass"),
+            1,
+        )
+        hooks = [card["hook"] for card in cards]
+        self.assertEqual(len(set(hooks)), 3)
+
     def test_author_falls_back_to_seed_after_one_short_attempt(self):
         src = Path(__file__).resolve().parents[1].joinpath("server/author.py").read_text(encoding="utf-8")
         self.assertIn("httpx.Timeout(timeout)", src)
