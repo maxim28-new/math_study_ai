@@ -38,7 +38,7 @@ const state = {
   authorJobId: "",
   authorWaitStartedAt: 0,
   authorWaitTimer: null,
-  waitSeq: 0,
+  waitSeqByTopic: {},
   waitByTopic: {},
 };
 
@@ -1377,6 +1377,18 @@ function isAuthorWaitVisible() {
   return !!(wait && !wait.classList.contains("hidden"));
 }
 
+function waitSeqFor(topic) {
+  const key = topic || state.topicKey;
+  return (state.waitSeqByTopic || {})[key] || 0;
+}
+
+function bumpWaitSeq(topic) {
+  const key = topic || state.topicKey;
+  state.waitSeqByTopic = state.waitSeqByTopic || {};
+  state.waitSeqByTopic[key] = waitSeqFor(key) + 1;
+  return state.waitSeqByTopic[key];
+}
+
 function persistWaitByTopic() {
   try {
     sessionStorage.setItem(AUTHOR_JOB_KEY, JSON.stringify({
@@ -1574,8 +1586,8 @@ function cardFromJob(data, currentHook) {
 
 async function waitForNewCard() {
   const topic = state.topicKey;
-  const seq = state.waitSeq;
-  const isLive = () => seq === state.waitSeq;
+  const seq = waitSeqFor(topic);
+  const isLive = () => seq === waitSeqFor(topic);
   const mine = { seq };
   state.waitInflight = state.waitInflight || {};
   state.waitInflight[topic] = mine;
@@ -2503,9 +2515,8 @@ async function startExplore() {
   setBoardMode("interact");
   clearDoodle();
   bumpAuthorGen();
-  state.waitSeq = (state.waitSeq || 0) + 1;
-  const seq = state.waitSeq;
   const topic = state.topicKey;
+  const seq = bumpWaitSeq(topic);
   clearTopicWait(topic);
   state.messages = [];
   state.mathWorkspace = null;
@@ -2519,13 +2530,13 @@ async function startExplore() {
   }
   try {
     const card = await waitForNewCard();
-    if (seq !== state.waitSeq) {
+    if (seq !== waitSeqFor(topic)) {
       if (card) stashGeneratedCard(topic, card);
       return;
     }
     await applyNewExploreCard(card, { topic });
   } catch (e) {
-    if (seq !== state.waitSeq || state.topicKey !== topic) return;
+    if (seq !== waitSeqFor(topic) || state.topicKey !== topic) return;
     hideAuthorWait();
     setCaption(friendlyAuthorError(e));
     showStartPlay();
