@@ -20,10 +20,48 @@ from server import author_agent, tutor  # noqa: E402
 DEFAULT_OUTPUT = ROOT / "data" / "seed_catalog.json"
 
 
+def write_checkpoint(
+    output: Path,
+    topics: dict[str, list[dict]],
+    reports: dict[str, dict],
+    *,
+    complete: bool,
+) -> None:
+    payload = {
+        "schema": author_agent.CATALOG_VERSION,
+        "generator": "author-agent",
+        "author_model": "glm-5.3",
+        "tutor_model": tutor.settings.model,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "complete": complete,
+        "topics": topics,
+        "reports": reports,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temp = output.with_suffix(output.suffix + ".tmp")
+    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temp.replace(output)
+
+
 async def generate(output: Path, *, tutor_probe: bool) -> None:
     topics: dict[str, list[dict]] = {}
     reports: dict[str, dict] = {}
+    try:
+        previous = json.loads(output.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        previous = {}
+    if (
+        isinstance(previous, dict)
+        and previous.get("generator") == "author-agent"
+        and previous.get("author_model") == "glm-5.3"
+    ):
+        topics = previous.get("topics") if isinstance(previous.get("topics"), dict) else {}
+        reports = previous.get("reports") if isinstance(previous.get("reports"), dict) else {}
+
     for topic in tutor.TOPICS:
+        if topic.key in topics and len(topics[topic.key]) == 3:
+            print(f"[resume] {topic.key}: using completed checkpoint", flush=True)
+            continue
         print(f"[author] {topic.key}: generating three cards", flush=True)
         result = await author_agent.generate_topic_seed_batch(topic.key)
         cards = result["cards"]
@@ -45,20 +83,10 @@ async def generate(output: Path, *, tutor_probe: bool) -> None:
                     )
         topics[topic.key] = cards
         reports[topic.key] = topic_report
+        write_checkpoint(output, topics, reports, complete=False)
+        print(f"[checkpoint] saved {topic.key}", flush=True)
 
-    payload = {
-        "schema": author_agent.CATALOG_VERSION,
-        "generator": "author-agent",
-        "author_model": "glm-5.3",
-        "tutor_model": tutor.settings.model,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "topics": topics,
-        "reports": reports,
-    }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temp = output.with_suffix(output.suffix + ".tmp")
-    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    temp.replace(output)
+    write_checkpoint(output, topics, reports, complete=True)
     print(f"[done] wrote {sum(len(cards) for cards in topics.values())} cards to {output}")
 
 

@@ -721,6 +721,7 @@ def generated_seed_catalog() -> dict[str, Any]:
         or payload.get("schema") != 1
         or payload.get("generator") != "author-agent"
         or payload.get("author_model") != "glm-5.3"
+        or payload.get("complete") is not True
     ):
         return {}
     topics = payload.get("topics")

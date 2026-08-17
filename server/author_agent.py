@@ -200,15 +200,21 @@ def _tool_record(call: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]
     }
 
 
-async def _post_author(payload: dict[str, Any], timeout: float = 180.0) -> dict[str, Any]:
+async def _post_author(payload: dict[str, Any], timeout: float = 300.0) -> dict[str, Any]:
     endpoint, api_key, _model = author._author_client_conf("glm")
     if not api_key:
         raise ValueError("GLM-5.3 密钥未配置")
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
-        response = await client.post(endpoint, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
+    last_error: Exception | None = None
+    for _attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
+                response = await client.post(endpoint, headers=headers, json=payload)
+                response.raise_for_status()
+                return response.json()
+        except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.RemoteProtocolError) as exc:
+            last_error = exc
+    raise last_error or RuntimeError("GLM-5.3 请求失败")
 
 
 async def review_seed_batch(topic: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
