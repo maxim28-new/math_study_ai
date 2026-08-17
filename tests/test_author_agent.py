@@ -34,6 +34,19 @@ class AuthorAgentValidationTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("三题的 concept_key 必须代表三个不同的数学发现", result["issues"])
 
+    def test_rejects_color_prediction_as_a_fraction_seed(self):
+        candidates = self.candidates("fractions")
+        candidates[2] = {
+            "concept_key": "fraction_as_share",
+            "card": author.SEED_VARIANTS["reasoning"][0] | {
+                "topic": "fractions",
+                "insight": "红花占全部的三分之二",
+            },
+        }
+        result = author_agent.validate_seed_batch("fractions", candidates)
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("只会问颜色规律" in issue for issue in result["issues"]), result)
+
     def test_every_accepted_card_mounts_as_tutor_workspace(self):
         result = author_agent.validate_seed_batch("reasoning", self.candidates("reasoning"))
         self.assertTrue(result["ok"], result)

@@ -44,7 +44,12 @@ def write_checkpoint(
     temp.replace(output)
 
 
-async def generate(output: Path, *, tutor_probe: bool) -> None:
+async def generate(
+    output: Path,
+    *,
+    tutor_probe: bool,
+    regenerate_topics: set[str] | None = None,
+) -> None:
     topics: dict[str, list[dict]] = {}
     reports: dict[str, dict] = {}
     try:
@@ -58,6 +63,9 @@ async def generate(output: Path, *, tutor_probe: bool) -> None:
     ):
         topics = previous.get("topics") if isinstance(previous.get("topics"), dict) else {}
         reports = previous.get("reports") if isinstance(previous.get("reports"), dict) else {}
+    for topic in regenerate_topics or set():
+        topics.pop(topic, None)
+        reports.pop(topic, None)
 
     for topic in tutor.TOPICS:
         cards = topics.get(topic.key) if isinstance(topics.get(topic.key), list) else []
@@ -109,8 +117,20 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--skip-tutor-probe", action="store_true")
+    parser.add_argument(
+        "--regenerate-topic",
+        action="append",
+        choices=[topic.key for topic in tutor.TOPICS],
+        default=[],
+    )
     args = parser.parse_args()
-    asyncio.run(generate(args.output, tutor_probe=not args.skip_tutor_probe))
+    asyncio.run(
+        generate(
+            args.output,
+            tutor_probe=not args.skip_tutor_probe,
+            regenerate_topics=set(args.regenerate_topic),
+        )
+    )
 
 
 if __name__ == "__main__":

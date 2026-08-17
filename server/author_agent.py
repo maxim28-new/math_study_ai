@@ -104,6 +104,16 @@ def validate_seed_batch(topic: str, candidates: Any) -> dict[str, Any]:
         if not card:
             issues.append(f"第 {index} 题未通过题卡或 BoardSpec V3 校验")
             continue
+        board_kind = card["board"]["kind"]
+        if board_kind == "color_sequence" and topic != "reasoning":
+            issues.append(
+                f"第 {index} 题用 color_sequence 时，程序第一问只会问颜色规律，"
+                f"不能承载 {topic} 主题的目标洞见"
+            )
+            continue
+        if board_kind == "geometry_compass" and topic != "geometry":
+            issues.append(f"第 {index} 题的尺规正三角形画板只能用于 geometry")
+            continue
         workspace = WS.seed_from_card(card, topic, f"author_preview_{topic}_{index}")
         if WS.from_dict(workspace) is None:
             issues.append(f"第 {index} 题无法挂载为 Tutor Agent 工作区")
@@ -236,7 +246,9 @@ async def review_seed_batch(topic: str, cards: list[dict[str, Any]]) -> dict[str
                 "content": (
                     "你是小欧题库的严格主编。检查同主题三题是否在数学洞见、孩子操作和推理路径上"
                     "实质不同，并检查画板、第一问、三层台阶是否一致可教。只换字母、数字、人物、"
-                    "物品或同义改写必须判重复。只输出 JSON："
+                    "物品或同义改写必须判重复。尤其要检查：孩子回答程序统一后的 first_question，"
+                    "是否会自然走向 insight；如果第一问只在问颜色、计数或摆放，而目标洞见另有其事，"
+                    "必须拒绝。只输出 JSON："
                     '{"approved":true|false,"issues":["..."],"duplicate_pairs":[[1,2]]}。'
                 ),
             },
