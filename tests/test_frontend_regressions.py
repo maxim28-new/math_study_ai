@@ -220,7 +220,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260817-authorwait", html)
+        self.assertIn("v=20260817-topicwait", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -306,8 +306,16 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("rememberCurrentWorkspace", choose)
         self.assertIn("applyWorkspace", choose)
         self.assertIn("bumpAuthorGen", choose)
-        self.assertIn("prefetchAuthor", choose)
+        self.assertIn("hideAuthorWait", choose)
+        self.assertIn("parkCurrentWait", choose)
+        self.assertIn("syncTopicSurface", choose)
         self.assertNotIn("problemCard = null", choose)
+        self.assertIn("function unusedSeedCard(", app)
+        self.assertIn("function stashGeneratedCard(", app)
+        start_ex = app[app.find("async function startExplore"):app.find("async function streamAssistant")]
+        self.assertIn("unusedSeedCard", start_ex)
+        self.assertIn("waitForNewCard", start_ex)
+        self.assertIn("state.topicKey !== topic", start_ex)
         self.assertIn('location.replace("/gate.html")', app)
         self.assertNotIn("Load failed", start)
 
@@ -450,7 +458,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260817-authorwait", html)
+        self.assertIn("v=20260817-topicwait", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

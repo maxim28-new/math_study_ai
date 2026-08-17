@@ -38,6 +38,8 @@ const state = {
   authorJobId: "",
   authorWaitStartedAt: 0,
   authorWaitTimer: null,
+  waitSeq: 0,
+  waitByTopic: {},
 };
 
 const STORE_KEY = "xiaoou.session.v1";
@@ -59,7 +61,7 @@ function sanitizeForStore(messages) {
   });
 }
 function emptyWorkspace() {
-  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [], mathWorkspace: null };
+  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [], mathWorkspace: null, recentHooks: [], pendingKickoff: false };
 }
 
 function messagePlainText(m) {
@@ -89,7 +91,7 @@ function lastTutorCaption() {
 
 function isIdleCaption(text) {
   const s = String(text || "").trim();
-  return !s || s === START_CAPTION || s === THINKING_CAPTION;
+  return !s || s === START_CAPTION || s === THINKING_CAPTION || s === AUTHOR_WAIT_CAPTION;
 }
 
 function liveCaption() {
@@ -136,6 +138,8 @@ function snapshotWorkspace() {
     caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
     mathWorkspace: state.mathWorkspace || null,
+    recentHooks: (state.recentHooks || []).slice(),
+    pendingKickoff: false,
   };
 }
 
@@ -150,6 +154,7 @@ function applyWorkspace(ws) {
   const W = window.XiaoouMathWorkspace;
   const savedWs = next.mathWorkspace;
   state.mathWorkspace = (W && W.fromDict(savedWs)) ? savedWs : null;
+  state.recentHooks = Array.isArray(next.recentHooks) ? next.recentHooks.slice() : [];
 }
 
 function rememberCurrentWorkspace() {
@@ -1291,13 +1296,37 @@ function mountFromCard(card) {
   }
 }
 
-function pickSeedCard() {
-  const pool = ((state.config && state.config.seed_cards) || {})[state.topicKey] || [];
+function topicSeedPool(topic) {
+  const key = topic || state.topicKey;
+  return ((state.config && state.config.seed_cards) || {})[key] || [];
+}
+
+function topicRecentHooks(topic) {
+  const key = topic || state.topicKey;
+  if (key === state.topicKey) return state.recentHooks || [];
+  const ws = (state.topicWorkspaces || {})[key];
+  return (ws && Array.isArray(ws.recentHooks)) ? ws.recentHooks : [];
+}
+
+function unusedSeedCard(topic) {
+  const key = topic || state.topicKey;
   const used = {};
-  (state.recentHooks || []).forEach((hook) => { used[String(hook)] = true; });
-  const unused = pool.filter((card) => card && !used[card.hook]);
-  const pick = unused[0] || pool[0] || null;
-  return topicCard(pick);
+  topicRecentHooks(key).forEach((hook) => { used[String(hook)] = true; });
+  if (key === state.topicKey && state.problemCard && state.problemCard.hook) {
+    used[String(state.problemCard.hook)] = true;
+  }
+  const pick = topicSeedPool(key).find((card) => card && card.hook && !used[card.hook]);
+  if (!pick) return null;
+  return key === state.topicKey ? topicCard(pick) : pick;
+}
+
+function pickSeedCard(topic) {
+  const key = topic || state.topicKey;
+  const unused = unusedSeedCard(key);
+  if (unused) return unused;
+  const pick = topicSeedPool(key)[0] || null;
+  if (!pick) return null;
+  return key === state.topicKey ? topicCard(pick) : pick;
 }
 
 function formatWaitClock(ms) {
@@ -1343,21 +1372,97 @@ function hideAuthorWait() {
   if (vp) vp.classList.remove("hidden");
 }
 
-function rememberAuthorJob(jobId) {
-  state.authorJobId = jobId || "";
-  if (!jobId) {
-    try { sessionStorage.removeItem(AUTHOR_JOB_KEY); } catch (e) {}
-    return;
-  }
+function isAuthorWaitVisible() {
+  const wait = $("#authorWaitWrap");
+  return !!(wait && !wait.classList.contains("hidden"));
+}
+
+function persistWaitByTopic() {
   try {
     sessionStorage.setItem(AUTHOR_JOB_KEY, JSON.stringify({
-      jobId,
+      byTopic: state.waitByTopic || {},
       topic: state.topicKey,
-      gen: state.authorGen,
-      startedAt: state.authorWaitStartedAt || Date.now(),
-      waiting: !!state.authorWaitStartedAt,
+      jobId: state.authorJobId,
+      startedAt: state.authorWaitStartedAt,
+      waiting: isAuthorWaitVisible(),
     }));
   } catch (e) {}
+}
+
+function rememberAuthorJob(jobId, topic) {
+  const key = topic || state.topicKey;
+  if (key === state.topicKey) state.authorJobId = jobId || "";
+  state.waitByTopic = state.waitByTopic || {};
+  if (!jobId) {
+    delete state.waitByTopic[key];
+    persistWaitByTopic();
+    return;
+  }
+  const prev = state.waitByTopic[key] || {};
+  state.waitByTopic[key] = {
+    jobId,
+    startedAt: (key === state.topicKey ? state.authorWaitStartedAt : 0) || prev.startedAt || Date.now(),
+  };
+  persistWaitByTopic();
+}
+
+function parkCurrentWait() {
+  if (!isAuthorWaitVisible() && !state.authorWaitStartedAt) return;
+  state.waitByTopic = state.waitByTopic || {};
+  state.waitByTopic[state.topicKey] = {
+    jobId: state.authorJobId || "",
+    startedAt: state.authorWaitStartedAt || Date.now(),
+  };
+  persistWaitByTopic();
+}
+
+function clearTopicWait(topic) {
+  if (!topic || !state.waitByTopic) return;
+  delete state.waitByTopic[topic];
+  persistWaitByTopic();
+}
+
+function restoreParkedWait(topic) {
+  const parked = (state.waitByTopic || {})[topic];
+  if (!parked || !parked.jobId) return false;
+  state.authorJobId = parked.jobId;
+  state.authorWaitStartedAt = parked.startedAt || Date.now();
+  showAuthorWait();
+  if (!((state.waitInflight || {})[topic])) resumeWaitingExplore();
+  return true;
+}
+
+function stashGeneratedCard(topic, card) {
+  if (!topic || !card) return;
+  clearTopicWait(topic);
+  const prev = (state.topicWorkspaces || {})[topic] || emptyWorkspace();
+  const hooks = Array.isArray(prev.recentHooks) ? prev.recentHooks.slice() : [];
+  if (card.hook) hooks.push(card.hook);
+  state.topicWorkspaces = state.topicWorkspaces || {};
+  state.topicWorkspaces[topic] = Object.assign({}, prev, {
+    messages: [],
+    problemCard: card,
+    boards: [],
+    caption: card.first_question || "",
+    mathWorkspace: null,
+    pendingKickoff: true,
+    recentHooks: hooks.filter(Boolean).slice(-8),
+  });
+  try { saveSession(); } catch (e) {}
+}
+
+function syncTopicSurface() {
+  if (restoreParkedWait(state.topicKey)) return;
+  const ws = (state.topicWorkspaces || {})[state.topicKey];
+  if (ws && ws.pendingKickoff) {
+    ws.pendingKickoff = false;
+    const card = topicCard(state.problemCard);
+    if (card) {
+      applyNewExploreCard(card, { topic: state.topicKey });
+      return;
+    }
+  }
+  prefetchAuthor();
 }
 
 function loadAuthorJob() {
@@ -1368,12 +1473,13 @@ function loadAuthorJob() {
   }
 }
 
-function authorBody() {
+function authorBody(topic) {
+  const key = topic || state.topicKey;
   return {
-    topic: state.topicKey,
+    topic: key,
     level: state.level,
     engine: state.authorEngine,
-    recent: state.recentHooks || [],
+    recent: topicRecentHooks(key),
   };
 }
 
@@ -1388,11 +1494,12 @@ async function peekAuthorJob(jobId) {
   return res.json().catch(() => null);
 }
 
-async function startAuthorJob() {
+async function startAuthorJob(topic) {
+  const key = topic || state.topicKey;
   const res = await fetch("/api/author/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(authorBody()),
+    body: JSON.stringify(authorBody(key)),
   });
   if (res.status === 401) {
     window.location.replace("/gate.html");
@@ -1400,7 +1507,7 @@ async function startAuthorJob() {
   }
   const data = await res.json().catch(() => ({}));
   if (!data.job_id) throw new Error(data.error || "出题还没开始。");
-  rememberAuthorJob(data.job_id);
+  rememberAuthorJob(data.job_id, key);
   return data;
 }
 
@@ -1410,7 +1517,7 @@ function warmAuthorJob() {
   startAuthorJob().catch(() => {});
 }
 
-function pollAuthorJob(jobId, deadline) {
+function pollAuthorJob(jobId, deadline, isLive) {
   return new Promise((resolve) => {
     let timer = null;
     let stopped = false;
@@ -1423,6 +1530,11 @@ function pollAuthorJob(jobId, deadline) {
 
     async function tick() {
       if (stopped) return;
+      if (isLive && !isLive()) {
+        cleanup();
+        resolve({ cancelled: true });
+        return;
+      }
       try {
         const data = await peekAuthorJob(jobId);
         if (data && data.status === "done" && data.card) {
@@ -1455,53 +1567,65 @@ function pollAuthorJob(jobId, deadline) {
 }
 
 function cardFromJob(data, currentHook) {
-  if (!data || !data.card) return null;
+  if (!data || data.cancelled || !data.card) return null;
   if (currentHook && data.card.hook === currentHook) return null;
   return data.card;
 }
 
 async function waitForNewCard() {
+  const topic = state.topicKey;
+  const seq = state.waitSeq;
+  const isLive = () => seq === state.waitSeq;
+  const mine = { seq };
+  state.waitInflight = state.waitInflight || {};
+  state.waitInflight[topic] = mine;
+  try {
   const currentHook = state.problemCard && state.problemCard.hook;
-  let jobId = state.authorJobId;
+  let jobId = ((state.waitByTopic || {})[topic] || {}).jobId || (topic === state.topicKey ? state.authorJobId : "");
   if (jobId) {
     const snap = await peekAuthorJob(jobId).catch(() => null);
     const ready = cardFromJob(snap, currentHook);
     if (ready) {
-      rememberAuthorJob("");
+      rememberAuthorJob("", topic);
       return ready;
     }
     if (!snap || snap.status === "done" || snap.missing) jobId = "";
   }
-  showAuthorWait();
+  if (state.topicKey === topic && isLive()) showAuthorWait();
   if (!jobId) {
-    const started = await startAuthorJob();
+    const started = await startAuthorJob(topic);
     jobId = started && started.job_id;
     const ready = cardFromJob(started, currentHook);
     if (ready) {
-      rememberAuthorJob("");
+      rememberAuthorJob("", topic);
       return ready;
     }
   } else {
-    rememberAuthorJob(jobId);
+    rememberAuthorJob(jobId, topic);
   }
   if (!jobId) {
-    rememberAuthorJob("");
-    return pickSeedCard();
+    rememberAuthorJob("", topic);
+    return pickSeedCard(topic);
   }
-  let done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS);
+  let done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS, isLive);
+  if (done && done.cancelled) return null;
   if (done && done.missing) {
-    const started = await startAuthorJob();
+    const started = await startAuthorJob(topic);
     jobId = started && started.job_id;
     const ready = cardFromJob(started, currentHook);
     if (ready) {
-      rememberAuthorJob("");
+      rememberAuthorJob("", topic);
       return ready;
     }
-    if (jobId) done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS);
+    if (jobId) done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS, isLive);
+    if (done && done.cancelled) return null;
   }
-  rememberAuthorJob("");
+  rememberAuthorJob("", topic);
   const ready = cardFromJob(done, currentHook);
-  return ready || pickSeedCard();
+  return ready || pickSeedCard(topic);
+  } finally {
+    if (state.waitInflight && state.waitInflight[topic] === mine) delete state.waitInflight[topic];
+  }
 }
 
 function friendlyAuthorError(err) {
@@ -2175,18 +2299,21 @@ async function loadConfig() {
   renderHistory();
   refreshVoiceAvailability();
   const pendingJob = loadAuthorJob();
-  if (pendingJob && pendingJob.jobId) {
-    state.authorJobId = pendingJob.jobId;
-    if (pendingJob.startedAt) state.authorWaitStartedAt = pendingJob.startedAt;
+  if (pendingJob && pendingJob.byTopic && typeof pendingJob.byTopic === "object") {
+    state.waitByTopic = pendingJob.byTopic;
+  } else if (pendingJob && pendingJob.jobId) {
+    state.waitByTopic = {};
+    state.waitByTopic[pendingJob.topic || state.topicKey] = {
+      jobId: pendingJob.jobId,
+      startedAt: pendingJob.startedAt || Date.now(),
+    };
   }
-  const resumeWait = !!(
-    pendingJob
-    && pendingJob.waiting
-    && pendingJob.jobId
-    && (!pendingJob.topic || pendingJob.topic === state.topicKey)
-  );
-  if (resumeWait) resumeWaitingExplore();
-  else prefetchAuthor();
+  const parked = (state.waitByTopic || {})[state.topicKey];
+  if (parked && parked.jobId) {
+    state.authorJobId = parked.jobId;
+    if (parked.startedAt) state.authorWaitStartedAt = parked.startedAt;
+  }
+  syncTopicSurface();
 }
 
 // 思考模式关闭时，展示思考的选项不可用。
@@ -2328,9 +2455,15 @@ async function sendMessage(text) {
   await streamAssistant(false);
 }
 
-async function applyNewExploreCard(card) {
+async function applyNewExploreCard(card, opts) {
+  const topic = (opts && opts.topic) || (card && card.topic) || state.topicKey;
+  if (state.topicKey !== topic) {
+    if (card) stashGeneratedCard(topic, card);
+    return false;
+  }
   hideAuthorWait();
-  if (!card) {
+  clearTopicWait(topic);
+  if (!card || !topicCard(card)) {
     setCaption(friendlyAuthorError("这道题再想一会儿，点开始玩再试一次。"));
     showStartPlay();
     return false;
@@ -2347,14 +2480,17 @@ async function resumeWaitingExplore() {
   if (state.streaming) return;
   setBoardMode("interact");
   clearDoodle();
-  state.messages = [];
-  state.mathWorkspace = null;
-  const messages = $("#messages");
-  if (messages) messages.innerHTML = "";
+  const topic = state.topicKey;
   try {
     const card = await waitForNewCard();
-    await applyNewExploreCard(card);
+    if (state.topicKey !== topic) {
+      if (card) stashGeneratedCard(topic, card);
+      return;
+    }
+    if (!card) return;
+    await applyNewExploreCard(card, { topic });
   } catch (e) {
+    if (state.topicKey !== topic || !isAuthorWaitVisible()) return;
     hideAuthorWait();
     setCaption(friendlyAuthorError(e));
     showStartPlay();
@@ -2367,15 +2503,29 @@ async function startExplore() {
   setBoardMode("interact");
   clearDoodle();
   bumpAuthorGen();
+  state.waitSeq = (state.waitSeq || 0) + 1;
+  const seq = state.waitSeq;
+  const topic = state.topicKey;
+  clearTopicWait(topic);
   state.messages = [];
   state.mathWorkspace = null;
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   saveSession();
+  const seed = unusedSeedCard(topic);
+  if (seed) {
+    await applyNewExploreCard(seed, { topic });
+    return;
+  }
   try {
     const card = await waitForNewCard();
-    await applyNewExploreCard(card);
+    if (seq !== state.waitSeq) {
+      if (card) stashGeneratedCard(topic, card);
+      return;
+    }
+    await applyNewExploreCard(card, { topic });
   } catch (e) {
+    if (seq !== state.waitSeq || state.topicKey !== topic) return;
     hideAuthorWait();
     setCaption(friendlyAuthorError(e));
     showStartPlay();
@@ -2983,6 +3133,8 @@ function chooseTopic(key) {
     if (sel) sel.value = state.topicKey;
     return;
   }
+  parkCurrentWait();
+  hideAuthorWait();
   rememberCurrentWorkspace();
   bumpAuthorGen();
   destroyMountedActivities();
@@ -2991,11 +3143,12 @@ function chooseTopic(key) {
   const sel = $("#topicSelect");
   if (sel) sel.value = key;
   applyWorkspace((state.topicWorkspaces || {})[key]);
+  state.authorJobId = ((state.waitByTopic || {})[key] || {}).jobId || "";
   clearPendingImage();
   updateAxioms();
   saveSession();
   renderHistory();
-  prefetchAuthor();
+  syncTopicSurface();
 }
 function openAttachSheet() {
   const sheet = $("#attachSheet");
