@@ -17,7 +17,7 @@ from .agent import workspace as WS
 from .config import settings
 
 
-MAX_AUTHOR_ROUNDS = 4
+MAX_AUTHOR_ROUNDS = 6
 CATALOG_VERSION = 1
 
 
@@ -339,7 +339,19 @@ async def generate_topic_seed_batch(
             }
         )
 
-    raise ValueError(f"{topic}: Author Agent 在 {max_rounds} 轮内未生成合格题组")
+    summary = [
+        {
+            "round": row.get("round"),
+            "tool_ok": (row.get("tool") or {}).get("ok"),
+            "tool_issues": (row.get("tool") or {}).get("issues") or [],
+            "review": row.get("review") or {},
+        }
+        for row in transcript
+    ]
+    raise ValueError(
+        f"{topic}: Author Agent 在 {max_rounds} 轮内未生成合格题组；"
+        + json.dumps(summary, ensure_ascii=False)
+    )
 
 
 async def probe_tutor_card(card: dict[str, Any], level: str = "middle") -> dict[str, Any]:

@@ -1,0 +1,203 @@
+{
+  "schema": 1,
+  "generator": "author-agent",
+  "author_model": "glm-5.3",
+  "tutor_model": "qwen3.7-plus",
+  "generated_at": "2026-08-17T03:40:47.662953+00:00",
+  "complete": false,
+  "topics": {
+    "arithmetic": [
+      {
+        "topic": "arithmetic",
+        "hook": "糖果店的糖装在托盘里：最上面一层6颗，下面两层每层10颗。",
+        "insight": "满十颗扎成一份：两个10合起来写成26里的一个2，6颗写在个位——同一个数字在不同位置意思不一样，这就是竖式对齐和进位的道理。",
+        "axiom": "写数字时，同一个数字放在不同位置意思不一样：从右往左是个位、十位、百位……每往左一位就大十倍。这就是竖式要对齐、要进位退位的原因。",
+        "representation": "board_v3",
+        "board": {
+          "schema": 3,
+          "kind": "layer_sum",
+          "model": {
+            "layers": [
+              6,
+              10,
+              10
+            ],
+            "item": "糖"
+          },
+          "task": {
+            "action": "count",
+            "ask": "total",
+            "prompt": "数一数每层，再想一共多少颗。"
+          },
+          "view": {
+            "reveal": "items_without_total"
+          }
+        },
+        "semantic_board": null,
+        "diagram": null,
+        "first_question": "从上到下每层分别有 6、10、10 糖，这些层一共有多少糖？",
+        "ladder": [
+          {
+            "rung": "do",
+            "ask": "从上到下数出每层几颗糖，算出一共26颗；下面两层都是10颗，合起来是多少？"
+          },
+          {
+            "rung": "see",
+            "ask": "26里的2对应盘子里的哪一部分？6对应哪一部分？为什么两个10只用一个数字2来记？"
+          },
+          {
+            "rung": "why",
+            "ask": "为什么满十颗就能扎成一份只算作一份数？个位满十向十位进一，和这件事是不是同一回事？"
+          }
+        ],
+        "misconceptions": [
+          "以为26里的2表示2颗糖，而不是2个十（位值混淆）",
+          "以为数的顺序不同、总数会变",
+          "以为进位写个小1只是竖式的书写规矩，和真的十颗扎一份没关系",
+          "把26看成2+6=8颗，忽略位置带来的十倍差别"
+        ]
+      },
+      {
+        "topic": "arithmetic",
+        "hook": "水果摊的橙子堆成一座小山：顶层1个，往下每层多1个，一共4层。",
+        "insight": "首尾配对：最上层和最底层凑成一样多的几对（每对5个），一样多的几堆相加就是乘法，2×5一下算出10。",
+        "axiom": "把两堆合在一起数，就是加法；无论先数哪一堆，结果都一样。",
+        "representation": "board_v3",
+        "board": {
+          "schema": 3,
+          "kind": "layer_sum",
+          "model": {
+            "layers": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "item": "橙子"
+          },
+          "task": {
+            "action": "count",
+            "ask": "total",
+            "prompt": "数一数每层，再想一共多少个。"
+          },
+          "view": {
+            "reveal": "items_without_total"
+          }
+        },
+        "semantic_board": null,
+        "diagram": null,
+        "first_question": "从上到下每层分别有 1、2、3、4 橙子，这些层一共有多少橙子？",
+        "ladder": [
+          {
+            "rung": "do",
+            "ask": "从上到下数出每层的橙子数，每层各是几个？全部加起来一共几个？"
+          },
+          {
+            "rung": "see",
+            "ask": "把最上层和最底层配成一对、中间两层配成一对，每对各是几个？这些对的数目有什么相同的地方？"
+          },
+          {
+            "rung": "why",
+            "ask": "重新配对分组后，橙子总数为什么一个不多一个不少？这和先数哪一堆结果都一样说的是一回事吗？"
+          }
+        ],
+        "misconceptions": [
+          "只会从上往下一个个累加，不去找配对的结构",
+          "配对时把某一层数了两次或漏掉（层数变成奇数时中间那层不知怎么办）",
+          "以为配对只对1+2+3+4这座山有效，换高一点就不敢用",
+          "发现每对是5之后，仍用5+5硬加，想不到用2×5"
+        ]
+      },
+      {
+        "topic": "arithmetic",
+        "hook": "要给礼物盒扎蝴蝶结，红彩带长12厘米、蓝彩带长18厘米，都得剪成一样长的小段且不许有剩余。",
+        "insight": "找一个正好量完12也正好量完18的步长：12=6×2、18=6×3，最长的共同一步是6厘米——问里面有几个几，就是在做除法。",
+        "axiom": "乘法反过来（平均分，或问'里面有几个几'）就是除法。",
+        "representation": "board_v3",
+        "board": {
+          "schema": 3,
+          "kind": "static_diagram",
+          "model": {
+            "diagram": {
+              "type": "numberline",
+              "from": 0,
+              "to": 20,
+              "marks": [
+                12,
+                18
+              ],
+              "caption": "红彩带从0摆到12，蓝彩带从0摆到18"
+            }
+          },
+          "task": {
+            "action": "observe",
+            "ask": "notice",
+            "prompt": "找一种一样长的步子，从0出发既要正好跳到12，也要正好跳到18。"
+          },
+          "view": {
+            "reveal": "model_only"
+          }
+        },
+        "semantic_board": null,
+        "diagram": null,
+        "first_question": "找一种一样长的步子，从0出发既要正好跳到12，也要正好跳到18。",
+        "ladder": [
+          {
+            "rung": "do",
+            "ask": "先试每步2厘米：跳到12正好几步？继续跳能正好落在18上吗？再试试3厘米、4厘米、5厘米……"
+          },
+          {
+            "rung": "see",
+            "ask": "把能同时正好到12和18的步子排成一排，都有哪些？其中最大的是哪一步？"
+          },
+          {
+            "rung": "why",
+            "ask": "为什么6厘米能正好量完两条彩带（12里有几个6？18里有几个6）？为什么7厘米、8厘米就一定不行？"
+          }
+        ],
+        "misconceptions": [
+          "直接答12厘米：只顾红彩带正好一段，忘了蓝彩带也必须正好分完",
+          "把每段最长几厘米答成一共能剪几段（5段）",
+          "试了一个步子在12上正好（如4厘米）就停，不再验证18",
+          "以为步子越大越可能正好量完，没想用乘法口诀检查里面有几个几"
+        ]
+      }
+    ]
+  },
+  "reports": {
+    "arithmetic": {
+      "model": "glm-5.3",
+      "rounds": 3,
+      "concept_keys": [
+        "placevalueregroup",
+        "pairfirstlasttomultiply",
+        "gcdcommonmeasure"
+      ],
+      "review": {
+        "approved": true,
+        "issues": [],
+        "duplicate_pairs": []
+      },
+      "tutor_probes": [
+        {
+          "ok": true,
+          "opening": "你好呀！我们一起来看糖果店的糖吧。\n\n你看，最上面这一层有 6 颗糖。下面还有两层，每层都有 10 颗糖。\n\n我们先来数一数：**这三层加起来，一共有多少颗糖呢？**",
+          "workspace_kind": "layer_sum",
+          "errors": []
+        },
+        {
+          "ok": true,
+          "opening": "你好呀！我们一起来看画板上的橙子小山吧。\n\n你看，现在最上面这一层有 1 个橙子。如果我们往下再加一层，你觉得第二层会有几个橙子呢？",
+          "workspace_kind": "layer_sum",
+          "errors": []
+        },
+        {
+          "ok": true,
+          "opening": "你好呀！我们一起来玩一个剪彩带的小游戏吧。\n\n你看，我们有两根彩带：一根红色的长 **12 厘米**，一根蓝色的长 **18 厘米**。现在要把它们都剪成**一样长**的小段，而且不能有任何剩余。\n\n我们先来试一试：如果每段剪 **2 厘米**，红彩带（12 厘米）正好能剪成几段呢？",
+          "workspace_kind": "static_diagram",
+          "errors": []
+        }
+      ]
+    }
+  }
+}
