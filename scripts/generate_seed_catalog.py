@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from server import author_agent, tutor  # noqa: E402
+from server.config import settings  # noqa: E402
 
 
 DEFAULT_OUTPUT = ROOT / "data" / "seed_catalog.json"
@@ -31,7 +32,7 @@ def write_checkpoint(
         "schema": author_agent.CATALOG_VERSION,
         "generator": "author-agent",
         "author_model": "glm-5.3",
-        "tutor_model": tutor.settings.model,
+        "tutor_model": settings.model,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "complete": complete,
         "topics": topics,
@@ -59,31 +60,45 @@ async def generate(output: Path, *, tutor_probe: bool) -> None:
         reports = previous.get("reports") if isinstance(previous.get("reports"), dict) else {}
 
     for topic in tutor.TOPICS:
-        if topic.key in topics and len(topics[topic.key]) == 3:
+        cards = topics.get(topic.key) if isinstance(topics.get(topic.key), list) else []
+        topic_report = reports.get(topic.key) if isinstance(reports.get(topic.key), dict) else {}
+        probes = (
+            topic_report.get("tutor_probes")
+            if isinstance(topic_report.get("tutor_probes"), list)
+            else []
+        )
+        if len(cards) == 3 and (not tutor_probe or len(probes) == 3):
             print(f"[resume] {topic.key}: using completed checkpoint", flush=True)
             continue
-        print(f"[author] {topic.key}: generating three cards", flush=True)
-        result = await author_agent.generate_topic_seed_batch(topic.key)
-        cards = result["cards"]
-        topic_report = {
-            "model": result["model"],
-            "rounds": result["rounds"],
-            "concept_keys": result["concept_keys"],
-            "review": result["review"],
-            "tutor_probes": [],
-        }
+        if len(cards) != 3:
+            print(f"[author] {topic.key}: generating three cards", flush=True)
+            result = await author_agent.generate_topic_seed_batch(topic.key)
+            cards = result["cards"]
+            topic_report = {
+                "model": result["model"],
+                "rounds": result["rounds"],
+                "concept_keys": result["concept_keys"],
+                "review": result["review"],
+                "tutor_probes": [],
+            }
+            topics[topic.key] = cards
+            reports[topic.key] = topic_report
+            write_checkpoint(output, topics, reports, complete=False)
+            print(f"[checkpoint] saved {topic.key} author batch", flush=True)
+        else:
+            print(f"[resume] {topic.key}: author batch already saved", flush=True)
+
         if tutor_probe:
-            for index, card in enumerate(cards, 1):
+            probes = topic_report.setdefault("tutor_probes", [])
+            for index, card in enumerate(cards[len(probes):], len(probes) + 1):
                 print(f"[tutor]  {topic.key} #{index}: probing kickoff", flush=True)
                 probe = await author_agent.probe_tutor_card(card)
-                topic_report["tutor_probes"].append(probe)
+                probes.append(probe)
                 if not probe["ok"]:
                     raise RuntimeError(
                         f"{topic.key} #{index}: Tutor Agent probe failed: {probe['errors']}"
                     )
-        topics[topic.key] = cards
-        reports[topic.key] = topic_report
-        write_checkpoint(output, topics, reports, complete=False)
+                write_checkpoint(output, topics, reports, complete=False)
         print(f"[checkpoint] saved {topic.key}", flush=True)
 
     write_checkpoint(output, topics, reports, complete=True)
