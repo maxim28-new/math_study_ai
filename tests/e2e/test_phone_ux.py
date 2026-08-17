@@ -43,7 +43,7 @@ class PhoneUxTests(HeadlessPhoneTests):
         finally:
             self._close()
 
-    def test_talk_dock_reveals_plus_send_board_stays_disabled(self) -> None:
+    def test_talk_dock_reveals_plus_and_send_board_is_ready(self) -> None:
         page = self._launch()
         try:
             self._unlock(page)

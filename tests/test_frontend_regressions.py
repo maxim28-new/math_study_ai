@@ -173,7 +173,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("canSendBoard", app)
         self.assertNotIn("先画一点再发给小欧", send)
         self.assertIn('hasDoodleInk() ? "doodle" : "board"', send)
-        sync = app[app.find("function syncBoardSendButton"):app.find("function setDoodleToolboxOpen")]
+        sync = app[app.find("function canSendBoard"):app.find("function setDoodleToolboxOpen")]
         self.assertNotIn("hasDoodleInk()", sync)
         self.assertIn("is-playing", sync)
 
