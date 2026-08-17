@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -17,6 +18,7 @@ AUTHOR_ENGINES = ("deepseek", "glm")
 
 LADDER_RUNGS = ("do", "see", "why")
 REPRESENTATIONS = {"board_v3"}
+GENERATED_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "seed_catalog.json"
 
 AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看不到你。你只输出一张 JSON 题卡，不要讲解、不要 Markdown 前言。
 
@@ -698,11 +700,51 @@ def _materialize_seed(topic: str, raw: dict[str, Any]) -> dict[str, Any]:
 
 def seed_variants(topic: str) -> list[dict[str, Any]]:
     topic = topic if topic in SEED_VARIANTS else "arithmetic"
-    return [_materialize_seed(topic, raw) for raw in SEED_VARIANTS[topic]]
+    catalog = generated_seed_catalog()
+    source = (catalog.get("topics") or {}).get(topic) if catalog else None
+    raws = source if isinstance(source, list) and len(source) == 3 else SEED_VARIANTS[topic]
+    return [_materialize_seed(topic, raw) for raw in raws]
 
 
 def seed_cards_payload() -> dict[str, list[dict[str, Any]]]:
     return {key: seed_variants(key) for key in SEED_VARIANTS}
+
+
+def generated_seed_catalog() -> dict[str, Any]:
+    """只接受 GLM Author Agent 产出的完整 6×3 目录；损坏时安全退回内置题。"""
+    try:
+        payload = json.loads(GENERATED_SEED_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != 1
+        or payload.get("generator") != "author-agent"
+        or payload.get("author_model") != "glm-5.3"
+    ):
+        return {}
+    topics = payload.get("topics")
+    if not isinstance(topics, dict) or set(topics) != set(SEED_VARIANTS):
+        return {}
+    for topic, raws in topics.items():
+        if not isinstance(raws, list) or len(raws) != 3:
+            return {}
+        cards = [_materialize_seed(topic, raw) for raw in raws]
+        if any(validate_card(card, topic) for card in cards):
+            return {}
+    return payload
+
+
+def seed_catalog_meta() -> dict[str, Any]:
+    payload = generated_seed_catalog()
+    if not payload:
+        return {"source": "builtin", "author_model": "", "generated_at": ""}
+    return {
+        "source": payload.get("generator"),
+        "author_model": payload.get("author_model"),
+        "tutor_model": payload.get("tutor_model"),
+        "generated_at": payload.get("generated_at"),
+    }
 
 
 def seed_card(

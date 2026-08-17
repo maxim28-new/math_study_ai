@@ -1464,7 +1464,6 @@ function stashGeneratedCard(topic, card) {
 }
 
 function syncTopicSurface() {
-  if (restoreParkedWait(state.topicKey)) return;
   const ws = (state.topicWorkspaces || {})[state.topicKey];
   if (ws && ws.pendingKickoff) {
     ws.pendingKickoff = false;
@@ -1730,13 +1729,9 @@ async function fetchAuthorCard(force) {
 function prefetchAuthor() {
   if (state.mode !== "explore") return;
   if (state.config && !state.config.configured) return;
-  if (state.problemCard && state.problemCard.topic === state.topicKey) {
-    warmAuthorJob();
-    return;
-  }
+  if (state.problemCard && state.problemCard.topic === state.topicKey) return;
   const seed = pickSeedCard();
   if (seed) rememberAuthorCard(seed, { force: false, gen: state.authorGen });
-  warmAuthorJob();
 }
 
 async function startPlay() {
@@ -1761,7 +1756,6 @@ async function startPlay() {
   mountFromCard(card);
   if (card.first_question) setCaption(card.first_question);
   applyModeUI();
-  warmAuthorJob();
   const alreadyStarted = state.messages.some((m) => m.role === "assistant");
   if (alreadyStarted) return;
   await streamAssistant(true);
@@ -2316,21 +2310,9 @@ async function loadConfig() {
   applyModeUI();
   renderHistory();
   refreshVoiceAvailability();
-  const pendingJob = loadAuthorJob();
-  if (pendingJob && pendingJob.byTopic && typeof pendingJob.byTopic === "object") {
-    state.waitByTopic = pendingJob.byTopic;
-  } else if (pendingJob && pendingJob.jobId) {
-    state.waitByTopic = {};
-    state.waitByTopic[pendingJob.topic || state.topicKey] = {
-      jobId: pendingJob.jobId,
-      startedAt: pendingJob.startedAt || Date.now(),
-    };
-  }
-  const parked = (state.waitByTopic || {})[state.topicKey];
-  if (parked && parked.jobId) {
-    state.authorJobId = parked.jobId;
-    if (parked.startedAt) state.authorWaitStartedAt = parked.startedAt;
-  }
+  state.waitByTopic = {};
+  state.authorJobId = "";
+  try { sessionStorage.removeItem(AUTHOR_JOB_KEY); } catch (e) {}
   syncTopicSurface();
 }
 
@@ -2489,7 +2471,6 @@ async function applyNewExploreCard(card, opts) {
   rememberAuthorCard(card, { force: true, gen: state.authorGen });
   mountFromCard(card);
   if (card.first_question) setCaption(card.first_question);
-  warmAuthorJob();
   await streamAssistant(true);
   return true;
 }
@@ -2529,19 +2510,9 @@ async function startExplore() {
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   saveSession();
-  try {
-    const card = await waitForNewCard();
-    if (seq !== waitSeqFor(topic)) {
-      if (card) stashGeneratedCard(topic, card);
-      return;
-    }
-    await applyNewExploreCard(card, { topic });
-  } catch (e) {
-    if (seq !== waitSeqFor(topic) || state.topicKey !== topic) return;
-    hideAuthorWait();
-    setCaption(friendlyAuthorError(e));
-    showStartPlay();
-  }
+  const card = unusedSeedCard(topic) || pickSeedCard(topic);
+  if (seq !== waitSeqFor(topic) || state.topicKey !== topic) return;
+  await applyNewExploreCard(card, { topic });
 }
 
 // 共用的流式接收逻辑。kickoff=true 时请求小欧出题。
@@ -3145,7 +3116,6 @@ function chooseTopic(key) {
     if (sel) sel.value = state.topicKey;
     return;
   }
-  parkCurrentWait();
   hideAuthorWait();
   rememberCurrentWorkspace();
   bumpAuthorGen();
@@ -3155,7 +3125,7 @@ function chooseTopic(key) {
   const sel = $("#topicSelect");
   if (sel) sel.value = key;
   applyWorkspace((state.topicWorkspaces || {})[key]);
-  state.authorJobId = ((state.waitByTopic || {})[key] || {}).jobId || "";
+  state.authorJobId = "";
   clearPendingImage();
   updateAxioms();
   saveSession();

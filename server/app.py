@@ -152,6 +152,7 @@ def get_config() -> dict:
         "author_engines": author.engine_payloads(),
         "default_author": settings.author_engine,
         "seed_cards": author.seed_cards_payload(),
+        "seed_catalog": author.seed_catalog_meta(),
     }
 
 
