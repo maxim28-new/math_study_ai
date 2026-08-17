@@ -202,6 +202,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("我有作业", html)
         self.assertNotIn("打开画板", html)
         self.assertIn(".layout-explore", css)
+        self.assertIn(".app.layout-explore:not(.talk-open) #inputRow", css)
+        self.assertIn(".app.layout-explore:not(.talk-open) #voiceDock { display: none; }", css)
         self.assertIn("solve-workspace", html)
         self.assertIn(".play-stage", css)
         self.assertIn(".play-stage.is-drawing", css)
