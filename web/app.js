@@ -484,8 +484,7 @@ function showStartPlay() {
   if (play) play.classList.remove("is-playing", "is-drawing");
   setBoardMode("interact");
   clearDoodle();
-  const tools = $("#stageTools");
-  if (tools) tools.classList.add("hidden");
+  updateTrayUi();
 }
 
 function hideStartPlay() {
@@ -505,12 +504,18 @@ function resetExploreEmpty() {
 function updateTrayUi() {
   const live = state.liveActivities[state.liveActivities.length - 1];
   const snap = live && live.getSnapshot ? live.getSnapshot() : null;
+  const playing = !!( $(".play-stage") && $(".play-stage").classList.contains("is-playing"));
+  const hasSnap = !!(playing && state.stageSpec && snap && typeof snap.tray_left === "number");
+  const tools = $("#stageTools");
+  if (tools) tools.classList.toggle("hidden", !hasSnap);
   const count = $("#trayCount");
-  if (count && window.XiaoouActivity && XiaoouActivity.trayCountLabel) {
-    count.textContent = XiaoouActivity.trayCountLabel(snap ? snap.tray_left : 0);
+  if (count) {
+    count.textContent = hasSnap && window.XiaoouActivity && XiaoouActivity.trayCountLabel
+      ? XiaoouActivity.trayCountLabel(snap.tray_left)
+      : "";
   }
   const undoBtn = $("#undoTileBtn");
-  if (undoBtn) undoBtn.disabled = !(live && live.canUndo && live.canUndo());
+  if (undoBtn) undoBtn.disabled = !(hasSnap && live && live.canUndo && live.canUndo());
 }
 
 function showStageToast(text) {
@@ -1191,6 +1196,7 @@ function mountBoardV3(raw, card) {
   hideStartPlay();
   destroyMountedActivities();
   state.stageSpec = null;
+  updateTrayUi();
   const host = $("#stageHost");
   const tools = $("#stageTools");
   if (tools) tools.classList.add("hidden");
@@ -2394,6 +2400,8 @@ function applyModeUI() {
   if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
   const boardSend = $("#doodleSendBtn");
   if (boardSend) boardSend.classList.toggle("hidden", !explore || !started);
+  const dockNew = $("#dockNewQuestionBtn");
+  if (dockNew) dockNew.classList.toggle("hidden", !explore || !started);
   syncBoardSendButton();
   const hintBtn = $("#hintBtn");
   if (hintBtn) hintBtn.hidden = !explore;
@@ -2679,6 +2687,8 @@ function setStreaming(on) {
   if (startBtn && state.config && state.config.configured) startBtn.disabled = on;
   const newQ = $("#newQuestionBtn");
   if (newQ) newQ.disabled = on;
+  const dockNew = $("#dockNewQuestionBtn");
+  if (dockNew) dockNew.disabled = on;
   document.querySelectorAll(".quick-actions button, #hintBtn").forEach((b) => (b.disabled = on));
   syncBoardSendButton();
 }
@@ -3222,13 +3232,14 @@ function bindEvents() {
       if (e.target === historySheet) closeHistorySheet();
     });
   }
-  const newQuestionBtn = $("#newQuestionBtn");
-  if (newQuestionBtn) {
-    newQuestionBtn.addEventListener("click", () => {
-      closeAttachSheet();
-      startExplore();
-    });
+  function requestNewQuestion() {
+    closeAttachSheet();
+    startExplore();
   }
+  const newQuestionBtn = $("#newQuestionBtn");
+  if (newQuestionBtn) newQuestionBtn.addEventListener("click", requestNewQuestion);
+  const dockNewQuestionBtn = $("#dockNewQuestionBtn");
+  if (dockNewQuestionBtn) dockNewQuestionBtn.addEventListener("click", requestNewQuestion);
   const undoTileBtn = $("#undoTileBtn");
   if (undoTileBtn) {
     undoTileBtn.addEventListener("click", () => {

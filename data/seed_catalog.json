@@ -290,7 +290,7 @@
         },
         "semantic_board": null,
         "diagram": null,
-        "first_question": "从第 0 级出发，每次只能跳 2 级或5 级，到第 10 级一共有几种不同走法？",
+        "first_question": "从第 0 级出发，每次只能跳 2 级或 5 级，到第 10 级一共有几种不同走法？",
         "ladder": [
           {
             "rung": "do",
@@ -541,7 +541,7 @@
         },
         "semantic_board": null,
         "diagram": null,
-        "first_question": "从第 0 级出发，每次只能跳 1 级或2 级，到第 5 级一共有几种不同走法？",
+        "first_question": "从第 0 级出发，每次只能跳 1 级或 2 级，到第 5 级一共有几种不同走法？",
         "ladder": [
           {
             "rung": "do",

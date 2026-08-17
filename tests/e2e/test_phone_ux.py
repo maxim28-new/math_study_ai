@@ -50,7 +50,8 @@ class PhoneUxTests(HeadlessPhoneTests):
             self._play_nth(page, "wordproblems", 2)
             closed = self._layout(page)
             self.assertTrue(closed["talkVisible"], closed)
-            self.assertFalse(closed["plusVisible"], "换一题入口应藏在我想说后面")
+            self.assertFalse(closed["plusVisible"], "加号仍藏在我想说后面")
+            self.assertTrue(closed["dockNewVisible"], "换一题应停在底栏，不必先点我想说")
             self.assertTrue(closed["sendVisible"], closed)
             self.assertFalse(closed["sendDisabled"], "操作界面也应能发画板")
             self._shot(page, "ux-talk-closed.png")
@@ -59,6 +60,7 @@ class PhoneUxTests(HeadlessPhoneTests):
             opened = self._layout(page)
             self.assertTrue(opened["talkOpen"], opened)
             self.assertTrue(opened["plusVisible"], opened)
+            self.assertTrue(opened["dockNewVisible"], opened)
             self.assertFalse(opened["sendDisabled"], opened)
             page.locator("#plusBtn").click()
             page.locator("#newQuestionBtn").wait_for(state="visible")
@@ -114,6 +116,23 @@ class PhoneUxTests(HeadlessPhoneTests):
             self._play_nth(page, "wordproblems", 2)
             before = len(self.chat_posts)
             tray_before = page.locator("#trayCount").inner_text()
+            wrap = page.evaluate(
+                """() => {
+                  const host = document.querySelector('.snap-grid-stage');
+                  const stage = (window.Konva && Konva.stages || []).find(
+                    (s) => host && host.contains(s.container())
+                  );
+                  if (!stage) return null;
+                  const groups = stage.find('Group').filter((g) => g.draggable());
+                  const xs = [...new Set(groups.map((g) => Math.round(g.x())))];
+                  const label = stage.find('Text').map((t) => t.text()).join(' ');
+                  return { cols: xs.length, label: label, n: groups.length };
+                }"""
+            )
+            self.assertIsNotNone(wrap)
+            self.assertEqual(wrap["n"], 12, wrap)
+            self.assertEqual(wrap["cols"], 6, "12 块托盘不应按棋盘 8 列折成 8+4")
+            self.assertIn("还没放进去", wrap["label"])
             pts = page.evaluate(
                 """() => {
                   const host = document.querySelector('.snap-grid-stage');
@@ -177,6 +196,8 @@ class PhoneUxTests(HeadlessPhoneTests):
             after = page.locator(".path-board-status").inner_text()
             self.assertIn("现在在第", after)
             self.assertRegex(label, r"跳 \d+ 级")
+            self.assertFalse(page.locator("#stageTools").is_visible())
+            self.assertEqual(page.locator("#trayCount").inner_text().strip(), "")
             self._shot(page, "ux-path-after-jump.png")
         finally:
             self._close()
@@ -253,8 +274,14 @@ class PhoneUxTests(HeadlessPhoneTests):
                 self.assertGreater(closed["boardBox"]["h"], 24, (label, closed["boardBox"]))
                 self.assertTrue(closed["caption"], label)
                 self.assertTrue(closed["talkVisible"], label)
+                self.assertTrue(closed["dockNewVisible"], label)
                 self.assertFalse(closed["plusVisible"], label)
                 self.assertTrue(opened["plusVisible"], label)
+                self.assertTrue(opened["dockNewVisible"], label)
+                if "snap_grid" in label:
+                    self.assertTrue(closed["tray"].strip(), (label, closed["tray"]))
+                else:
+                    self.assertEqual(closed["tray"].strip(), "", (label, closed["tray"]))
                 if label == "snap_grid_4x4":
                     self.assertFalse(
                         closed["boardClippedByViewport"],

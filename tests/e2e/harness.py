@@ -50,6 +50,7 @@ LAYOUT_JS = """() => {
   const talk = document.querySelector('#talkBtn');
   const plus = document.querySelector('#plusBtn');
   const send = document.querySelector('#doodleSendBtn');
+  const dockNew = document.querySelector('#dockNewQuestionBtn');
   const boardEl = host && (
     host.querySelector('.semantic-board')
     || host.querySelector('.snap-grid-stage')
@@ -78,6 +79,7 @@ LAYOUT_JS = """() => {
     plusVisible: vis(plus),
     sendVisible: vis(send),
     sendDisabled: !!(send && send.disabled),
+    dockNewVisible: vis(dockNew),
     startPlayVisible: vis(document.querySelector('#startPlayWrap')),
     fallbackVisible: vis(document.querySelector('.board-safe-fallback')),
     tray: (document.querySelector('#trayCount') || {}).textContent || '',
@@ -268,6 +270,10 @@ class HeadlessPhoneTests(unittest.TestCase):
         wrap = page.locator("#startPlayWrap")
         if wrap.is_visible():
             page.locator("#startPlayBtn").click()
+            return
+        dock = page.locator("#dockNewQuestionBtn")
+        if dock.is_visible():
+            dock.click()
             return
         plus = page.locator("#plusBtn")
         if not plus.is_visible():

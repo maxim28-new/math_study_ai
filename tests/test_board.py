@@ -148,7 +148,7 @@ class SemanticBoardTests(unittest.TestCase):
         self.assertEqual(spec["purpose"], "explore_choices")
         question = board.first_question_for_board(spec)
         self.assertIn("第 5 级", question)
-        self.assertIn("1 级或2 级", question)
+        self.assertIn("1 级或 2 级", question)
 
     def test_layer_question_comes_from_validated_counts(self):
         spec = board.normalize_semantic_board(

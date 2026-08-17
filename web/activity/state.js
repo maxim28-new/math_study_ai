@@ -47,6 +47,13 @@
     return left <= 0 ? "方块用完了" : "还剩 " + left + " 块";
   };
 
+  // 托盘不要按棋盘列数折行：2×8 棋盘、12 块会排成 8+4，看起来像已经摆好了。
+  A.trayWrapCols = function trayWrapCols(spec) {
+    const cols = Math.max(1, spec && spec.cols || 1);
+    const tray = Math.max(1, spec && spec.tray || 1);
+    return Math.min(cols, Math.ceil(tray / 2) || cols);
+  };
+
   A.softenBareLatex = function softenBareLatex(s) {
     let t = String(s || "");
     const symbols = [

@@ -125,6 +125,8 @@ class FrontendRegressionTests(unittest.TestCase):
         snap = read("web/activity/snap-grid.js")
         self.assertIn("board-viewport", snap)
         self.assertIn("spec.rows + trayRows", snap)
+        self.assertIn("还没放进去的方块", snap)
+        self.assertIn("trayWrapCols", read("web/activity/state.js"))
 
     def test_drawing_guide_teaches_snap_grid(self):
         guide = read("server/tutor.py")
@@ -194,6 +196,7 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="attachSheet"',
             'id="hintBtn"',
             'id="newQuestionBtn"',
+            'id="dockNewQuestionBtn"',
             'id="doodleCanvas"',
             'id="doodleToolbar"',
             'id="doodleSendBtn"',
@@ -215,6 +218,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".layout-explore", css)
         self.assertIn(".app.layout-explore:not(.talk-open) #inputRow", css)
         self.assertIn(".app.layout-explore:not(.talk-open) #voiceDock { display: none; }", css)
+        self.assertIn(".app.layout-explore.talk-open .voice-hint { display: none; }", css)
         self.assertIn("solve-workspace", html)
         self.assertIn(".play-stage", css)
         self.assertIn(".play-stage.is-drawing", css)
@@ -227,7 +231,10 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".doodle-canvas", css)
         self.assertIn(".doodle-toolbar", css)
         self.assertIn(".child-dock", css)
+        self.assertIn("dock-new-btn", css)
         self.assertIn("function remountStage(", app)
+        self.assertIn("function requestNewQuestion(", app)
+        self.assertIn("typeof snap.tray_left", app)
         self.assertIn("function setBoardMode(", app)
         self.assertIn("function captureBoardImage(", app)
         self.assertIn("function sendDoodleToTutor(", app)
@@ -236,7 +243,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260817-boardsend", html)
+        self.assertIn("v=20260817-uxfix", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -396,6 +403,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("mountColorSequence", color_seq)
         self.assertIn('unit: ["red", "red", "blue"]', color_seq)
         self.assertIn(".stage-host:has(.semantic-board) { align-items: stretch; }", css)
+        self.assertIn(".stage-host:has(figure.diagram:not(.snap-grid)) { align-items: center; }", css)
         self.assertIn("preserveAspectRatio", read("web/board/geometry-compass.js"))
         self.assertIn("function highlight(", geometry_board)
         self.assertIn(".term-chip", css)
@@ -480,7 +488,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260817-boardsend", html)
+        self.assertIn("v=20260817-uxfix", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

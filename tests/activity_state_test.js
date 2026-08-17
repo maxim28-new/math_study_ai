@@ -88,6 +88,9 @@ assert.strictEqual(A.sameSnapGrid(null, d), false);
 assert.strictEqual(A.trayCountLabel(4), "还剩 4 块");
 assert.strictEqual(A.trayCountLabel(0), "方块用完了");
 assert.strictEqual(A.trayCountLabel(-3), "方块用完了");
+assert.strictEqual(A.trayWrapCols({ cols: 8, tray: 12 }), 6);
+assert.strictEqual(A.trayWrapCols({ cols: 4, tray: 8 }), 4);
+assert.strictEqual(A.trayWrapCols({ cols: 3, tray: 3 }), 2);
 
 assert.strictEqual(
   A.tutorCaption("这 9 块，能摆成一个正方形吗？\n\n```xiaoou-draw\n{\"type\":\"snap_grid\",\"cols\":3,\"rows\":3,\"tray\":9}\n```"),
