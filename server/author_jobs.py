@@ -83,14 +83,14 @@ def public_view(job: dict[str, Any]) -> dict[str, Any]:
     if status == "running":
         status = "pending"
     out: dict[str, Any] = {
-        "ok": True,
+        "ok": status != "failed",
         "job_id": job.get("id"),
         "status": status,
-        "fallback": bool(job.get("fallback")),
+        "fallback": False,
     }
     if job.get("status") == "done" and job.get("card"):
         out["card"] = job["card"]
-        out["engine"] = "seed" if job.get("fallback") else (job.get("engine") or "")
+        out["engine"] = job.get("engine") or ""
     if job.get("error"):
         out["error"] = job["error"]
     return out
@@ -107,7 +107,6 @@ async def run_job(job_id: str) -> None:
     engine = str(job.get("engine") or "")
     log.info("author job %s start topic=%s engine=%s", job_id, topic, engine)
     card = None
-    fallback = False
     error = ""
     try:
         try:
@@ -121,15 +120,23 @@ async def run_job(job_id: str) -> None:
             error = str(exc)
             log.info("author job %s glm failed: %s", job_id, error[:200])
         if card is None:
-            card = author.seed_card(topic, level, recent)
-            fallback = True
-        job["card"] = card
-        job["fallback"] = fallback
-        job["error"] = error if fallback else ""
-        job["status"] = "done"
+            job["card"] = None
+            job["fallback"] = False
+            job["error"] = error or "GLM-5.3 这次没有生成合格的新题。"
+            job["status"] = "failed"
+        else:
+            job["card"] = card
+            job["fallback"] = False
+            job["error"] = ""
+            job["status"] = "done"
         key = (topic, level)
         if _pending_key.get(key) == job_id:
             _pending_key.pop(key, None)
-        log.info("author job %s done fallback=%s hook=%s", job_id, fallback, (card or {}).get("hook"))
+        log.info(
+            "author job %s status=%s hook=%s",
+            job_id,
+            job["status"],
+            (card or {}).get("hook"),
+        )
     finally:
         job["running"] = False

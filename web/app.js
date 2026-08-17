@@ -1554,6 +1554,11 @@ function pollAuthorJob(jobId, deadline, isLive) {
           resolve(data);
           return;
         }
+        if (data && data.status === "failed") {
+          cleanup();
+          resolve(data);
+          return;
+        }
         if (!data) {
           cleanup();
           resolve({ missing: true });
@@ -1617,7 +1622,7 @@ async function waitForNewCard() {
   }
   if (!jobId) {
     rememberAuthorJob("", topic);
-    return pickSeedCard(topic);
+    throw new Error("GLM-5.3 没有开始生成新题，请再试一次。");
   }
   let done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS, isLive);
   if (done && done.cancelled) return null;
@@ -1634,7 +1639,8 @@ async function waitForNewCard() {
   }
   rememberAuthorJob("", topic);
   const ready = cardFromJob(done, currentHook);
-  return ready || pickSeedCard(topic);
+  if (ready) return ready;
+  throw new Error((done && done.error) || "GLM-5.3 这次没有生成合格的新题，请再试一次。");
   } finally {
     if (state.waitInflight && state.waitInflight[topic] === mine) delete state.waitInflight[topic];
   }
@@ -2523,11 +2529,6 @@ async function startExplore() {
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   saveSession();
-  const seed = unusedSeedCard(topic);
-  if (seed) {
-    await applyNewExploreCard(seed, { topic });
-    return;
-  }
   try {
     const card = await waitForNewCard();
     if (seq !== waitSeqFor(topic)) {

@@ -421,6 +421,25 @@ class AuthorHttpTests(unittest.TestCase):
             self.assertEqual(body["card"]["topic"], "reasoning")
             self.assertIsNone(author.validate_card(body["card"], "reasoning"))
 
+    def test_failed_author_job_never_substitutes_a_seed(self):
+        self.client.post("/api/unlock", json={"code": "maxim"})
+
+        async def fail_request(*args, **kwargs):
+            raise ValueError("GLM failed")
+
+        with mock.patch.object(author, "engine_ready", return_value=True), mock.patch.object(
+            author, "request_author_card", side_effect=fail_request
+        ):
+            started = self.client.post(
+                "/api/author/jobs", json={"topic": "geometry", "level": "middle"}
+            )
+            job_id = started.json()["job_id"]
+            body = self.client.get("/api/author/jobs/" + job_id).json()
+            self.assertFalse(body["ok"])
+            self.assertEqual(body["status"], "failed")
+            self.assertNotIn("card", body)
+            self.assertNotEqual(body.get("engine"), "seed")
+
     def test_pending_jobs_are_reused_for_same_topic(self):
         first = author_jobs.create("geometry", "middle", ["a"], "glm")
         second = author_jobs.create("geometry", "middle", ["b"], "glm")
