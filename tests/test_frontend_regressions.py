@@ -220,7 +220,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260817-glmnew", html)
+        self.assertIn("v=20260817-agentseeds", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -454,7 +454,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260817-glmnew", html)
+        self.assertIn("v=20260817-agentseeds", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

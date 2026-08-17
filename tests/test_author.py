@@ -221,10 +221,9 @@ class AuthorCardTests(unittest.TestCase):
     def test_reasoning_seed_uses_color_sequence(self):
         card = author.seed_card("reasoning", "middle")
         self.assertEqual(card["board"]["kind"], "color_sequence")
-        self.assertEqual(card["board"]["model"]["unit"], ["red", "red", "blue"])
+        self.assertGreaterEqual(len(card["board"]["model"]["unit"]), 2)
         self.assertEqual(card["board"]["view"]["reveal"], "hide_last")
         self.assertIn("红", card["first_question"])
-        self.assertIn("蓝", card["first_question"])
 
     def test_legacy_pattern_dots_card_upgrades_to_color_sequence(self):
         raw = {
@@ -286,9 +285,27 @@ class AuthorCardTests(unittest.TestCase):
             self.assertFalse(author.is_nine_square(card))
         arithmetic = author.seed_card("arithmetic", "middle")
         self.assertEqual(arithmetic["board"]["kind"], "layer_sum")
-        self.assertEqual(arithmetic["board"]["model"]["layers"], [1, 3, 5])
-        self.assertEqual(arithmetic["board"]["view"]["reveal"], "stepwise")
         self.assertNotEqual(arithmetic["board"]["kind"], "static_diagram")
+
+    def test_runtime_uses_complete_agent_generated_catalog(self):
+        catalog = author.generated_seed_catalog()
+        self.assertTrue(catalog.get("complete"))
+        self.assertEqual(catalog.get("generator"), "author-agent")
+        self.assertEqual(catalog.get("author_model"), "glm-5.3")
+        self.assertEqual(set(catalog["topics"]), set(author.SEED_VARIANTS))
+        self.assertEqual(sum(len(cards) for cards in catalog["topics"].values()), 18)
+        for topic, report in catalog["reports"].items():
+            self.assertTrue(report["review"]["approved"], topic)
+            self.assertEqual(len(report["tutor_probes"]), 3, topic)
+            self.assertTrue(all(probe["ok"] for probe in report["tutor_probes"]), topic)
+            recent = []
+            rotated = []
+            for _ in range(3):
+                card = author.seed_card(topic, "middle", recent)
+                rotated.append(card["hook"])
+                recent.append(card["hook"])
+            self.assertEqual(len(set(rotated)), 3, topic)
+        self.assertEqual(author.seed_catalog_meta()["source"], "author-agent")
 
     def test_each_topic_has_three_distinct_seed_variants(self):
         for topic, raws in author.SEED_VARIANTS.items():
@@ -362,6 +379,8 @@ class AuthorHttpTests(unittest.TestCase):
         self.assertEqual(len(cfg["seed_cards"]), 6)
         for topic, cards in cfg["seed_cards"].items():
             self.assertEqual(len(cards), 3, topic)
+        self.assertEqual(cfg["seed_catalog"]["source"], "author-agent")
+        self.assertEqual(cfg["seed_catalog"]["author_model"], "glm-5.3")
 
     def test_seed_only_returns_seed_card(self):
         self.client.post("/api/unlock", json={"code": "maxim"})
