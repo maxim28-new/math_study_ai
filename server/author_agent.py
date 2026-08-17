@@ -100,7 +100,15 @@ def validate_seed_batch(topic: str, candidates: Any) -> dict[str, Any]:
         if not concept:
             issues.append(f"第 {index} 题缺少 concept_key")
         concepts.append(concept)
-        card = author.normalize_card(candidate.get("card"), topic)
+        raw_card = candidate.get("card")
+        raw_board = raw_card.get("board") if isinstance(raw_card, dict) else {}
+        raw_model = raw_board.get("model") if isinstance(raw_board, dict) else {}
+        raw_diagram = raw_model.get("diagram") if isinstance(raw_model, dict) else {}
+        raw_caption = raw_diagram.get("caption") if isinstance(raw_diagram, dict) else ""
+        if len(str(raw_caption or "")) > 80:
+            issues.append(f"第 {index} 题的画板 caption 超过 80 字，程序会截断")
+            continue
+        card = author.normalize_card(raw_card, topic)
         if not card:
             issues.append(f"第 {index} 题未通过题卡或 BoardSpec V3 校验")
             continue
@@ -248,8 +256,10 @@ async def review_seed_batch(topic: str, cards: list[dict[str, Any]]) -> dict[str
                     "实质不同，并检查画板、第一问、三层台阶是否一致可教。只换字母、数字、人物、"
                     "物品或同义改写必须判重复。尤其要检查：孩子回答程序统一后的 first_question，"
                     "是否会自然走向 insight；如果第一问只在问颜色、计数或摆放，而目标洞见另有其事，"
-                    "必须拒绝。只输出 JSON："
-                    '{"approved":true|false,"issues":["..."],"duplicate_pairs":[[1,2]]}。'
+                    "必须拒绝。blocking_issues 只写必须改卡才能上线的问题；正面评价和非阻断建议放 notes。"
+                    "只输出 JSON："
+                    '{"approved":true|false,"blocking_issues":["..."],"notes":["..."],'
+                    '"duplicate_pairs":[[1,2]]}。approved=true 必须同时意味着 blocking_issues 为空。'
                 ),
             },
             {
@@ -264,9 +274,15 @@ async def review_seed_batch(topic: str, cards: list[dict[str, Any]]) -> dict[str
     review = author.extract_json_object(content)
     if not isinstance(review, dict):
         return {"approved": False, "issues": ["主编没有返回可解析的审核 JSON"], "duplicate_pairs": []}
+    blocking = [
+        str(item)
+        for item in (review.get("blocking_issues") or review.get("issues") or [])
+        if str(item).strip()
+    ][:12]
     return {
-        "approved": bool(review.get("approved")),
-        "issues": [str(item) for item in (review.get("issues") or []) if str(item).strip()][:12],
+        "approved": bool(review.get("approved")) and not blocking,
+        "blocking_issues": blocking,
+        "notes": [str(item) for item in (review.get("notes") or []) if str(item).strip()][:12],
         "duplicate_pairs": review.get("duplicate_pairs") or [],
     }
 

@@ -47,6 +47,13 @@ class AuthorAgentValidationTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertTrue(any("只会问颜色规律" in issue for issue in result["issues"]), result)
 
+    def test_rejects_caption_that_would_be_truncated(self):
+        candidates = self.candidates("wordproblems")
+        candidates[0]["card"]["board"]["model"]["diagram"]["caption"] = "很长" * 50
+        result = author_agent.validate_seed_batch("wordproblems", candidates)
+        self.assertFalse(result["ok"])
+        self.assertTrue(any("caption 超过 80 字" in issue for issue in result["issues"]), result)
+
     def test_every_accepted_card_mounts_as_tutor_workspace(self):
         result = author_agent.validate_seed_batch("reasoning", self.candidates("reasoning"))
         self.assertTrue(result["ok"], result)
