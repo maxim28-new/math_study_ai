@@ -19,6 +19,7 @@ AUTHOR_ENGINES = ("deepseek", "glm")
 LADDER_RUNGS = ("do", "see", "why")
 REPRESENTATIONS = {"board_v3"}
 GENERATED_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "seed_catalog.json"
+GEOMETRY_SEED_KINDS = frozenset({"geometry_compass", "snap_grid"})
 
 AUTHOR_PROMPT = """你是小欧的「出题作者」，不是老师。孩子看不到你。你只输出一张 JSON 题卡，不要讲解、不要 Markdown 前言。
 
@@ -62,7 +63,7 @@ board 只允许下面六种严格结构，字段名和值都不要改：
 - 允许步长的走法用 path_count。
 - 需要孩子摆方块用 snap_grid。
 - 数轴、线段图、点阵和正方形变化用 static_diagram。
-- 几何主题优先出“两圆交点作正三角形”，使用 geometry_compass。
+- 几何主题必须对准点、线、圆、角、平行、垂直、全等、对称或拼图形/面积；画板只用 geometry_compass 或 snap_grid。禁止数轴、刻度尺数格、加减求长度。尺规正三角形全组最多一题，不能靠换字母再出两道。
 - 找规律、按颜色重复排队必须用 color_sequence，禁止用单色 dots 代替花朵或珠子。
 - 不允许 board=null，不允许输出旧 semantic_board 或 diagram 顶层字段。
 - board 必须描述第一问的同一个规模；程序会按已校验 board 统一第一问。
@@ -198,6 +199,21 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
     if validate_card(card, topic):
         return None
     return card
+
+
+def topic_board_issues(topic: str, card: dict[str, Any], index: int = 1) -> list[str]:
+    """主题和画板是否匹配。程序校验用，避免几何题滑成数轴计数。"""
+    board = card.get("board") if isinstance(card.get("board"), dict) else {}
+    kind = str(board.get("kind") or "")
+    if topic != "geometry":
+        return []
+    if kind in GEOMETRY_SEED_KINDS:
+        return []
+    label = kind or "空的"
+    return [
+        f"第 {index} 题的画板是 {label}，几何与图形只接受尺规作图或拼方块图形，"
+        "不能用数轴、楼梯、点阵或颜色排队冒充几何"
+    ]
 
 
 SEED_VARIANTS: dict[str, list[dict[str, Any]]] = {

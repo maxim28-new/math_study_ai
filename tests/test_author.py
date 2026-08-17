@@ -305,6 +305,12 @@ class AuthorCardTests(unittest.TestCase):
                 rotated.append(card["hook"])
                 recent.append(card["hook"])
             self.assertEqual(len(set(rotated)), 3, topic)
+        arith = author.seed_variants("arithmetic")
+        used = [card["hook"] for card in arith]
+        fourth = author.seed_card("arithmetic", "middle", used)
+        fifth = author.seed_card("arithmetic", "middle", used + [fourth["hook"]])
+        self.assertEqual(fourth["hook"], arith[0]["hook"])
+        self.assertEqual(fifth["hook"], arith[1]["hook"])
         self.assertEqual(author.seed_catalog_meta()["source"], "author-agent")
 
     def test_each_topic_has_three_distinct_seed_variants(self):

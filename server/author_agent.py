@@ -122,6 +122,10 @@ def validate_seed_batch(topic: str, candidates: Any) -> dict[str, Any]:
         if board_kind == "geometry_compass" and topic != "geometry":
             issues.append(f"第 {index} 题的尺规正三角形画板只能用于 geometry")
             continue
+        fit_issues = author.topic_board_issues(topic, card, index)
+        if fit_issues:
+            issues.extend(fit_issues)
+            continue
         workspace = WS.seed_from_card(card, topic, f"author_preview_{topic}_{index}")
         if WS.from_dict(workspace) is None:
             issues.append(f"第 {index} 题无法挂载为 Tutor Agent 工作区")
@@ -130,6 +134,10 @@ def validate_seed_batch(topic: str, candidates: Any) -> dict[str, Any]:
 
     if len(set(concepts)) != 3:
         issues.append("三题的 concept_key 必须代表三个不同的数学发现")
+    if topic == "geometry":
+        compass = sum(1 for card in cards if card["board"]["kind"] == "geometry_compass")
+        if compass > 1:
+            issues.append("尺规正三角形全组最多一题，另外两题必须是不同的图形发现，不能只换字母")
     if len(cards) == 3:
         fingerprints = [_board_fingerprint(card) for card in cards]
         for left in range(3):
@@ -163,8 +171,17 @@ def validate_seed_batch(topic: str, candidates: Any) -> dict[str, Any]:
 def build_batch_prompt(topic_key: str, level: str) -> str:
     topic = tutor.TOPICS_BY_KEY[topic_key]
     single_contract = author.build_author_prompt(topic_key, level, [])
+    geometry_rules = ""
+    if topic_key == "geometry":
+        geometry_rules = """
+# 几何主题硬性约束（优先于灵感里的“数一数”）
+- 三题必须分别对准点/线/圆、角/平行/垂直/全等/对称、或拼图形与面积中的不同发现。
+- 禁止数轴、刻度尺、数格子做减法、排队位置、加减运算；那是度量或应用题，不是几何。
+- 画板只允许 geometry_compass 或 snap_grid。
+- geometry_compass（尺规作正三角形）全组最多一题；另外两题用拼图形讲不同的道理。
+"""
     return f"""{single_contract}
-
+{geometry_rules}
 # 本次是种子题组任务（优先于上面的“单卡”措辞）
 你不是提交一题，而是为同一个主题设计一组恰好三题，并调用 author_submit_seed_batch。
 每个 candidate 包含 concept_key 和 card；card 使用上面的单卡格式。
@@ -256,7 +273,9 @@ async def review_seed_batch(topic: str, cards: list[dict[str, Any]]) -> dict[str
                     "实质不同，并检查画板、第一问、三层台阶是否一致可教。只换字母、数字、人物、"
                     "物品或同义改写必须判重复。尤其要检查：孩子回答程序统一后的 first_question，"
                     "是否会自然走向 insight；如果第一问只在问颜色、计数或摆放，而目标洞见另有其事，"
-                    "必须拒绝。blocking_issues 只写必须改卡才能上线的问题；正面评价和非阻断建议放 notes。"
+                    "必须拒绝。几何主题若出现数轴、刻度尺数格、加减求长度，必须写入 blocking_issues；"
+                    "尺规正三角形换字母也不算新题。blocking_issues 只写必须改卡才能上线的问题；"
+                    "正面评价和非阻断建议放 notes。"
                     "只输出 JSON："
                     '{"approved":true|false,"blocking_issues":["..."],"notes":["..."],'
                     '"duplicate_pairs":[[1,2]]}。approved=true 必须同时意味着 blocking_issues 为空。'

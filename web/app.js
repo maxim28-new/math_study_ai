@@ -1324,8 +1324,9 @@ function pickSeedCard(topic) {
   const key = topic || state.topicKey;
   const unused = unusedSeedCard(key);
   if (unused) return unused;
-  const pick = topicSeedPool(key)[0] || null;
-  if (!pick) return null;
+  const pool = topicSeedPool(key);
+  if (!pool.length) return null;
+  const pick = pool[topicRecentHooks(key).length % pool.length] || pool[0];
   return key === state.topicKey ? topicCard(pick) : pick;
 }
 

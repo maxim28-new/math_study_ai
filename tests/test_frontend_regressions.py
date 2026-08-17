@@ -220,7 +220,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260817-agentseeds", html)
+        self.assertIn("v=20260817-geomcycle", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -301,6 +301,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("syncTopicSurface", choose)
         self.assertNotIn("problemCard = null", choose)
         self.assertIn("function unusedSeedCard(", app)
+        self.assertIn("function pickSeedCard(", app)
+        pick = app[app.find("function pickSeedCard"):app.find("function formatWaitClock")]
+        self.assertIn("unusedSeedCard(key)", pick)
+        self.assertIn("topicRecentHooks(key).length % pool.length", pick)
+        self.assertNotIn("topicSeedPool(key)[0] || null", pick)
         self.assertIn("function stashGeneratedCard(", app)
         self.assertIn("function waitSeqFor(", app)
         self.assertIn("waitSeqByTopic", app)
@@ -454,7 +459,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260817-agentseeds", html)
+        self.assertIn("v=20260817-geomcycle", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")
