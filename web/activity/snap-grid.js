@@ -7,12 +7,18 @@
 
   function occupancySnapshot(spec, cells, trayCount) {
     let filled = 0;
+    const rowsFilled = [];
     for (let r = 0; r < spec.rows; r++) {
+      let n = 0;
       for (let c = 0; c < spec.cols; c++) {
-        if (cells[r][c]) filled += 1;
+        if (cells[r][c]) {
+          filled += 1;
+          n += 1;
+        }
       }
+      rowsFilled.push(n);
     }
-    return A.makeSnapshot(spec, filled, trayCount);
+    return A.makeSnapshot(spec, filled, trayCount, rowsFilled);
   }
 
   function clonePlace(p) {

@@ -52,14 +52,14 @@ class PhoneUxTests(HeadlessPhoneTests):
             self.assertTrue(closed["talkVisible"], closed)
             self.assertFalse(closed["plusVisible"], "换一题入口应藏在我想说后面")
             self.assertTrue(closed["sendVisible"], closed)
-            self.assertTrue(closed["sendDisabled"], "没画一笔时发画板应是灰的")
+            self.assertFalse(closed["sendDisabled"], "操作界面也应能发画板")
             self._shot(page, "ux-talk-closed.png")
 
             self._open_talk(page)
             opened = self._layout(page)
             self.assertTrue(opened["talkOpen"], opened)
             self.assertTrue(opened["plusVisible"], opened)
-            self.assertTrue(opened["sendDisabled"], opened)
+            self.assertFalse(opened["sendDisabled"], opened)
             page.locator("#plusBtn").click()
             page.locator("#newQuestionBtn").wait_for(state="visible")
             self.assertTrue(page.locator("#hintBtn").is_visible())
@@ -146,7 +146,18 @@ class PhoneUxTests(HeadlessPhoneTests):
             self._shot(page, "ux-snap-grid-after-drag.png")
             self.assertNotEqual(tray_after, tray_before, (tray_before, tray_after))
             self.assertEqual(len(self.chat_posts), before, self.chat_posts)
-            self.assertTrue(page.locator("#doodleSendBtn").is_disabled())
+            self.assertFalse(page.locator("#doodleSendBtn").is_disabled())
+            page.locator("#doodleSendBtn").click()
+            deadline = time.time() + 10
+            sent = []
+            while time.time() < deadline:
+                sent = [row for row in self.chat_posts[before:] if row["has_image"]]
+                if sent:
+                    break
+                page.wait_for_timeout(200)
+            self.assertTrue(sent, self.chat_posts[before:])
+            self.assertIn("当前学具盘面", sent[-1]["text"])
+            self._shot(page, "ux-snap-grid-after-send.png")
         finally:
             self._close()
 

@@ -133,11 +133,11 @@
     return { type: "snap_grid", cols, rows, tray, goal: "fill", caption };
   };
 
-  A.makeSnapshot = function makeSnapshot(spec, filled, trayLeft) {
+  A.makeSnapshot = function makeSnapshot(spec, filled, trayLeft, rowsFilled) {
     const cells = spec.cols * spec.rows;
     const f = clampInt(filled, 0, cells, 0);
     const t = clampInt(trayLeft, 0, 64, 0);
-    return {
+    const snap = {
       type: "snap_grid",
       cols: spec.cols,
       rows: spec.rows,
@@ -146,6 +146,10 @@
       tray_left: t,
       goal: spec.goal || "fill",
     };
+    if (Array.isArray(rowsFilled) && rowsFilled.length === spec.rows) {
+      snap.rows_filled = rowsFilled.slice();
+    }
+    return snap;
   };
 
   A.detectMilestone = function detectMilestone(prev, next) {
@@ -174,6 +178,11 @@
       "空格：" + snapshot.empty,
       "托盘剩余：" + snapshot.tray_left,
     ];
+    if (Array.isArray(snapshot.rows_filled) && snapshot.rows_filled.length) {
+      lines.push(
+        "各行已放：" + snapshot.rows_filled.map((n, i) => "第" + (i + 1) + "行" + n + "块").join("，")
+      );
+    }
     if (eventName) lines.push("节点：" + eventName);
     return lines.join("\n");
   };

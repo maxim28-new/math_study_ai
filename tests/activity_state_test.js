@@ -56,6 +56,12 @@ assert.ok(note.includes("空格：0"));
 assert.ok(note.includes("托盘剩余：0"));
 assert.ok(note.includes("节点：board_full"));
 
+const rowSnap = A.makeSnapshot(spec({ cols: 8, rows: 2, tray: 12 }), 12, 0, [8, 4]);
+assert.deepStrictEqual(rowSnap.rows_filled, [8, 4]);
+const rowNote = A.formatBoardNote(rowSnap, "tiles_exhausted");
+assert.ok(rowNote.includes("各行已放：第1行8块，第2行4块"));
+assert.ok(rowNote.includes("节点：tiles_exhausted"));
+
 const liveNote = A.formatBoardNote(s8, null);
 assert.ok(liveNote.includes("（当前学具盘面，这不是她打的字）"));
 assert.ok(!liveNote.includes("节点："));

@@ -726,10 +726,15 @@ function hasDoodleInk() {
   });
 }
 
+function canSendBoard() {
+  const play = $(".play-stage");
+  return !!(play && play.classList.contains("is-playing") && !state.streaming);
+}
+
 function syncBoardSendButton() {
   const send = $("#doodleSendBtn");
   if (!send) return;
-  send.disabled = state.streaming || !doodle.dirty || !hasDoodleInk();
+  send.disabled = !canSendBoard();
 }
 
 function setDoodleToolboxOpen(open) {
@@ -909,10 +914,8 @@ async function captureBoardImage() {
 
 async function sendDoodleToTutor() {
   if (state.streaming) return;
-  if (!hasDoodleInk()) {
-    showStageToast("先画一点再发给小欧");
-    return;
-  }
+  const play = $(".play-stage");
+  if (!play || !play.classList.contains("is-playing")) return;
   showStageToast("正在发给小欧…");
   resetDoodleView();
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -925,7 +928,7 @@ async function sendDoodleToTutor() {
     showStageToast("这张画还没发出去，再试一次");
     return;
   }
-  setPendingImage(dataUrl, "doodle");
+  setPendingImage(dataUrl, hasDoodleInk() ? "doodle" : "board");
   doodle.dirty = false;
   syncBoardSendButton();
   await sendMessage("");
@@ -2141,8 +2144,12 @@ function renderContentInto(bubble, content) {
       img.addEventListener("click", () => window.open(img.src, "_blank"));
       bubble.appendChild(img);
     } else if (part.type === "text" && part.text) {
+      const liveMarker = "（当前学具盘面，这不是她打的字）";
+      const cut = part.text.indexOf(liveMarker);
+      const shown = cut >= 0 ? part.text.slice(0, cut).trim() : part.text;
+      if (!shown) continue;
       const div = document.createElement("div");
-      div.innerHTML = renderMarkdown(part.text);
+      div.innerHTML = renderMarkdown(shown);
       decorateTutorTerms(div);
       bubble.appendChild(div);
     }
@@ -2419,6 +2426,21 @@ function updateAxioms() {
   applyModeUI();
 }
 
+function currentBoardNote() {
+  const semantic = state.semanticBoardHandle;
+  if (semantic && semantic.getSnapshot && window.XiaoouSemanticBoard && XiaoouSemanticBoard.formatSnapshot) {
+    if (state.mathWorkspace && window.XiaoouMathWorkspace && XiaoouMathWorkspace.formatNote) {
+      return XiaoouMathWorkspace.formatNote(state.mathWorkspace) || "";
+    }
+    return XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot()) || "";
+  }
+  const live = state.liveActivities[state.liveActivities.length - 1];
+  if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
+    return XiaoouActivity.formatBoardNote(live.getSnapshot(), null) || "";
+  }
+  return "";
+}
+
 // ---------------- 发送 / 流式接收 ----------------
 async function sendMessage(text) {
   if (state.streaming) return;
@@ -2427,36 +2449,25 @@ async function sendMessage(text) {
   const imageKind = state.pendingImageKind || (image ? "photo" : "");
   if (!typed && !image) return;
 
-  // 组装本条消息：有图片时用多模态数组，否则用纯文字。
+  const note = currentBoardNote();
   let content;
   if (image) {
     const caption = typed || (imageKind === "doodle"
       ? "这是我在数学画板上画的，请直接看图里我画的内容。"
-      : "这是我作业本上的题目，你先帮我看看。");
+      : imageKind === "board"
+        ? "这是我现在的数学画板，请直接看图，也看盘面说明。"
+        : "这是我作业本上的题目，你先帮我看看。");
     content = [
-      { type: "text", text: caption },
+      { type: "text", text: note ? caption + "\n\n" + note : caption },
       { type: "image_url", image_url: { url: image } },
     ];
   } else {
     content = typed;
   }
 
-  // 显示孩子的消息
   let contentForModel = content;
   if (!image && typeof content === "string") {
-    const semantic = state.semanticBoardHandle;
-    if (semantic && semantic.getSnapshot && window.XiaoouSemanticBoard && XiaoouSemanticBoard.formatSnapshot) {
-      const note = (state.mathWorkspace && window.XiaoouMathWorkspace && XiaoouMathWorkspace.formatNote)
-        ? XiaoouMathWorkspace.formatNote(state.mathWorkspace)
-        : XiaoouSemanticBoard.formatSnapshot(semantic.getSnapshot());
-      contentForModel = note ? typed + "\n\n" + note : typed;
-    } else {
-      const live = state.liveActivities[state.liveActivities.length - 1];
-      if (live && live.getSnapshot && window.XiaoouActivity && XiaoouActivity.formatBoardNote) {
-        const note = XiaoouActivity.formatBoardNote(live.getSnapshot(), null);
-        contentForModel = typed + "\n\n" + note;
-      }
-    }
+    contentForModel = note ? typed + "\n\n" + note : typed;
   }
   state.messages.push({ role: "user", content: image ? content : contentForModel });
   const childBubble = addMessageEl("child");

@@ -131,6 +131,8 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('"type":"snap_grid"', guide)
         self.assertIn("board_full", guide)
         self.assertIn("tiles_exhausted", guide)
+        self.assertIn("各行已放", guide)
+        self.assertIn("发画板", guide)
         self.assertIn("不要祝贺", guide)
         self.assertIn('{"type":"dots"', guide)
         self.assertIn('{"type":"stairs"', guide)
@@ -163,8 +165,17 @@ class FrontendRegressionTests(unittest.TestCase):
     def test_app_js_appends_board_note_on_typed_send(self):
         app = read("web/app.js")
         self.assertIn("当前学具盘面", app)
+        self.assertIn("function currentBoardNote(", app)
         self.assertIn("XiaoouSemanticBoard.formatSnapshot", app)
         self.assertIn("contentForModel", app)
+        self.assertIn('imageKind === "board"', app)
+        send = app[app.find("async function sendDoodleToTutor"):app.find("function initDoodle")]
+        self.assertIn("canSendBoard", app)
+        self.assertNotIn("先画一点再发给小欧", send)
+        self.assertIn('hasDoodleInk() ? "doodle" : "board"', send)
+        sync = app[app.find("function syncBoardSendButton"):app.find("function setDoodleToolboxOpen")]
+        self.assertNotIn("hasDoodleInk()", sync)
+        self.assertIn("is-playing", sync)
 
     def test_explore_stage_shell(self):
         html = read("web/index.html")
@@ -225,7 +236,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260817-seedwrap", html)
+        self.assertIn("v=20260817-boardsend", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -469,7 +480,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260817-seedwrap", html)
+        self.assertIn("v=20260817-boardsend", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")
