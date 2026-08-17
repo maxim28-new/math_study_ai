@@ -10,7 +10,7 @@ import json
 from typing import Any, AsyncGenerator, Optional, Union
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from . import asr
 from . import author
+from . import author_jobs
 from . import config as teaching_config
 from .config import WEB_DIR, settings
 from . import gate
@@ -150,6 +151,7 @@ def get_config() -> dict:
         "voice_enabled": settings.voice_enabled,
         "author_engines": author.engine_payloads(),
         "default_author": settings.author_engine,
+        "seed_cards": author.seed_cards_payload(),
     }
 
 
@@ -380,20 +382,46 @@ class AuthorRequest(BaseModel):
 
 
 @app.post("/api/author")
-async def author_card(req: AuthorRequest) -> JSONResponse:
+async def author_card(req: AuthorRequest, background_tasks: BackgroundTasks) -> JSONResponse:
+    topic = req.topic if req.topic in tutor.TOPICS_BY_KEY else tutor.DEFAULT_TOPIC_KEY
+    level = req.level if req.level in tutor.LEVELS else tutor.DEFAULT_LEVEL
     if req.seed_only:
-        topic = req.topic if req.topic in tutor.TOPICS_BY_KEY else tutor.DEFAULT_TOPIC_KEY
-        level = req.level if req.level in tutor.LEVELS else tutor.DEFAULT_LEVEL
         return JSONResponse(
-            {"ok": True, "card": author.seed_card(topic, level), "engine": "seed", "fallback": True}
+            {
+                "ok": True,
+                "card": author.seed_card(topic, level, req.recent),
+                "engine": "seed",
+                "fallback": True,
+            }
         )
-    try:
-        card = await author.author_problem(req.topic, req.level, req.recent, req.engine or None)
-    except ValueError as exc:
-        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
-    except httpx.HTTPError:
-        return JSONResponse({"ok": False, "error": "出题大脑这会儿有点忙，再试一次。"}, status_code=502)
-    return JSONResponse({"ok": True, "card": card})
+    job = author_jobs.create(topic, level, req.recent, req.engine or None)
+    if job.get("status") == "pending" and not job.get("running"):
+        background_tasks.add_task(author_jobs.run_job, job["id"])
+    return JSONResponse(
+        {
+            "ok": True,
+            "card": author.seed_card(topic, level, req.recent),
+            "engine": "seed",
+            "fallback": True,
+            "job_id": job["id"],
+        }
+    )
+
+
+@app.post("/api/author/jobs")
+async def start_author_job(req: AuthorRequest, background_tasks: BackgroundTasks) -> JSONResponse:
+    job = author_jobs.create(req.topic, req.level, req.recent, req.engine or None)
+    if job.get("status") == "pending" and not job.get("running"):
+        background_tasks.add_task(author_jobs.run_job, job["id"])
+    return JSONResponse(author_jobs.public_view(job))
+
+
+@app.get("/api/author/jobs/{job_id}")
+async def get_author_job(job_id: str) -> JSONResponse:
+    job = author_jobs.get(job_id)
+    if not job:
+        return JSONResponse({"ok": False, "error": "这道题还没开始想"}, status_code=404)
+    return JSONResponse(author_jobs.public_view(job))
 
 
 class TranscribeRequest(BaseModel):

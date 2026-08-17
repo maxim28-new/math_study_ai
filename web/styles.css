@@ -956,6 +956,38 @@ button, input, select, textarea { font-family: inherit; }
 }
 .start-play-btn:disabled { opacity: .5; }
 
+.author-wait {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 20px;
+  text-align: center;
+}
+.author-wait.hidden { display: none; }
+.author-wait-kicker {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.author-wait-copy {
+  margin: 0;
+  max-width: 22em;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 650;
+}
+.author-wait-timer {
+  margin: 8px 0 0;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 750;
+}
+
 .stage-host {
   flex: 1 1 0;
   min-height: 0;

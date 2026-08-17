@@ -35,11 +35,18 @@ const state = {
   seenTerms: [],
   authorGen: 0,
   mathWorkspace: null,
+  authorJobId: "",
+  authorWaitStartedAt: 0,
+  authorWaitTimer: null,
 };
 
 const STORE_KEY = "xiaoou.session.v1";
+const AUTHOR_JOB_KEY = "xiaoou.authorJob.v1";
 const START_CAPTION = "点开始玩，把方块拖进格子";
 const THINKING_CAPTION = "小欧在想一道有意思的题…";
+const AUTHOR_WAIT_CAPTION = "小欧在想一道新题，大约要 2 分钟…";
+const AUTHOR_WAIT_MS = 125000;
+const AUTHOR_POLL_MS = 2000;
 
 // ---------------- 本地存储 ----------------
 // 图片是很大的 base64，存进 localStorage 会撑爆配额，所以持久化时把图片换成占位文字。
@@ -1284,6 +1291,219 @@ function mountFromCard(card) {
   }
 }
 
+function pickSeedCard() {
+  const pool = ((state.config && state.config.seed_cards) || {})[state.topicKey] || [];
+  const used = {};
+  (state.recentHooks || []).forEach((hook) => { used[String(hook)] = true; });
+  const unused = pool.filter((card) => card && !used[card.hook]);
+  const pick = unused[0] || pool[0] || null;
+  return topicCard(pick);
+}
+
+function formatWaitClock(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return "已经等了 " + minutes + " 分 " + seconds + " 秒";
+}
+
+function stopAuthorWaitClock() {
+  if (state.authorWaitTimer) {
+    clearInterval(state.authorWaitTimer);
+    state.authorWaitTimer = null;
+  }
+}
+
+function tickAuthorWaitClock() {
+  const el = $("#authorWaitTimer");
+  if (!el || !state.authorWaitStartedAt) return;
+  el.textContent = formatWaitClock(Date.now() - state.authorWaitStartedAt);
+}
+
+function showAuthorWait() {
+  hideStartPlay();
+  const wait = $("#authorWaitWrap");
+  if (wait) wait.classList.remove("hidden");
+  const vp = $("#boardViewport");
+  if (vp) vp.classList.add("hidden");
+  if (!state.authorWaitStartedAt) state.authorWaitStartedAt = Date.now();
+  setCaption(AUTHOR_WAIT_CAPTION);
+  tickAuthorWaitClock();
+  stopAuthorWaitClock();
+  state.authorWaitTimer = setInterval(tickAuthorWaitClock, 1000);
+  if (state.authorJobId) rememberAuthorJob(state.authorJobId);
+}
+
+function hideAuthorWait() {
+  stopAuthorWaitClock();
+  state.authorWaitStartedAt = 0;
+  const wait = $("#authorWaitWrap");
+  if (wait) wait.classList.add("hidden");
+  const vp = $("#boardViewport");
+  if (vp) vp.classList.remove("hidden");
+}
+
+function rememberAuthorJob(jobId) {
+  state.authorJobId = jobId || "";
+  if (!jobId) {
+    try { sessionStorage.removeItem(AUTHOR_JOB_KEY); } catch (e) {}
+    return;
+  }
+  try {
+    sessionStorage.setItem(AUTHOR_JOB_KEY, JSON.stringify({
+      jobId,
+      topic: state.topicKey,
+      gen: state.authorGen,
+      startedAt: state.authorWaitStartedAt || Date.now(),
+      waiting: !!state.authorWaitStartedAt,
+    }));
+  } catch (e) {}
+}
+
+function loadAuthorJob() {
+  try {
+    return JSON.parse(sessionStorage.getItem(AUTHOR_JOB_KEY) || "null");
+  } catch (e) {
+    return null;
+  }
+}
+
+function authorBody() {
+  return {
+    topic: state.topicKey,
+    level: state.level,
+    engine: state.authorEngine,
+    recent: state.recentHooks || [],
+  };
+}
+
+async function peekAuthorJob(jobId) {
+  if (!jobId) return null;
+  const res = await fetch("/api/author/jobs/" + encodeURIComponent(jobId));
+  if (res.status === 401) {
+    window.location.replace("/gate.html");
+    return null;
+  }
+  if (res.status === 404) return null;
+  return res.json().catch(() => null);
+}
+
+async function startAuthorJob() {
+  const res = await fetch("/api/author/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(authorBody()),
+  });
+  if (res.status === 401) {
+    window.location.replace("/gate.html");
+    return null;
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!data.job_id) throw new Error(data.error || "出题还没开始。");
+  rememberAuthorJob(data.job_id);
+  return data;
+}
+
+function warmAuthorJob() {
+  if (state.mode !== "explore") return;
+  if (state.authorJobId) return;
+  startAuthorJob().catch(() => {});
+}
+
+function pollAuthorJob(jobId, deadline) {
+  return new Promise((resolve) => {
+    let timer = null;
+    let stopped = false;
+
+    function cleanup() {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVis);
+    }
+
+    async function tick() {
+      if (stopped) return;
+      try {
+        const data = await peekAuthorJob(jobId);
+        if (data && data.status === "done" && data.card) {
+          cleanup();
+          resolve(data);
+          return;
+        }
+        if (!data) {
+          cleanup();
+          resolve({ missing: true });
+          return;
+        }
+      } catch (e) {}
+      if (Date.now() > deadline && !document.hidden) {
+        cleanup();
+        resolve(null);
+        return;
+      }
+      const delay = document.hidden ? 4000 : AUTHOR_POLL_MS;
+      timer = setTimeout(tick, delay);
+    }
+
+    function onVis() {
+      if (!document.hidden) tick();
+    }
+
+    document.addEventListener("visibilitychange", onVis);
+    tick();
+  });
+}
+
+function cardFromJob(data, currentHook) {
+  if (!data || !data.card) return null;
+  if (currentHook && data.card.hook === currentHook) return null;
+  return data.card;
+}
+
+async function waitForNewCard() {
+  const currentHook = state.problemCard && state.problemCard.hook;
+  let jobId = state.authorJobId;
+  if (jobId) {
+    const snap = await peekAuthorJob(jobId).catch(() => null);
+    const ready = cardFromJob(snap, currentHook);
+    if (ready) {
+      rememberAuthorJob("");
+      return ready;
+    }
+    if (!snap || snap.status === "done" || snap.missing) jobId = "";
+  }
+  showAuthorWait();
+  if (!jobId) {
+    const started = await startAuthorJob();
+    jobId = started && started.job_id;
+    const ready = cardFromJob(started, currentHook);
+    if (ready) {
+      rememberAuthorJob("");
+      return ready;
+    }
+  } else {
+    rememberAuthorJob(jobId);
+  }
+  if (!jobId) {
+    rememberAuthorJob("");
+    return pickSeedCard();
+  }
+  let done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS);
+  if (done && done.missing) {
+    const started = await startAuthorJob();
+    jobId = started && started.job_id;
+    const ready = cardFromJob(started, currentHook);
+    if (ready) {
+      rememberAuthorJob("");
+      return ready;
+    }
+    if (jobId) done = await pollAuthorJob(jobId, Date.now() + AUTHOR_WAIT_MS);
+  }
+  rememberAuthorJob("");
+  const ready = cardFromJob(done, currentHook);
+  return ready || pickSeedCard();
+}
+
 function friendlyAuthorError(err) {
   const msg = String(err && err.message ? err.message : err || "");
   if (/load failed|failed to fetch|networkerror|abort|timeout|network/i.test(msg)) {
@@ -1310,6 +1530,7 @@ async function fetchAuthorOnce(body, timeoutMs) {
     if (!res.ok || !data.card) {
       throw new Error(data.error || "出题大脑这会儿有点忙，再试一次。");
     }
+    if (data.job_id) rememberAuthorJob(data.job_id);
     return data.card;
   } finally {
     if (timer) clearTimeout(timer);
@@ -1367,25 +1588,22 @@ async function fetchAuthorCard(force) {
 function prefetchAuthor() {
   if (state.mode !== "explore") return;
   if (state.config && !state.config.configured) return;
-  if (state.problemCard && state.problemCard.topic === state.topicKey) return;
-  const gen = state.authorGen;
-  const topic = state.topicKey;
-  state.authorPromise = fetchAuthorCard(false).then((card) => {
-    if (gen !== state.authorGen || state.topicKey !== topic) return null;
-    return card;
-  }).catch(() => null);
+  if (state.problemCard && state.problemCard.topic === state.topicKey) {
+    warmAuthorJob();
+    return;
+  }
+  const seed = pickSeedCard();
+  if (seed) rememberAuthorCard(seed, { force: false, gen: state.authorGen });
+  warmAuthorJob();
 }
 
 async function startPlay() {
   if (state.streaming) return;
   if (state.config && !state.config.configured) return;
+  hideAuthorWait();
   hideStartPlay();
-  setCaption(THINKING_CAPTION);
-  let card = topicCard(state.problemCard);
+  let card = topicCard(state.problemCard) || pickSeedCard();
   try {
-    if (!card && state.authorPromise) {
-      card = topicCard(await state.authorPromise);
-    }
     if (!card) card = await fetchAuthorCard(false);
   } catch (e) {
     setCaption(friendlyAuthorError(e));
@@ -1397,9 +1615,11 @@ async function startPlay() {
     showStartPlay();
     return;
   }
+  rememberAuthorCard(card, { force: false, gen: state.authorGen });
   mountFromCard(card);
   if (card.first_question) setCaption(card.first_question);
   applyModeUI();
+  warmAuthorJob();
   const alreadyStarted = state.messages.some((m) => m.role === "assistant");
   if (alreadyStarted) return;
   await streamAssistant(true);
@@ -1954,7 +2174,19 @@ async function loadConfig() {
   applyModeUI();
   renderHistory();
   refreshVoiceAvailability();
-  prefetchAuthor();
+  const pendingJob = loadAuthorJob();
+  if (pendingJob && pendingJob.jobId) {
+    state.authorJobId = pendingJob.jobId;
+    if (pendingJob.startedAt) state.authorWaitStartedAt = pendingJob.startedAt;
+  }
+  const resumeWait = !!(
+    pendingJob
+    && pendingJob.waiting
+    && pendingJob.jobId
+    && (!pendingJob.topic || pendingJob.topic === state.topicKey)
+  );
+  if (resumeWait) resumeWaitingExplore();
+  else prefetchAuthor();
 }
 
 // 思考模式关闭时，展示思考的选项不可用。
@@ -2096,6 +2328,39 @@ async function sendMessage(text) {
   await streamAssistant(false);
 }
 
+async function applyNewExploreCard(card) {
+  hideAuthorWait();
+  if (!card) {
+    setCaption(friendlyAuthorError("这道题再想一会儿，点开始玩再试一次。"));
+    showStartPlay();
+    return false;
+  }
+  rememberAuthorCard(card, { force: true, gen: state.authorGen });
+  mountFromCard(card);
+  if (card.first_question) setCaption(card.first_question);
+  warmAuthorJob();
+  await streamAssistant(true);
+  return true;
+}
+
+async function resumeWaitingExplore() {
+  if (state.streaming) return;
+  setBoardMode("interact");
+  clearDoodle();
+  state.messages = [];
+  state.mathWorkspace = null;
+  const messages = $("#messages");
+  if (messages) messages.innerHTML = "";
+  try {
+    const card = await waitForNewCard();
+    await applyNewExploreCard(card);
+  } catch (e) {
+    hideAuthorWait();
+    setCaption(friendlyAuthorError(e));
+    showStartPlay();
+  }
+}
+
 // 探索模式：点"出个新题"，让小欧出题（不显示孩子气泡）。
 async function startExplore() {
   if (state.streaming) return;
@@ -2106,18 +2371,15 @@ async function startExplore() {
   state.mathWorkspace = null;
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
-  setCaption(THINKING_CAPTION);
+  saveSession();
   try {
-    const card = await fetchAuthorCard(true);
-    if (card) {
-      mountFromCard(card);
-      if (card.first_question) setCaption(card.first_question);
-    }
+    const card = await waitForNewCard();
+    await applyNewExploreCard(card);
   } catch (e) {
+    hideAuthorWait();
     setCaption(friendlyAuthorError(e));
-    return;
+    showStartPlay();
   }
-  await streamAssistant(true);
 }
 
 // 共用的流式接收逻辑。kickoff=true 时请求小欧出题。
@@ -2904,17 +3166,11 @@ function bindEvents() {
 
   $("#resetBtn").addEventListener("click", () => {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
-    state.messages = [];
-    state.problemCard = null;
-    state.caption = "";
     state.seenTerms = [];
-    state.mathWorkspace = null;
-    bumpAuthorGen();
     clearPendingImage();
     clearActivitySession();
-    saveSession();
-    renderHistory();
-    prefetchAuthor();
+    closeDrawer();
+    startExplore();
   });
 }
 

@@ -10,7 +10,7 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from server.app import app
-from server import author, tutor
+from server import author, author_jobs, tutor
 from server.config import thinking_request_extras, load_settings
 
 
@@ -260,7 +260,8 @@ class AuthorCardTests(unittest.TestCase):
 
     def test_author_falls_back_to_seed_after_one_short_attempt(self):
         src = Path(__file__).resolve().parents[1].joinpath("server/author.py").read_text(encoding="utf-8")
-        self.assertIn("httpx.Timeout(50.0)", src)
+        self.assertIn("httpx.Timeout(timeout)", src)
+        self.assertIn("timeout: float = 120.0", src)
         self.assertNotIn("for _ in range(2):", src)
 
     def test_v3_tutor_prompt_has_no_competing_draw_command(self):
@@ -288,6 +289,25 @@ class AuthorCardTests(unittest.TestCase):
         self.assertEqual(arithmetic["board"]["model"]["layers"], [1, 3, 5])
         self.assertEqual(arithmetic["board"]["view"]["reveal"], "stepwise")
         self.assertNotEqual(arithmetic["board"]["kind"], "static_diagram")
+
+    def test_each_topic_has_three_distinct_seed_variants(self):
+        for topic, raws in author.SEED_VARIANTS.items():
+            self.assertEqual(len(raws), 3, topic)
+            cards = author.seed_variants(topic)
+            self.assertEqual(len(cards), 3, topic)
+            hooks = [card["hook"] for card in cards]
+            self.assertEqual(len(set(hooks)), 3, hooks)
+            for card in cards:
+                self.assertEqual(card["topic"], topic)
+                self.assertIsNone(author.validate_card(card, topic), card.get("hook"))
+                self.assertFalse(author.is_nine_square(card))
+                self.assertTrue(card.get("first_question"))
+        first = author.seed_card("arithmetic", "middle")
+        second = author.seed_card("arithmetic", "middle", [first["hook"]])
+        third = author.seed_card("arithmetic", "middle", [first["hook"], second["hook"]])
+        self.assertNotEqual(first["hook"], second["hook"])
+        self.assertNotEqual(second["hook"], third["hook"])
+        self.assertNotEqual(first["hook"], third["hook"])
 
     def test_glm_thinking_cannot_be_disabled(self):
         extras = thinking_request_extras(
@@ -320,10 +340,17 @@ class AuthorHttpTests(unittest.TestCase):
     def setUp(self):
         from server.gate import reset_unlock_limiter
         reset_unlock_limiter()
+        author_jobs.reset()
         self.client = TestClient(app, follow_redirects=False)
 
     def test_author_requires_gate(self):
         resp = self.client.post("/api/author", json={"topic": "geometry"})
+        self.assertEqual(resp.status_code, 401)
+
+    def test_author_jobs_require_gate(self):
+        resp = self.client.post("/api/author/jobs", json={"topic": "geometry"})
+        self.assertEqual(resp.status_code, 401)
+        resp = self.client.get("/api/author/jobs/job_missing")
         self.assertEqual(resp.status_code, 401)
 
     def test_config_lists_author_engines_after_unlock(self):
@@ -332,6 +359,9 @@ class AuthorHttpTests(unittest.TestCase):
         keys = [e["key"] for e in cfg["author_engines"]]
         self.assertEqual(keys, ["glm", "deepseek"])
         self.assertIn(cfg["default_author"], ("glm", "deepseek"))
+        self.assertEqual(len(cfg["seed_cards"]), 6)
+        for topic, cards in cfg["seed_cards"].items():
+            self.assertEqual(len(cards), 3, topic)
 
     def test_seed_only_returns_seed_card(self):
         self.client.post("/api/unlock", json={"code": "maxim"})
@@ -342,6 +372,61 @@ class AuthorHttpTests(unittest.TestCase):
         self.assertEqual(data["engine"], "seed")
         self.assertEqual(data["card"]["topic"], "reasoning")
         self.assertFalse(author.is_nine_square(data["card"]))
+        self.assertIsNone(data.get("job_id"))
+
+    def test_author_returns_seed_immediately_and_starts_job(self):
+        self.client.post("/api/unlock", json={"code": "maxim"})
+        called = {}
+
+        async def fake_request(topic, level, recent, engine, timeout=120.0):
+            called["timeout"] = timeout
+            called["topic"] = topic
+            return author.seed_card(topic, level, list(recent or []) + ["__used__"])
+
+        with mock.patch.object(author, "engine_ready", return_value=True), mock.patch.object(
+            author, "request_author_card", side_effect=fake_request
+        ):
+            resp = self.client.post("/api/author", json={"topic": "geometry", "recent": ["旧题"]})
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["engine"], "seed")
+            self.assertTrue(data["job_id"])
+            self.assertEqual(data["card"]["topic"], "geometry")
+            job = self.client.get("/api/author/jobs/" + data["job_id"])
+            self.assertEqual(job.status_code, 200)
+            body = job.json()
+            self.assertEqual(body["status"], "done")
+            self.assertTrue(body["card"])
+            self.assertEqual(called.get("timeout"), 120.0)
+            self.assertEqual(called.get("topic"), "geometry")
+
+    def test_author_job_poll_returns_generated_card(self):
+        self.client.post("/api/unlock", json={"code": "maxim"})
+
+        async def fake_request(topic, level, recent, engine, timeout=120.0):
+            return author.seed_card(topic, level, list(recent or []) + ["__used__"])
+
+        with mock.patch.object(author, "engine_ready", return_value=True), mock.patch.object(
+            author, "request_author_card", side_effect=fake_request
+        ):
+            started = self.client.post("/api/author/jobs", json={"topic": "reasoning", "level": "middle"})
+            self.assertEqual(started.status_code, 200)
+            job_id = started.json()["job_id"]
+            self.assertTrue(job_id)
+            polled = self.client.get("/api/author/jobs/" + job_id)
+            self.assertEqual(polled.status_code, 200)
+            body = polled.json()
+            self.assertEqual(body["status"], "done")
+            self.assertEqual(body["card"]["topic"], "reasoning")
+            self.assertIsNone(author.validate_card(body["card"], "reasoning"))
+
+    def test_pending_jobs_are_reused_for_same_topic(self):
+        first = author_jobs.create("geometry", "middle", ["a"], "glm")
+        second = author_jobs.create("geometry", "middle", ["b"], "glm")
+        self.assertEqual(first["id"], second["id"])
+        other = author_jobs.create("arithmetic", "middle", [], "glm")
+        self.assertNotEqual(first["id"], other["id"])
 
 
 if __name__ == "__main__":
