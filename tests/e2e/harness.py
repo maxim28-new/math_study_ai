@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import threading
@@ -24,7 +25,7 @@ BOARD_SELECTOR = {
     "geometry_compass": ".geometry-compass-board",
     "snap_grid": ".snap-grid-stage, figure.diagram.snap-grid, #stageHost canvas",
     "layer_sum": ".layer-pile-board",
-    "static_diagram": "figure.diagram, #stageHost svg",
+    "static_diagram": "figure.diagram:not(.snap-grid) svg, figure.diagram:not(.snap-grid)",
     "color_sequence": ".color-seq-board",
     "path_count": ".path-board",
 }
@@ -50,7 +51,12 @@ LAYOUT_JS = """() => {
   const plus = document.querySelector('#plusBtn');
   const send = document.querySelector('#doodleSendBtn');
   const boardEl = host && (
-    host.querySelector('canvas') || host.querySelector('svg') || host.querySelector('.semantic-board') || host
+    host.querySelector('.semantic-board')
+    || host.querySelector('.snap-grid-stage')
+    || host.querySelector('figure.diagram')
+    || host.querySelector('canvas')
+    || host.querySelector('svg')
+    || host
   );
   const capBox = box(cap);
   const vpBox = box(vp);
@@ -185,8 +191,9 @@ class HeadlessPhoneTests(unittest.TestCase):
 
     def _stub_chat(self, route) -> None:
         if route.request.method == "POST":
+            raw = route.request.post_data or ""
             try:
-                body = route.request.post_data_json() or {}
+                body = json.loads(raw) if raw else {}
             except Exception:
                 body = {}
             blob = _last_user_blob(body)
@@ -195,6 +202,7 @@ class HeadlessPhoneTests(unittest.TestCase):
                     "kickoff": bool(body.get("kickoff")),
                     "has_image": blob["has_image"],
                     "text": blob["text"][:180],
+                    "keys": sorted(body.keys())[:12],
                 }
             )
         route.fulfill(
@@ -209,6 +217,11 @@ class HeadlessPhoneTests(unittest.TestCase):
         page.fill("#codeInput", settings.access_code or "maxim")
         page.click("#unlockBtn")
         page.wait_for_selector("#startPlayBtn", timeout=15000)
+        page.evaluate("() => { try { localStorage.clear(); } catch (e) {} }")
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_selector("#startPlayBtn", timeout=15000)
+
+    def _fresh_session(self, page) -> None:
         page.evaluate("() => { try { localStorage.clear(); } catch (e) {} }")
         page.reload(wait_until="domcontentloaded")
         page.wait_for_selector("#startPlayBtn", timeout=15000)
@@ -286,14 +299,7 @@ class HeadlessPhoneTests(unittest.TestCase):
         topic = next(item for item in tutor.TOPICS if item.key == topic_key)
         cards = author.seed_variants(topic_key)
         self.assertGreaterEqual(len(cards), index, topic_key)
-        line = page.locator("#topicLine").inner_text()
-        playing = (
-            page.locator(".play-stage.is-playing").count() > 0
-            and not page.locator("#startPlayWrap").is_visible()
-        )
-        if playing and topic.name in line:
-            other = next(item for item in tutor.TOPICS if item.key != topic_key)
-            self._choose_topic(page, other.name)
+        self._fresh_session(page)
         self._choose_topic(page, topic.name)
         for step in range(index):
             kind = cards[step]["board"]["kind"]
