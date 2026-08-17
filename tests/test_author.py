@@ -324,6 +324,9 @@ class AuthorCardTests(unittest.TestCase):
         fifth = author.seed_card("arithmetic", "middle", used + [fourth["hook"]])
         self.assertEqual(fourth["hook"], arith[0]["hook"])
         self.assertEqual(fifth["hook"], arith[1]["hook"])
+        stuck_on_last = [arith[(index + 1) % 3]["hook"] for index in range(8)]
+        after_eight = author.seed_card("arithmetic", "middle", stuck_on_last)
+        self.assertEqual(after_eight["hook"], arith[0]["hook"])
         self.assertEqual(author.seed_catalog_meta()["source"], "author-agent")
 
     def test_each_topic_has_three_distinct_seed_variants(self):

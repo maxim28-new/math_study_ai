@@ -3,7 +3,6 @@
 (function (root) {
   const A = root.XiaoouActivity || {};
   const BLUE = "#3f5bd6";
-  const CELL_MIN = 44;
   const SNAP_RATIO = 0.55;
 
   function occupancySnapshot(spec, cells, trayCount) {
@@ -48,24 +47,28 @@
     }
 
     const interactive = !!options.interactive;
-    const stageHost = host.querySelector(".snap-grid-stage") || host;
-    const fallback = host.querySelector(".snap-grid-fallback");
     const play = host.closest ? host.closest(".play-stage") : null;
     const expanded = !!(play && play.classList.contains("is-playing"));
+    const stageHost = host.querySelector(".snap-grid-stage") || host;
+    const fallback = host.querySelector(".snap-grid-fallback");
+    const viewport = host.closest(".board-viewport") || stageHost;
     const hostW = Math.max(200, stageHost.clientWidth || host.clientWidth || 280);
-    const hostH = Math.max(0, stageHost.clientHeight || 0);
+    const hostH = Math.max(0, (viewport && viewport.clientHeight) || stageHost.clientHeight || 0);
     const gap = 6;
     const pad = 10;
     const cellCap = expanded ? 72 : 56;
-    const cell = Math.max(
-      CELL_MIN,
-      Math.min(cellCap, Math.floor((hostW - pad * 2 - gap * (spec.cols - 1)) / spec.cols))
-    );
+    const perRow = Math.max(1, spec.cols);
+    const trayRows = Math.max(1, Math.ceil(Math.max(spec.tray, 1) / perRow));
+    const cellW = Math.floor((hostW - pad * 2 - gap * (spec.cols - 1)) / spec.cols);
+    let cellH = cellCap;
+    if (hostH > 80) {
+      const vGaps = gap * Math.max(0, spec.rows - 1) + gap * trayRows + 16;
+      cellH = Math.floor((hostH - pad * 2 - vGaps) / (spec.rows + trayRows));
+    }
+    const cell = Math.max(26, Math.min(cellCap, cellW, cellH));
     const gridW = spec.cols * cell + (spec.cols - 1) * gap;
     const gridH = spec.rows * cell + (spec.rows - 1) * gap;
     const trayTop = pad + gridH + 16;
-    const perRow = spec.cols;
-    const trayRows = Math.max(1, Math.ceil(Math.max(spec.tray, 1) / perRow));
     let width = pad * 2 + gridW;
     let height = trayTop + trayRows * (cell + gap) + pad;
 

@@ -122,6 +122,9 @@ class FrontendRegressionTests(unittest.TestCase):
         snap_at = html.find("/activity/snap-grid.js")
         app_at = html.find("/app.js")
         self.assertTrue(0 < konva_at < state_at < snap_at < app_at)
+        snap = read("web/activity/snap-grid.js")
+        self.assertIn("board-viewport", snap)
+        self.assertIn("spec.rows + trayRows", snap)
 
     def test_drawing_guide_teaches_snap_grid(self):
         guide = read("server/tutor.py")
@@ -220,7 +223,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260817-geomcycle", html)
+        self.assertIn("v=20260817-seedwrap", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -302,19 +305,24 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("problemCard = null", choose)
         self.assertIn("function unusedSeedCard(", app)
         self.assertIn("function pickSeedCard(", app)
-        pick = app[app.find("function pickSeedCard"):app.find("function formatWaitClock")]
+        pick = app[app.find("function pickSeedCard"):app.find("function abortChatStream")]
         self.assertIn("unusedSeedCard(key)", pick)
-        self.assertIn("topicRecentHooks(key).length % pool.length", pick)
+        self.assertIn("(idx < 0 ? 0 : idx + 1) % pool.length", pick)
+        self.assertNotIn("topicRecentHooks(key).length % pool.length", pick)
         self.assertNotIn("topicSeedPool(key)[0] || null", pick)
+        self.assertIn("function abortChatStream(", app)
+        self.assertIn("AbortController", app)
+        self.assertIn("AbortError", app)
         self.assertIn("function stashGeneratedCard(", app)
         self.assertIn("function waitSeqFor(", app)
         self.assertIn("waitSeqByTopic", app)
         self.assertIn("waitByTopic", app)
         start_ex = app[app.find("async function startExplore"):app.find("async function streamAssistant")]
+        self.assertIn("abortChatStream", start_ex)
         self.assertIn("bumpWaitSeq", start_ex)
         self.assertIn("waitSeqFor(topic)", start_ex)
-        self.assertIn("unusedSeedCard", start_ex)
         self.assertIn("pickSeedCard", start_ex)
+        self.assertNotIn("if (state.streaming) return;", start_ex)
         self.assertNotIn("waitForNewCard", start_ex)
         self.assertNotIn("/api/author/jobs", start_ex)
         self.assertIn('location.replace("/gate.html")', app)
@@ -459,7 +467,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260817-geomcycle", html)
+        self.assertIn("v=20260817-seedwrap", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

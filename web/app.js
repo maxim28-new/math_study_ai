@@ -15,6 +15,7 @@ const state = {
   pendingImage: null, // 待发送的题目照片或画板涂鸦（dataURL）
   pendingImageKind: "", // photo | doodle | draw
   streaming: false,
+  chatAbort: null,
   liveActivities: [],
   mountedActivities: [],
   semanticBoardHandle: null,
@@ -1324,10 +1325,23 @@ function pickSeedCard(topic) {
   const key = topic || state.topicKey;
   const unused = unusedSeedCard(key);
   if (unused) return unused;
-  const pool = topicSeedPool(key);
+  const pool = topicSeedPool(key).filter((card) => card && card.hook);
   if (!pool.length) return null;
-  const pick = pool[topicRecentHooks(key).length % pool.length] || pool[0];
+  const currentHook = (key === state.topicKey && state.problemCard && state.problemCard.hook)
+    ? String(state.problemCard.hook)
+    : "";
+  const idx = pool.findIndex((card) => card.hook === currentHook);
+  const pick = pool[(idx < 0 ? 0 : idx + 1) % pool.length] || pool[0];
   return key === state.topicKey ? topicCard(pick) : pick;
+}
+
+function abortChatStream() {
+  const ac = state.chatAbort;
+  state.chatAbort = null;
+  if (ac) {
+    try { ac.abort(); } catch (e) {}
+  }
+  if (state.streaming) setStreaming(false);
 }
 
 function formatWaitClock(ms) {
@@ -2499,7 +2513,7 @@ async function resumeWaitingExplore() {
 
 // 探索模式：点"出个新题"，让小欧出题（不显示孩子气泡）。
 async function startExplore() {
-  if (state.streaming) return;
+  abortChatStream();
   setBoardMode("interact");
   clearDoodle();
   bumpAuthorGen();
@@ -2511,13 +2525,15 @@ async function startExplore() {
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   saveSession();
-  const card = unusedSeedCard(topic) || pickSeedCard(topic);
+  const card = pickSeedCard(topic);
   if (seq !== waitSeqFor(topic) || state.topicKey !== topic) return;
   await applyNewExploreCard(card, { topic });
 }
 
 // 共用的流式接收逻辑。kickoff=true 时请求小欧出题。
 async function streamAssistant(kickoff) {
+  const ac = new AbortController();
+  state.chatAbort = ac;
   setStreaming(true);
   const tutorBubble = addMessageEl("tutor");
   tutorBubble.classList.add("cursor-blink");
@@ -2528,6 +2544,7 @@ async function streamAssistant(kickoff) {
     const res = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: ac.signal,
       body: JSON.stringify({
         messages: state.messages,
         topic: state.topicKey,
@@ -2599,38 +2616,44 @@ async function streamAssistant(kickoff) {
       }
     }
   } catch (err) {
+    if ((err && err.name === "AbortError") || ac.signal.aborted) return;
     acc += (acc ? "\n\n" : "") + "抱歉，连接出了点问题，请稍后再试。";
     tutorBubble.innerHTML = renderMarkdown(acc);
     decorateTutorTerms(tutorBubble);
-  }
-
-  tutorBubble.classList.remove("cursor-blink");
-  if (state.mode === "explore") {
-    acc = stripBoardProtocol(acc);
-    tutorBubble.innerHTML = renderMarkdown(acc);
-    decorateTutorTerms(tutorBubble);
-  }
-  if (acc.trim()) {
-    state.messages.push({ role: "assistant", content: acc });
-    saveSession();
-    if (state.mode === "explore") {
-      const cap = window.XiaoouActivity && XiaoouActivity.tutorCaption
-        ? XiaoouActivity.tutorCaption(acc)
-        : "";
-      if (cap) setCaption(cap);
-      // 探索画板只由已校验题卡驱动，陪练文字不能替换或清空它。
-    } else {
-      const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
-      if (hasGrid) freezeLiveActivities();
-      hydrateSnapGrids(tutorBubble, true);
+  } finally {
+    tutorBubble.classList.remove("cursor-blink");
+    if (state.chatAbort !== ac) return;
+    state.chatAbort = null;
+    if (ac.signal.aborted) {
+      setStreaming(false);
+      return;
     }
-    saveSession();
-  }
-  setStreaming(false);
-  if (state.queuedMilestone) {
-    const q = state.queuedMilestone;
-    state.queuedMilestone = null;
-    sendActivityMilestone(q.event, q.snapshot);
+    if (state.mode === "explore") {
+      acc = stripBoardProtocol(acc);
+      tutorBubble.innerHTML = renderMarkdown(acc);
+      decorateTutorTerms(tutorBubble);
+    }
+    if (acc.trim()) {
+      state.messages.push({ role: "assistant", content: acc });
+      saveSession();
+      if (state.mode === "explore") {
+        const cap = window.XiaoouActivity && XiaoouActivity.tutorCaption
+          ? XiaoouActivity.tutorCaption(acc)
+          : "";
+        if (cap) setCaption(cap);
+      } else {
+        const hasGrid = tutorBubble.querySelector("figure.diagram[data-snap-grid]");
+        if (hasGrid) freezeLiveActivities();
+        hydrateSnapGrids(tutorBubble, true);
+      }
+      saveSession();
+    }
+    setStreaming(false);
+    if (state.queuedMilestone) {
+      const q = state.queuedMilestone;
+      state.queuedMilestone = null;
+      sendActivityMilestone(q.event, q.snapshot);
+    }
   }
 }
 

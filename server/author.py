@@ -781,7 +781,11 @@ def seed_card(
     unused = [card for card in cards if card.get("hook") not in recent_hooks]
     if unused:
         return unused[0]
-    return cards[len(recent_hooks) % len(cards)]
+    current = recent_hooks[-1] if recent_hooks else None
+    for index, card in enumerate(cards):
+        if card.get("hook") == current:
+            return cards[(index + 1) % len(cards)]
+    return cards[0]
 
 
 def build_author_prompt(topic_key: str, level: str, recent: list[str]) -> str:
