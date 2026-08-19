@@ -85,6 +85,16 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("activity_state_test.js ok", proc.stdout)
 
+    def test_lesson_state_js_rules(self):
+        proc = subprocess.run(
+            ["node", str(ROOT / "tests" / "lesson_state_test.js")],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("lesson_state_test.js ok", proc.stdout)
+
     def test_semantic_board_state_js_rules(self):
         proc = subprocess.run(
             ["node", str(ROOT / "tests" / "semantic_board_test.js")],
@@ -195,6 +205,8 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="historyMount"',
             'id="attachSheet"',
             'id="hintBtn"',
+            'id="discoveryStrip"',
+            'id="dockNewQuestionBtn"',
             'id="newQuestionBtn"',
             'id="dockNewQuestionBtn"',
             'id="doodleCanvas"',
@@ -243,7 +255,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260817-uxfix", html)
+        self.assertIn("v=20260819-lesson", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -271,7 +283,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".voice-row", css)
         self.assertIn(".voice-clear-btn", css)
         self.assertNotIn("说错了，撤销刚才", html)
-        self.assertIn("小提示", html)
+        self.assertIn("再小一点", html)
+        self.assertIn('id="discoveryStrip"', html)
+        self.assertIn("/lesson/state.js", html)
+        self.assertIn("board_switch_view", read("server/agent/tools.py"))
+        self.assertIn("pair_rows", read("web/activity/snap-grid.js"))
         self.assertIn("拍给我", html)
         self.assertIn("发给小欧", html)
         self.assertNotIn('id="historyBtn"', html)
@@ -488,7 +504,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260817-uxfix", html)
+        self.assertIn("v=20260819-lesson", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

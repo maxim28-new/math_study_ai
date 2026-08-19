@@ -850,6 +850,50 @@ button, input, select, textarea { font-family: inherit; }
   background: var(--primary-soft);
 }
 .term-card.hidden { display: none; }
+.discovery-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 8px;
+}
+.discovery-strip.is-empty { display: none; }
+.discovery-chip {
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.discovery-card {
+  margin: 0 16px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffdf8;
+}
+.discovery-card.hidden { display: none; }
+.discovery-card p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.discovery-card button {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
 .term-card-head {
   display: flex;
   align-items: center;

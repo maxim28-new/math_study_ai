@@ -352,7 +352,9 @@ AGENT_TOOLS_GUIDE = """\
 - 只引用孩子看得见的对象。
 - 不要直接给最终答案或完整解题步骤。
 - 涂鸦和「发画板」截图请直接看图，不要当成作业本读题。操作界面和画笔界面都可以发当前盘面。
-- 第一次用到圆规、圆心、半径、交点、线段、正三角形、正方形、规律、排列、组合这些词时，先说看见的意思，再给名字。一次一个新词。"""
+- 第一次用到圆规、圆心、半径、交点、线段、正三角形、正方形、规律、排列、组合这些词时，先说看见的意思，再给名字。一次一个新词。
+- 孩子用自己的话说出道理时，调用 lesson_record_claim（statement 必须是孩子原话，禁止抄题卡 insight），再 lesson_mark_child_acceptance。
+- 题卡允许换看法时，只能用 board_switch_view；不要口头假装画面已经换了。"""
 
 
 def _board_controlled_prompt(text: str) -> str:
@@ -400,6 +402,8 @@ def build_system_prompt(
     card: dict | None = None,
     seen_terms: list[str] | None = None,
     agent: bool = False,
+    lesson: dict | None = None,
+    lesson_event: str = "",
 ) -> str:
     topic = TOPICS_BY_KEY.get(topic_key, TOPICS_BY_KEY[DEFAULT_TOPIC_KEY])
     level_desc = LEVELS.get(level, LEVELS[DEFAULT_LEVEL])
@@ -444,6 +448,11 @@ def build_system_prompt(
     if names:
         seen_block = "\n这些词孩子已经点开看过，可以直接用，不必再解释：" + "、".join(names) + "。\n"
 
+    lesson_block = ""
+    if mode == "explore" and isinstance(card, dict) and card:
+        from . import lesson as lesson_state
+        lesson_block = "\n" + lesson_state.lesson_guidance(lesson, card, lesson_event or "") + "\n"
+
     return f"""{core_block}
 
 # 本次学习的设置
@@ -457,6 +466,7 @@ def build_system_prompt(
 {card_block}
 {drawing_guide}
 {seen_block}
+{lesson_block}
 {mode_block}
 """
 

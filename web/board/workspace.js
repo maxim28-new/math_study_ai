@@ -150,6 +150,10 @@
   function seedShell(wsId, topic, card, representation) {
     const board = (card && card.board) || {};
     const model = board.model || {};
+    const views = Array.isArray(card && card.allowed_views)
+      ? card.allowed_views.map((name) => clip(name, 32)).filter(Boolean)
+      : [];
+    if (representation && views.indexOf(representation) < 0) views.unshift(representation);
     return {
       id: wsId,
       version: 1,
@@ -162,6 +166,8 @@
         item: clip(model.item, 8) || "块",
         first_question: clip(card && card.first_question, 200),
         allowed_layers: [],
+        insight_key: clip(card && card.insight_key, 48),
+        allowed_views: views,
       },
       objects: [],
       relations: [],

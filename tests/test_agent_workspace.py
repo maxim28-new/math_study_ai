@@ -119,6 +119,33 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertEqual(validators.forms_square(ws)["tile_count"], 1)
         self.assertEqual(ws["visibility"]["emphasis"], ["tile_1"])
 
+    def test_switch_view_only_allows_card_views(self):
+        card = {
+            "hook": "哥哥有8张贴纸，弟弟只有4张",
+            "insight": "每移过去一张，差距一次缩小2",
+            "insight_key": "equalize_by_half_diff",
+            "allowed_views": ["snap_grid", "pair_rows"],
+            "first_question": "先摆再移",
+            "board": {
+                "schema": 3,
+                "kind": "snap_grid",
+                "model": {"rows": 2, "cols": 8, "tray": 12},
+                "task": {"action": "arrange", "ask": "observe", "prompt": "摆一摆"},
+                "view": {"reveal": "empty_grid_and_tiles"},
+            },
+        }
+        ws = WS.seed_from_card(card, "wordproblems")
+        self.assertEqual(ws["view"]["representation"], "snap_grid")
+        self.assertIn("pair_rows", ws["problem"]["allowed_views"])
+        version = ws["version"]
+        bad = tools.execute_tool("board_switch_view", ws, {"view_id": "numberline"})
+        self.assertFalse(bad["ok"])
+        self.assertEqual(ws["version"], version)
+        ok = tools.execute_tool("board_switch_view", ws, {"view_id": "pair_rows"})
+        self.assertTrue(ok["ok"], ok)
+        self.assertEqual(ws["view"]["representation"], "pair_rows")
+        self.assertGreater(ws["version"], version)
+
 
 if __name__ == "__main__":
     unittest.main()

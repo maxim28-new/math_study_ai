@@ -89,6 +89,8 @@ class ChatRequest(BaseModel):
     workspace: Optional[dict[str, Any]] = None
     workspace_id: str = ""
     expected_workspace_version: Optional[int] = None
+    lesson: Optional[dict[str, Any]] = None
+    lesson_event: str = ""
 
 
 class UnlockRequest(BaseModel):
@@ -272,7 +274,8 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
             yield _sse({"done": True})
             return
     system_prompt = tutor.build_system_prompt(
-        req.topic, req.level, req.child_name, req.mode, card, req.seen_terms
+        req.topic, req.level, req.child_name, req.mode, card, req.seen_terms,
+        lesson=req.lesson, lesson_event=req.lesson_event,
     )
     text_headers = {
         "Authorization": f"Bearer {settings.api_key}",
@@ -335,6 +338,8 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                         client_workspace=client_ws,
                         thinking_on=thinking_on,
                         show_reasoning=show_reasoning,
+                        lesson=req.lesson,
+                        lesson_event=req.lesson_event,
                     ):
                         if event.get("board_patch") is None and "board_patch" in event:
                             event = {k: v for k, v in event.items() if k != "board_patch"}
@@ -343,7 +348,8 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     return
                 except agent_runtime.ToolsUnsupportedError:
                     system_prompt = tutor.build_system_prompt(
-                        req.topic, req.level, req.child_name, req.mode, card, req.seen_terms, agent=False
+                        req.topic, req.level, req.child_name, req.mode, card, req.seen_terms,
+                        agent=False, lesson=req.lesson, lesson_event=req.lesson_event,
                     )
 
             payload = {

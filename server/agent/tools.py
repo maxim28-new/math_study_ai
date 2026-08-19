@@ -18,6 +18,7 @@ WRITE_TOOLS = {
     "lesson_record_conjecture",
     "lesson_record_claim",
     "lesson_mark_child_acceptance",
+    "board_switch_view",
 }
 
 READ_TOOLS = {
@@ -140,6 +141,12 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "标记孩子已经认可某条 claim 或 conjecture。",
         {"claim_id": {"type": "string"}},
         ["claim_id"],
+    ),
+    _fn(
+        "board_switch_view",
+        "把当前数学对象换成题卡允许的另一种看法。只能用 allowed_views 里的 id。失败时不要假装已经换图。",
+        {"view_id": {"type": "string"}},
+        ["view_id"],
     ),
 ]
 
@@ -440,6 +447,26 @@ def mark_child_acceptance(workspace: dict[str, Any], args: dict[str, Any]) -> di
     return _fail("unknown_claim")
 
 
+def switch_view(workspace: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    view_id = V.clip_text(args.get("view_id"), 32)
+    if not view_id:
+        return _fail("view_id_required")
+    problem = workspace.get("problem") if isinstance(workspace.get("problem"), dict) else {}
+    allowed = problem.get("allowed_views") if isinstance(problem.get("allowed_views"), list) else []
+    names = [str(item).strip() for item in allowed if str(item).strip()]
+    current = ""
+    view = workspace.get("view") if isinstance(workspace.get("view"), dict) else {}
+    current = str(view.get("representation") or "")
+    if not names:
+        names = [current] if current else []
+    if view_id not in names:
+        return _fail("view_not_allowed", view_id=view_id, allowed=names)
+    workspace.setdefault("view", {})
+    workspace["view"]["representation"] = view_id
+    WS.bump(workspace)
+    return _ok(workspace, view_id=view_id)
+
+
 EXECUTORS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "workspace_inspect": inspect,
     "workspace_inspect_visible": inspect_visible,
@@ -453,6 +480,7 @@ EXECUTORS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]]
     "lesson_record_conjecture": record_conjecture,
     "lesson_record_claim": record_claim,
     "lesson_mark_child_acceptance": mark_child_acceptance,
+    "board_switch_view": switch_view,
 }
 
 

@@ -341,6 +341,7 @@ class AuthorCardTests(unittest.TestCase):
                 self.assertIsNone(author.validate_card(card, topic), card.get("hook"))
                 self.assertFalse(author.is_nine_square(card))
                 self.assertTrue(card.get("first_question"))
+                self.assertTrue(card.get("insight_key"))
         first = author.seed_card("arithmetic", "middle")
         second = author.seed_card("arithmetic", "middle", [first["hook"]])
         third = author.seed_card("arithmetic", "middle", [first["hook"], second["hook"]])

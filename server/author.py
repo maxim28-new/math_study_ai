@@ -11,6 +11,7 @@ import httpx
 
 from . import config as teaching_config
 from . import board as semantic_board
+from . import lesson as lesson_state
 from .config import settings
 from . import tutor
 
@@ -189,6 +190,8 @@ def normalize_card(data: dict[str, Any] | None, topic: str) -> dict[str, Any] | 
         "semantic_board": None,
         "diagram": None,
         "first_question": first_question,
+        "insight_key": lesson_state.insight_key_of(data if isinstance(data, dict) else {}),
+        "allowed_views": lesson_state.allowed_views_of(data if isinstance(data, dict) else {}),
         "ladder": ladder,
         "misconceptions": [
             str(x).strip()
