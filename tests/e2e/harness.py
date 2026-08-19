@@ -204,7 +204,9 @@ class HeadlessPhoneTests(unittest.TestCase):
                     "kickoff": bool(body.get("kickoff")),
                     "has_image": blob["has_image"],
                     "text": blob["text"][:180],
-                    "keys": sorted(body.keys())[:12],
+                    "keys": sorted(body.keys())[:16],
+                    "lesson_event": body.get("lesson_event") or "",
+                    "lesson_shrinks": ((body.get("lesson") or {}) if isinstance(body.get("lesson"), dict) else {}).get("shrinks"),
                 }
             )
         route.fulfill(

@@ -95,9 +95,12 @@ def build_agent_prompt(
     card: dict[str, Any] | None,
     seen_terms: list[str],
     workspace: dict[str, Any],
+    lesson: dict[str, Any] | None = None,
+    lesson_event: str = "",
 ) -> str:
     base = tutor.build_system_prompt(
-        topic, level, child_name, mode, card, seen_terms, agent=True
+        topic, level, child_name, mode, card, seen_terms, agent=True,
+        lesson=lesson, lesson_event=lesson_event,
     )
     visible = WS.visible_snapshot(workspace)
     compact = {
@@ -137,11 +140,14 @@ async def run_tutor_agent(
     client_workspace: dict[str, Any] | None,
     thinking_on: bool,
     show_reasoning: bool,
+    lesson: dict[str, Any] | None = None,
+    lesson_event: str = "",
 ) -> AsyncGenerator[dict[str, Any], None]:
     stored = store.get((client_workspace or {}).get("id") if isinstance(client_workspace, dict) else None)
     workspace = WS.resolve_workspace(stored, client_workspace, card, topic)
     system_prompt = build_agent_prompt(
-        topic, level, child_name, mode, card, seen_terms, workspace
+        topic, level, child_name, mode, card, seen_terms, workspace,
+        lesson=lesson, lesson_event=lesson_event,
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     messages.extend(teaching_messages)

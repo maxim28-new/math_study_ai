@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 from . import validators as V
+from .. import lesson as lesson_state
 
 
 def _empty_visibility() -> dict[str, list[str]]:
@@ -219,6 +220,8 @@ def _seed_shell(ws_id: str, topic: str, card: dict[str, Any], representation: st
             "item": V.clip_text(model.get("item"), 8) or "块",
             "first_question": V.clip_text(card.get("first_question"), 200),
             "allowed_layers": [],
+            "insight_key": lesson_state.insight_key_of(card),
+            "allowed_views": lesson_state.allowed_views_of(card, representation),
         },
         "objects": [],
         "relations": [],

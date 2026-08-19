@@ -65,6 +65,14 @@ class PhoneUxTests(HeadlessPhoneTests):
             page.locator("#plusBtn").click()
             page.locator("#newQuestionBtn").wait_for(state="visible")
             self.assertTrue(page.locator("#hintBtn").is_visible())
+            self.assertEqual(page.locator("#hintBtn").inner_text().strip(), "再小一点")
+            page.locator("#hintBtn").click()
+            page.wait_for_timeout(400)
+            shrinks = [row for row in self.chat_posts if row.get("lesson_event") == "shrink"]
+            self.assertTrue(shrinks, self.chat_posts)
+            self.assertIn("再小一点", shrinks[-1]["text"])
+            page.locator("#historyOpenBtn").click()
+            page.locator("#discoveryStrip").wait_for(state="attached")
             self._shot(page, "ux-talk-open-attach.png")
         finally:
             self._close()

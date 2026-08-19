@@ -34,6 +34,8 @@ const state = {
   topicWorkspaces: {},
   caption: "",
   seenTerms: [],
+  lesson: { rung: "do", shrinks: 0, view: "", discoveries: [] },
+  pendingLessonEvent: "",
   authorGen: 0,
   mathWorkspace: null,
   authorJobId: "",
@@ -62,7 +64,23 @@ function sanitizeForStore(messages) {
   });
 }
 function emptyWorkspace() {
-  return { messages: [], problemCard: null, boards: [], caption: "", seenTerms: [], mathWorkspace: null, recentHooks: [], pendingKickoff: false };
+  return {
+    messages: [], problemCard: null, boards: [], caption: "", seenTerms: [],
+    mathWorkspace: null, recentHooks: [], pendingKickoff: false,
+    lesson: emptyLessonState(),
+  };
+}
+
+function emptyLessonState() {
+  return window.XiaoouLesson && XiaoouLesson.emptyLesson
+    ? XiaoouLesson.emptyLesson()
+    : { rung: "do", shrinks: 0, view: "", discoveries: [] };
+}
+
+function currentLesson() {
+  return window.XiaoouLesson && XiaoouLesson.normalizeLesson
+    ? XiaoouLesson.normalizeLesson(state.lesson)
+    : emptyLessonState();
 }
 
 function messagePlainText(m) {
@@ -138,6 +156,7 @@ function snapshotWorkspace() {
     boards: collectBoards(),
     caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
+    lesson: currentLesson(),
     mathWorkspace: state.mathWorkspace || null,
     recentHooks: (state.recentHooks || []).slice(),
     pendingKickoff: false,
@@ -152,10 +171,14 @@ function applyWorkspace(ws) {
   const savedCap = String(next.caption || "").trim();
   state.caption = isIdleCaption(savedCap) ? lastTutorCaption() : savedCap;
   state.seenTerms = Array.isArray(next.seenTerms) ? next.seenTerms.slice() : [];
+  state.lesson = window.XiaoouLesson
+    ? XiaoouLesson.normalizeLesson(next.lesson)
+    : emptyLessonState();
   const W = window.XiaoouMathWorkspace;
   const savedWs = next.mathWorkspace;
   state.mathWorkspace = (W && W.fromDict(savedWs)) ? savedWs : null;
   state.recentHooks = Array.isArray(next.recentHooks) ? next.recentHooks.slice() : [];
+  renderDiscoveryStrip();
 }
 
 function rememberCurrentWorkspace() {
@@ -178,6 +201,7 @@ function saveSession() {
     problemCard: state.problemCard,
     caption: liveCaption(),
     seenTerms: (state.seenTerms || []).slice(),
+    lesson: currentLesson(),
     mathWorkspace: state.mathWorkspace || null,
     topics: state.topicWorkspaces || {},
     authorEngine: state.authorEngine,
@@ -1189,7 +1213,76 @@ function applyMathWorkspace(ws) {
     handle.highlight(((vis.emphasis || [])[0]) || "");
   }
   if (handle && handle.getSnapshot) state.semanticBoardSnapshot = handle.getSnapshot();
+  harvestLessonFromWorkspace(parsed);
+  maybeRemountSnapView(parsed);
   saveSession();
+}
+
+function harvestLessonFromWorkspace(ws) {
+  const L = window.XiaoouLesson;
+  if (!L || !ws) return;
+  const card = state.problemCard || {};
+  const childSaid = L.lastChildText(state.messages);
+  (ws.claims || []).forEach((claim) => {
+    const row = L.harvestDiscovery(
+      claim,
+      childSaid,
+      card.insight || "",
+      card.insight_key || "",
+      state.topicKey
+    );
+    if (row) state.lesson = L.mergeDiscovery(state.lesson, row);
+  });
+  renderDiscoveryStrip();
+}
+
+function maybeRemountSnapView(ws) {
+  const view = (ws && ws.view && ws.view.representation) || "";
+  if (!state.stageSpec || (view !== "pair_rows" && view !== "snap_grid")) return;
+  const current = (state.lesson && state.lesson.view) || "snap_grid";
+  if (view === current) {
+    if ((state.lesson || {}).view !== view) {
+      state.lesson = Object.assign(currentLesson(), { view: view });
+    }
+    return;
+  }
+  state.lesson = Object.assign(currentLesson(), { view: view });
+  const live = state.liveActivities[state.liveActivities.length - 1];
+  const occ = live && live.getOccupancy ? live.getOccupancy() : { occupied: [] };
+  remountStage(state.stageSpec, occ.occupied || []);
+}
+
+function renderDiscoveryStrip() {
+  const strip = $("#discoveryStrip");
+  if (!strip) return;
+  const items = currentLesson().discoveries || [];
+  strip.innerHTML = "";
+  if (!items.length) {
+    strip.classList.add("is-empty");
+    return;
+  }
+  strip.classList.remove("is-empty");
+  items.forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "discovery-chip";
+    btn.textContent = item.child_said;
+    btn.addEventListener("click", () => showDiscoveryCard(item));
+    strip.appendChild(btn);
+  });
+}
+
+function showDiscoveryCard(item) {
+  const card = $("#discoveryCard");
+  const body = $("#discoveryCardText");
+  if (!card || !body || !item) return;
+  body.textContent = item.child_said || "";
+  card.classList.remove("hidden");
+}
+
+function hideDiscoveryCard() {
+  const card = $("#discoveryCard");
+  if (card) card.classList.add("hidden");
 }
 
 function mountBoardV3(raw, card) {
@@ -1797,6 +1890,8 @@ function placeMessages() {
 
 function openHistorySheet() {
   placeMessages();
+  renderDiscoveryStrip();
+  hideDiscoveryCard();
   const sheet = $("#historySheet");
   if (sheet) sheet.classList.add("open");
   scrollToBottom();
@@ -1838,6 +1933,7 @@ function hydrateSnapGrids(bubble, interactive) {
     const handle = XiaoouActivity.mountSnapGrid(host, spec, {
       interactive: isLive,
       occupied: occ.occupied || [],
+      view: (state.lesson && state.lesson.view) || "",
       onSettled: onSnapGridSettled,
     });
     state.mountedActivities.push(handle);
@@ -2291,7 +2387,7 @@ async function loadConfig() {
 
   $("#childName").value = state.childName;
 
-  // 快捷按钮（带题模式仍用横条；探索模式只保留加号里的「小提示」）
+  // 快捷按钮（带题模式仍用横条；探索模式只保留加号里的「再小一点」）
   const qa = $("#quickActions");
   qa.innerHTML = "";
   cfg.quick_actions.forEach((a) => {
@@ -2541,6 +2637,10 @@ async function startExplore() {
   clearTopicWait(topic);
   state.messages = [];
   state.mathWorkspace = null;
+  state.lesson = window.XiaoouLesson && XiaoouLesson.resetForNewCard
+    ? XiaoouLesson.resetForNewCard(state.lesson)
+    : emptyLessonState();
+  renderDiscoveryStrip();
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   saveSession();
@@ -2558,6 +2658,8 @@ async function streamAssistant(kickoff) {
   tutorBubble.classList.add("cursor-blink");
   let acc = "";
   let reasoningAcc = "";
+  const lessonEvent = state.pendingLessonEvent || "";
+  state.pendingLessonEvent = "";
 
   try {
     const res = await fetch("/api/chat", {
@@ -2575,6 +2677,8 @@ async function streamAssistant(kickoff) {
         show_reasoning: state.showReasoning,
         card: state.problemCard || null,
         seen_terms: state.seenTerms || [],
+        lesson: currentLesson(),
+        lesson_event: lessonEvent,
         workspace: state.mathWorkspace || null,
         workspace_id: state.mathWorkspace && state.mathWorkspace.id ? state.mathWorkspace.id : "",
         expected_workspace_version: state.mathWorkspace ? state.mathWorkspace.version : null,
@@ -3217,6 +3321,13 @@ function bindEvents() {
   if (hintBtn) {
     hintBtn.addEventListener("click", () => {
       closeAttachSheet();
+      if (window.XiaoouLesson && XiaoouLesson.applyShrink) {
+        state.lesson = XiaoouLesson.applyShrink(state.lesson);
+        state.pendingLessonEvent = "shrink";
+        saveSession();
+        sendMessage(XiaoouLesson.SHRINK_MESSAGE);
+        return;
+      }
       const actions = (state.config && state.config.quick_actions) || [];
       const stuck = actions.find((a) => a.id === "stuck") || actions[0];
       sendMessage(stuck ? stuck.message : "我卡住了，给我一点点小提示就好，请不要直接告诉我答案。");
@@ -3226,6 +3337,8 @@ function bindEvents() {
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
   const historyClose = $("#historyClose");
   if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
+  const discoveryClose = $("#discoveryCardClose");
+  if (discoveryClose) discoveryClose.addEventListener("click", hideDiscoveryCard);
   const historySheet = $("#historySheet");
   if (historySheet) {
     historySheet.addEventListener("click", (e) => {
@@ -3348,6 +3461,8 @@ function bindEvents() {
   $("#resetBtn").addEventListener("click", () => {
     if (state.messages.length && !confirm("开启新的探究会清空当前对话，确定吗？")) return;
     state.seenTerms = [];
+    state.lesson = emptyLessonState();
+    renderDiscoveryStrip();
     clearPendingImage();
     clearActivitySession();
     closeDrawer();

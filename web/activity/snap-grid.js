@@ -62,11 +62,14 @@
     const hostH = Math.max(0, (viewport && viewport.clientHeight) || stageHost.clientHeight || 0);
     const gap = 6;
     const pad = 10;
+    const pairRows = !!(options.view === "pair_rows" && spec.rows === 2);
+    const labelBand = pairRows ? 36 : 0;
+    const padX = pad + labelBand;
     const cellCap = expanded ? 72 : 56;
     const perRow = A.trayWrapCols ? A.trayWrapCols(spec) : Math.max(1, spec.cols);
     const trayRows = Math.max(1, Math.ceil(Math.max(spec.tray, 1) / perRow));
     const trayBand = 22;
-    const cellW = Math.floor((hostW - pad * 2 - gap * (spec.cols - 1)) / spec.cols);
+    const cellW = Math.floor((hostW - padX - pad - gap * (spec.cols - 1)) / spec.cols);
     let cellH = cellCap;
     if (hostH > 80) {
       const vGaps = gap * Math.max(0, spec.rows - 1) + gap * trayRows + 16 + trayBand;
@@ -76,7 +79,7 @@
     const gridW = spec.cols * cell + (spec.cols - 1) * gap;
     const gridH = spec.rows * cell + (spec.rows - 1) * gap;
     const trayTop = pad + gridH + 16 + trayBand;
-    let width = pad * 2 + gridW;
+    let width = padX + pad + gridW;
     let height = trayTop + trayRows * (cell + gap) + pad;
 
     stageHost.innerHTML = "";
@@ -99,7 +102,7 @@
       cellRects[r] = [];
       for (let c = 0; c < spec.cols; c++) {
         cells[r][c] = null;
-        const x = pad + c * (cell + gap);
+        const x = padX + c * (cell + gap);
         const y = pad + r * (cell + gap);
         const rect = new Konva.Rect({
           x: x, y: y, width: cell, height: cell, cornerRadius: 10,
@@ -110,15 +113,30 @@
       }
     }
 
+    if (pairRows) {
+      ["哥哥", "弟弟"].forEach((label, r) => {
+        layer.add(new Konva.Text({
+          x: 4,
+          y: pad + r * (cell + gap) + Math.max(4, (cell - 14) / 2),
+          width: labelBand - 2,
+          text: label,
+          fontSize: 12,
+          fontFamily: "system-ui, sans-serif",
+          fill: "#5c574e",
+          listening: false,
+        }));
+      });
+    }
+
     layer.add(new Konva.Line({
-      points: [pad, pad + gridH + 8, pad + gridW, pad + gridH + 8],
+      points: [padX, pad + gridH + 8, padX + gridW, pad + gridH + 8],
       stroke: "#d4cfc4",
       strokeWidth: 1,
       dash: [6, 4],
       listening: false,
     }));
     layer.add(new Konva.Text({
-      x: pad,
+      x: padX,
       y: pad + gridH + 12,
       width: gridW,
       text: "还没放进去的方块",
@@ -131,7 +149,7 @@
     function trayPosition(index) {
       const c = index % perRow;
       const r = Math.floor(index / perRow);
-      return { x: pad + c * (cell + gap), y: trayTop + r * (cell + gap) };
+      return { x: padX + c * (cell + gap), y: trayTop + r * (cell + gap) };
     }
 
     const tiles = [];
