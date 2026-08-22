@@ -395,7 +395,7 @@ SEED_VARIANTS: dict[str, list[dict[str, Any]]] = {
             "ladder": [
                 {"rung": "do", "ask": "先把圆规夹成线段 AB 那么宽。"},
                 {"rung": "see", "ask": "交点 P 到 A、B 的距离分别是多少？"},
-                {"rung": "why", "ask": "为什么 PA、PB、AB 一定一样长？"},
+                {"rung": "why", "ask": "为什么线段 PA、线段 PB 和线段 AB 一定一样长？"},
             ],
             "misconceptions": ["以为交点离两个圆心可以不一样远"],
         },
@@ -415,7 +415,7 @@ SEED_VARIANTS: dict[str, list[dict[str, Any]]] = {
                 "view": {"reveal": "stepwise"},
             },
             "ladder": [
-                {"rung": "do", "ask": "先夹住 CD，再分别以 C、D 为圆心画圆。"},
+                {"rung": "do", "ask": "先夹住线段 CD，再分别以 C、D 为圆心画圆。"},
                 {"rung": "see", "ask": "交点 Q 到 C、到 D，哪一段更长？"},
                 {"rung": "why", "ask": "为什么换了字母，三条边仍然一样长？"},
             ],

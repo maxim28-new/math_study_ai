@@ -121,6 +121,16 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("agent_workspace_test.js ok", proc.stdout)
 
+    def test_term_scaffold_js_rules(self):
+        proc = subprocess.run(
+            ["node", str(ROOT / "tests" / "term_scaffold_test.js")],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("term_scaffold_test.js ok", proc.stdout)
+
     def test_activity_state_js_has_no_konva(self):
         src = read("web/activity/state.js")
         self.assertNotIn("Konva", src)
@@ -261,7 +271,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260822-board", html)
+        self.assertIn("v=20260822-line", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -445,6 +455,10 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bindHistory(", read("web/terms/scaffold.js"))
         self.assertIn("decorateTutorTerms", app)
         self.assertIn("圆心", read("web/terms/glossary.js"))
+        self.assertIn("直线", read("web/terms/glossary.js"))
+        self.assertIn("直线段", read("web/terms/glossary.js"))
+        self.assertIn("不要说「这条线」", read("server/tutor.py"))
+        self.assertIn('"line": "直线"', read("server/tutor.py"))
         self.assertIn("seen_terms", app)
 
     def test_semantic_cards_disable_model_draw_commands(self):
@@ -516,7 +530,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260822-board", html)
+        self.assertIn("v=20260822-line", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

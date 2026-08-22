@@ -1333,12 +1333,18 @@ button, input, select, textarea { font-family: inherit; }
 .geometry-point.is-term-lit { fill: #e05252; }
 .geometry-circle.is-term-lit,
 .geometry-segment.is-term-lit,
+.geometry-line.is-term-lit,
 .geometry-side.is-term-lit,
 .geometry-compass.is-term-lit,
 .geometry-radius.is-term-lit {
   stroke: #e05252;
   stroke-width: 3.4;
   opacity: 1;
+}
+.geometry-line {
+  stroke: #7a7166;
+  stroke-width: 1.6;
+  stroke-dasharray: 8 6;
 }
 .color-seq-board.is-term-lit .color-seq-item {
   transform: scale(1.06);

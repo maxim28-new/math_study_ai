@@ -256,6 +256,9 @@ class AuthorCardTests(unittest.TestCase):
         self.assertEqual(card["representation"], "board_v3")
         self.assertEqual(card["board"]["schema"], 3)
         self.assertEqual(card["board"]["kind"], "geometry_compass")
+        self.assertIn("线段 PA", card["first_question"])
+        self.assertIn("线段 AB", card["first_question"])
+        self.assertNotIn("三条线", card["first_question"])
 
     def test_geometry_catalog_stays_on_shape_boards(self):
         cards = author.seed_variants("geometry")
