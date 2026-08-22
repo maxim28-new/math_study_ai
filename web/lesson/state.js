@@ -7,8 +7,14 @@
   const MAX_SAID = 80;
   const L = root.XiaoouLesson || {};
 
-  L.SHRINK_MESSAGE = "再小一点。请把问题削短，不要告诉我答案。";
+  L.SHRINK_MESSAGE = "太难了";
   L.REGULARITY_ASK = "你总结出什么规律了吗？";
+  const SHRINK_PREFIXES = ["太难了", "再小一点", "再说简单点"];
+
+  L.isShrinkTalk = function isShrinkTalk(text) {
+    const said = String(text || "").trim();
+    return SHRINK_PREFIXES.some((prefix) => said === prefix || said.indexOf(prefix) === 0);
+  };
 
   L.emptyLesson = function emptyLesson() {
     return { rung: "do", shrinks: 0, view: "", discoveries: [] };
@@ -127,7 +133,7 @@
 
   L.acceptRegularity = function acceptRegularity(said, card, topic) {
     const text = String(said || "").trim();
-    if (text.length < 4 || text.indexOf("再小一点") === 0) return null;
+    if (text.length < 4 || L.isShrinkTalk(text)) return null;
     const insight = card && card.insight ? String(card.insight) : "";
     if (L.leaksInsight(text, insight)) return null;
     if (L.looksLikeMisconception(text, card)) return null;
@@ -170,7 +176,7 @@
       else if (Array.isArray(msg.content)) {
         text = msg.content.map((part) => (part && part.type === "text" ? String(part.text || "") : "")).join("\n").trim();
       }
-      if (!text || text.indexOf("再小一点") === 0) continue;
+      if (!text || L.isShrinkTalk(text)) continue;
       return text;
     }
     return "";

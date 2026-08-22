@@ -52,9 +52,17 @@ class PhoneUxTests(HeadlessPhoneTests):
             self.assertTrue(closed["talkVisible"], closed)
             self.assertFalse(closed["plusVisible"], "加号仍藏在我想说后面")
             self.assertTrue(closed["dockNewVisible"], "换一题应停在底栏，不必先点我想说")
+            self.assertTrue(closed["easierVisible"], "太难了应停在小欧说旁边，不必先点加号")
             self.assertTrue(closed["sendVisible"], closed)
             self.assertFalse(closed["sendDisabled"], "操作界面也应能发画板")
             self._shot(page, "ux-talk-closed.png")
+
+            self.assertEqual(page.locator("#easierBtn").inner_text().strip(), "太难了")
+            page.locator("#easierBtn").click()
+            page.wait_for_timeout(400)
+            shrinks = [row for row in self.chat_posts if row.get("lesson_event") == "shrink"]
+            self.assertTrue(shrinks, self.chat_posts)
+            self.assertTrue(str(shrinks[-1]["text"]).startswith("太难了"), shrinks[-1])
 
             self._open_talk(page)
             opened = self._layout(page)
@@ -65,12 +73,8 @@ class PhoneUxTests(HeadlessPhoneTests):
             page.locator("#plusBtn").click()
             page.locator("#newQuestionBtn").wait_for(state="visible")
             self.assertTrue(page.locator("#hintBtn").is_visible())
-            self.assertEqual(page.locator("#hintBtn").inner_text().strip(), "再小一点")
-            page.locator("#hintBtn").click()
-            page.wait_for_timeout(400)
-            shrinks = [row for row in self.chat_posts if row.get("lesson_event") == "shrink"]
-            self.assertTrue(shrinks, self.chat_posts)
-            self.assertIn("再小一点", shrinks[-1]["text"])
+            self.assertEqual(page.locator("#hintBtn").inner_text().strip(), "太难了")
+            page.locator("#attachCancel").click()
             page.locator("#historyOpenBtn").click()
             page.locator("#discoveryStrip").wait_for(state="attached")
             self._shot(page, "ux-talk-open-attach.png")

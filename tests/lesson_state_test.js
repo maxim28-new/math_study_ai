@@ -54,7 +54,10 @@ const merged = L.mergeDiscovery(L.emptyLesson(), got);
 assert.strictEqual(merged.discoveries.length, 1);
 
 assert.ok(L.lastChildText([{ role: "user", content: "移一张" }]).includes("移一张"));
-assert.strictEqual(L.SHRINK_MESSAGE.indexOf("再小一点") >= 0, true);
+assert.strictEqual(L.SHRINK_MESSAGE, "太难了");
+assert.strictEqual(L.isShrinkTalk("太难了"), true);
+assert.strictEqual(L.isShrinkTalk("再小一点。请把问题削短"), true);
+assert.strictEqual(L.isShrinkTalk("一张，两边差会少 2"), false);
 
 const card = {
   insight_key: "equalize_by_half_diff",

@@ -2424,7 +2424,7 @@ async function loadConfig() {
 
   $("#childName").value = state.childName;
 
-  // 快捷按钮（带题模式仍用横条；探索模式只保留加号里的「再小一点」）
+  // 快捷按钮（带题模式仍用横条；探索模式用「太难了」）
   const qa = $("#quickActions");
   qa.innerHTML = "";
   cfg.quick_actions.forEach((a) => {
@@ -2535,6 +2535,8 @@ function applyModeUI() {
   if (boardSend) boardSend.classList.toggle("hidden", !explore || !started);
   const dockNew = $("#dockNewQuestionBtn");
   if (dockNew) dockNew.classList.toggle("hidden", !explore || !started);
+  const easierBtn = $("#easierBtn");
+  if (easierBtn) easierBtn.classList.toggle("hidden", !explore || !started);
   syncBoardSendButton();
   const hintBtn = $("#hintBtn");
   if (hintBtn) hintBtn.hidden = !explore;
@@ -2834,7 +2836,7 @@ function setStreaming(on) {
   if (newQ) newQ.disabled = on;
   const dockNew = $("#dockNewQuestionBtn");
   if (dockNew) dockNew.disabled = on;
-  document.querySelectorAll(".quick-actions button, #hintBtn").forEach((b) => (b.disabled = on));
+  document.querySelectorAll(".quick-actions button, #hintBtn, #easierBtn").forEach((b) => (b.disabled = on));
   syncBoardSendButton();
 }
 
@@ -3358,22 +3360,23 @@ function bindEvents() {
   if (startPlayBtn) startPlayBtn.addEventListener("click", () => startPlay());
   const historyOpenBtn = $("#historyOpenBtn");
   if (historyOpenBtn) historyOpenBtn.addEventListener("click", openHistorySheet);
-  const hintBtn = $("#hintBtn");
-  if (hintBtn) {
-    hintBtn.addEventListener("click", () => {
-      closeAttachSheet();
-      if (window.XiaoouLesson && XiaoouLesson.applyShrink) {
-        state.lesson = XiaoouLesson.applyShrink(state.lesson);
-        state.pendingLessonEvent = "shrink";
-        saveSession();
-        sendMessage(XiaoouLesson.SHRINK_MESSAGE);
-        return;
-      }
-      const actions = (state.config && state.config.quick_actions) || [];
-      const stuck = actions.find((a) => a.id === "stuck") || actions[0];
-      sendMessage(stuck ? stuck.message : "我卡住了，给我一点点小提示就好，请不要直接告诉我答案。");
-    });
+  function askForEasier() {
+    closeAttachSheet();
+    if (window.XiaoouLesson && XiaoouLesson.applyShrink) {
+      state.lesson = XiaoouLesson.applyShrink(state.lesson);
+      state.pendingLessonEvent = "shrink";
+      saveSession();
+      sendMessage(XiaoouLesson.SHRINK_MESSAGE);
+      return;
+    }
+    const actions = (state.config && state.config.quick_actions) || [];
+    const stuck = actions.find((a) => a.id === "stuck") || actions[0];
+    sendMessage(stuck ? stuck.message : "太难了，再说简单点。");
   }
+  const hintBtn = $("#hintBtn");
+  if (hintBtn) hintBtn.addEventListener("click", askForEasier);
+  const easierBtn = $("#easierBtn");
+  if (easierBtn) easierBtn.addEventListener("click", askForEasier);
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
   const historyClose = $("#historyClose");
