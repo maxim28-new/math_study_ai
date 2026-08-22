@@ -517,7 +517,7 @@ def first_question_for_v3(board: dict[str, Any]) -> str:
         a, b, p = model["labels"]
         return (
             f"保持圆规宽度等于线段 {a}{b}，分别以 {a} 和 {b} 为圆心画圆。"
-            f"两个圆的交点记作 {p}，你觉得 {p}{a}、{p}{b} 和 {a}{b} 谁更长，还是一样长？"
+            f"两个圆的交点记作 {p}，你觉得线段 {p}{a}、线段 {p}{b} 和线段 {a}{b} 谁更长，还是一样长？"
         )
     if kind == "color_sequence":
         unit = "、".join(COLOR_SEQUENCE_LABELS[color] for color in model["unit"])

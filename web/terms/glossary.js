@@ -26,16 +26,23 @@
     {
       id: "intersection",
       words: ["交点"],
-      kid: "两条线或两个圆碰到一起的地方。",
+      kid: "两条线段、两条直线或两个圆碰到一起的地方。",
       example: "两个圆交叉时，上面那个碰到的点可以记作 P。",
       highlight: "intersection",
     },
     {
       id: "segment",
-      words: ["线段"],
-      kid: "两个点之间连起来的这一段，有头有尾。",
-      example: "A 和 B 连起来的那一条，就是线段 AB。",
+      words: ["线段", "直线段"],
+      kid: "两个点之间连起来的这一段。两头都有点，到此为止，不能再往外画。",
+      example: "A 和 B 连起来的那一条，就是线段 AB。课本里说的直线段，也是这个意思。",
       highlight: "segment",
+    },
+    {
+      id: "line",
+      words: ["直线"],
+      kid: "也能穿过两个点，可是两头都能一直延长，没有头也没有尾。",
+      example: "把线段 AB 两头再往外画，想的时候就是一条直线。折痕、尺边都要当成直线。",
+      highlight: "line",
     },
     {
       id: "equilateral",

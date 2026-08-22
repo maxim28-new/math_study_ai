@@ -87,7 +87,10 @@ class SemanticBoardTests(unittest.TestCase):
             }
         )
         question = board.first_question_for_v3(spec)
-        self.assertIn("PA、PB 和 AB", question)
+        self.assertIn("线段 PA", question)
+        self.assertIn("线段 PB", question)
+        self.assertIn("线段 AB", question)
+        self.assertNotIn("三条线", question)
         self.assertNotIn("不要信任", question)
 
     def test_snap_grid_question_uses_blue_tiles(self) -> None:

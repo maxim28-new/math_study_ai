@@ -84,6 +84,9 @@
       const half = (bx - ax) / 2;
       const py = baseY - Math.sqrt(radius * radius - half * half);
 
+      if (lit === "line") {
+        svg.appendChild(line(-60, baseY, 420, baseY, "geometry-line"));
+      }
       svg.appendChild(line(ax, baseY, bx, baseY, "geometry-base geometry-segment"));
       svg.appendChild(svgEl("circle", { cx: ax, cy: baseY, r: 4, class: "geometry-point geometry-center" }));
       svg.appendChild(svgEl("circle", { cx: bx, cy: baseY, r: 4, class: "geometry-point geometry-center" }));
@@ -115,7 +118,7 @@
 
       const messages = [
         `先看线段 ${labels[0]}${labels[1]}。`,
-        `圆规已经夹成 ${labels[0]}${labels[1]} 那么宽。`,
+        `圆规已经夹成线段 ${labels[0]}${labels[1]} 那么宽。`,
         `以 ${labels[0]} 为圆心画好了第一个圆。`,
         `两个圆相交了。看看交点到两个圆心的距离。`,
       ];
@@ -139,6 +142,7 @@
         radius: ".geometry-radius, .geometry-circle",
         intersection: ".geometry-intersection",
         segment: ".geometry-segment",
+        line: ".geometry-line",
         equilateral: ".geometry-side, .geometry-segment",
       };
       const sel = map[lit];
