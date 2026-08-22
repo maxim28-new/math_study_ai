@@ -818,7 +818,7 @@ def card_guidance(card: dict[str, Any]) -> str:
         "任何 JSON、xiaoou-draw、schema、kind、SVG、Canvas、Konva 或画图步骤。"
         "根据孩子的操作和盘面快照继续追问，不要在文字里提前列完答案。"
     )
-    opening_rule = "现在先用第一问开场；不要重复描述画板代码，画板已经在孩子面前。"
+    opening_rule = "开场白已经由程序写成第一问，不要再修饰、不要打招呼改写。画板已经在孩子面前。"
     return f"""# 本堂课的题卡（孩子看不到）
 你只教下面这张卡。不要另出一道题，不要把课拖回「9 块摆正方形」，除非这张卡的道理就是平方数/奇数包一圈。
 - 钩子：{card.get("hook")}

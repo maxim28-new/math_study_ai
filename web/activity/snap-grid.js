@@ -114,7 +114,7 @@
     }
 
     if (pairRows) {
-      ["哥哥", "弟弟"].forEach((label, r) => {
+      ["上排", "下排"].forEach((label, r) => {
         layer.add(new Konva.Text({
           x: 4,
           y: pad + r * (cell + gap) + Math.max(4, (cell - 14) / 2),

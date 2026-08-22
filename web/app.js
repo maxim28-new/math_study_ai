@@ -1214,7 +1214,7 @@ function applyMathWorkspace(ws) {
   }
   if (handle && handle.getSnapshot) state.semanticBoardSnapshot = handle.getSnapshot();
   harvestLessonFromWorkspace(parsed);
-  maybeRemountSnapView(parsed);
+  applySnapFromWorkspace(parsed);
   saveSession();
 }
 
@@ -1236,20 +1236,58 @@ function harvestLessonFromWorkspace(ws) {
   renderDiscoveryStrip();
 }
 
-function maybeRemountSnapView(ws) {
-  const view = (ws && ws.view && ws.view.representation) || "";
-  if (!state.stageSpec || (view !== "pair_rows" && view !== "snap_grid")) return;
-  const current = (state.lesson && state.lesson.view) || "snap_grid";
-  if (view === current) {
-    if ((state.lesson || {}).view !== view) {
-      state.lesson = Object.assign(currentLesson(), { view: view });
+function applySnapFromWorkspace(ws) {
+  if (!state.stageSpec || state.stageSpec.type !== "snap_grid") return;
+  const view = (ws && ws.view) || {};
+  const representation = view.representation || "snap_grid";
+  if (representation !== "pair_rows" && representation !== "snap_grid") return;
+  const occupied = (view.occupancy && view.occupancy.occupied) || [];
+  const currentView = (state.lesson && state.lesson.view) || "snap_grid";
+  const live = state.liveActivities[state.liveActivities.length - 1];
+  const currentOcc = JSON.stringify((live && live.getOccupancy && live.getOccupancy().occupied) || []);
+  const nextOcc = JSON.stringify(occupied);
+  if (representation === currentView && currentOcc === nextOcc) {
+    if ((state.lesson || {}).view !== representation) {
+      state.lesson = Object.assign(currentLesson(), { view: representation });
     }
     return;
   }
-  state.lesson = Object.assign(currentLesson(), { view: view });
+  state.lesson = Object.assign(currentLesson(), { view: representation });
+  remountStage(state.stageSpec, occupied);
+}
+
+function syncSnapOccupancyFromLive() {
+  const W = window.XiaoouMathWorkspace;
   const live = state.liveActivities[state.liveActivities.length - 1];
-  const occ = live && live.getOccupancy ? live.getOccupancy() : { occupied: [] };
-  remountStage(state.stageSpec, occ.occupied || []);
+  if (!W || !W.writeOccupancy || !live || !state.mathWorkspace) return;
+  const snap = live.getSnapshot ? live.getSnapshot() : null;
+  const occ = live.getOccupancy ? live.getOccupancy() : { occupied: [], trayLeft: 0 };
+  state.mathWorkspace = W.writeOccupancy(state.mathWorkspace, {
+    counts: (snap && snap.rows_filled) ? snap.rows_filled.slice() : [],
+    tray_left: occ.trayLeft,
+    occupied: occ.occupied || [],
+  });
+}
+
+function playFixedOpening(card) {
+  const text = String((card && card.first_question) || "").trim();
+  if (!text) return;
+  setCaption(text);
+  if ((state.messages || []).some((m) => m.role === "assistant")) return;
+  state.messages.push({ role: "assistant", content: text });
+  const bubble = addMessageEl("tutor");
+  renderContentInto(bubble, text);
+  saveSession();
+}
+
+function maybeHarvestRegularity(childText) {
+  const L = window.XiaoouLesson;
+  if (!L || !L.acceptRegularity || !L.askedRegularity(state.messages)) return false;
+  const row = L.acceptRegularity(childText, state.problemCard || {}, state.topicKey);
+  if (!row) return false;
+  state.lesson = L.mergeDiscovery(state.lesson, row);
+  renderDiscoveryStrip();
+  return true;
 }
 
 function renderDiscoveryStrip() {
@@ -1303,6 +1341,7 @@ function mountBoardV3(raw, card) {
     return;
   }
   if (spec.kind === "snap_grid") {
+    if (card) ensureMathWorkspace(card);
     const model = spec.model;
     const snap = {
       type: "snap_grid",
@@ -1871,11 +1910,8 @@ async function startPlay() {
   }
   rememberAuthorCard(card, { force: false, gen: state.authorGen });
   mountFromCard(card);
-  if (card.first_question) setCaption(card.first_question);
+  playFixedOpening(card);
   applyModeUI();
-  const alreadyStarted = state.messages.some((m) => m.role === "assistant");
-  if (alreadyStarted) return;
-  await streamAssistant(true);
 }
 
 function placeMessages() {
@@ -1944,6 +1980,7 @@ function hydrateSnapGrids(bubble, interactive) {
 
 function onSnapGridSettled(snapshot, eventName) {
   state.boards = collectBoards();
+  syncSnapOccupancyFromLive();
   saveSession();
   updateTrayUi();
   if (eventName === "board_full") showStageToast("摆好了");
@@ -2581,6 +2618,11 @@ async function sendMessage(text) {
   clearPendingImage();
   autoGrow($("#input"));
   saveSession();
+  if (!state.pendingLessonEvent && window.XiaoouLesson && XiaoouLesson.askedRegularity(state.messages)) {
+    state.pendingLessonEvent = "regularity";
+    maybeHarvestRegularity(typed);
+    saveSession();
+  }
 
   await streamAssistant(false);
 }
@@ -2600,8 +2642,7 @@ async function applyNewExploreCard(card, opts) {
   }
   rememberAuthorCard(card, { force: true, gen: state.authorGen });
   mountFromCard(card);
-  if (card.first_question) setCaption(card.first_question);
-  await streamAssistant(true);
+  playFixedOpening(card);
   return true;
 }
 

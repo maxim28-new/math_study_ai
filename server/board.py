@@ -526,6 +526,22 @@ def first_question_for_v3(board: dict[str, Any]) -> str:
             f"这些{model['item']}按{unit}重复排队。"
             f"第{model['count']}{measure}会是什么颜色？"
         )
+    if kind == "snap_grid":
+        rows = int(model["rows"])
+        cols = int(model["cols"])
+        tray = int(model["tray"])
+        if rows == 2:
+            top = min(cols, tray)
+            bottom = min(cols, max(0, tray - top))
+            return (
+                f"这是 2 行 {cols} 列的蓝格子，托盘里有 {tray} 块蓝块。"
+                f"先把上排放 {top} 块、下排放 {bottom} 块，"
+                f"再一块一块从上排移到下排，直到两行一样多。"
+            )
+        return (
+            f"这是 {rows} 行 {cols} 列的蓝格子，托盘里有 {tray} 块蓝块。"
+            f"把蓝块拖进格子里，看看能摆出什么。"
+        )
     return normalized["task"]["prompt"]
 
 

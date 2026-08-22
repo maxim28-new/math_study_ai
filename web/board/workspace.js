@@ -145,6 +145,45 @@
       marked: ((ws.visibility || {}).marked || []).filter((id) => !hidden.has(id)),
       emphasis: ((ws.visibility || {}).emphasis || []).filter((id) => !hidden.has(id)),
     };
+    const occupancy = occupancyOf(ws);
+    if (occupancy) {
+      snapshot.occupancy = occupancy;
+      snapshot.row_counts = occupancy.counts;
+      snapshot.tray_left = occupancy.tray_left;
+    }
+    return snapshot;
+  }
+
+  function emptyOccupancy(rows, tray) {
+    const n = Math.max(1, Math.min(8, parseInt(rows, 10) || 1));
+    const left = Math.max(0, Math.min(64, parseInt(tray, 10) || 0));
+    return { counts: Array(n).fill(0), tray_left: left, occupied: [] };
+  }
+
+  function occupancyOf(ws) {
+    const raw = ws && ws.view && ws.view.occupancy;
+    if (!raw || typeof raw !== "object") return null;
+    const counts = (raw.counts || []).map((n) => Math.max(0, Math.min(8, parseInt(n, 10) || 0)));
+    const occupied = [];
+    (raw.occupied || []).forEach((item) => {
+      if (!item || typeof item !== "object") return;
+      const r = parseInt(item.r, 10);
+      const c = parseInt(item.c, 10);
+      if (isNaN(r) || isNaN(c)) return;
+      occupied.push({ r: r, c: c });
+    });
+    let trayLeft = parseInt(raw.tray_left, 10);
+    if (isNaN(trayLeft)) trayLeft = 0;
+    return { counts: counts, tray_left: Math.max(0, trayLeft), occupied: occupied };
+  }
+
+  function occupiedFromCounts(rows, cols, counts) {
+    const occupied = [];
+    (counts || []).slice(0, rows).forEach((n, r) => {
+      const take = Math.max(0, Math.min(cols, parseInt(n, 10) || 0));
+      for (let c = 0; c < take; c += 1) occupied.push({ r: r, c: c });
+    });
+    return occupied;
   }
 
   function seedShell(wsId, topic, card, representation) {
@@ -215,6 +254,19 @@
     if (kind === "color_sequence") {
       const ws = seedShell(wsId, topic, card, "color_sequence");
       ws.objects = [{ id: "pattern", type: "group", attrs: { role: "pattern" } }];
+      return ws;
+    }
+    if (kind === "snap_grid") {
+      const ws = seedShell(wsId, topic, card, "snap_grid");
+      const rows = asInt(model.rows) || 2;
+      const cols = asInt(model.cols) || 8;
+      const tray = asInt(model.tray) == null ? rows * cols : asInt(model.tray);
+      ws.problem.grid_rows = rows;
+      ws.problem.grid_cols = cols;
+      ws.problem.grid_tray = tray;
+      ws.problem.item = "蓝块";
+      ws.view.occupancy = emptyOccupancy(rows, tray);
+      ws.objects = [{ id: "grid", type: "group", attrs: { role: "snap_grid" } }];
       return ws;
     }
     const ws = seedShell(wsId, topic, card, kind || "static");
@@ -350,7 +402,23 @@
       ];
       return lines.join("\n");
     }
+    if (snap.occupancy) {
+      const counts = (snap.occupancy.counts || []).join("、");
+      return [
+        "（当前数学工作区，这不是孩子打的字）",
+        "蓝格子各行已放：" + (counts || "0"),
+        "托盘还剩：" + snap.occupancy.tray_left + " 块蓝块",
+      ].join("\n");
+    }
     return "";
+  }
+
+  function writeOccupancy(ws, occupancy) {
+    if (!ws || !occupancy) return ws;
+    ws.view = ws.view || {};
+    ws.view.occupancy = occupancy;
+    ws.version = (asInt(ws.version) || 0) + 1;
+    return ws;
   }
 
   root.XiaoouMathWorkspace = {
@@ -364,5 +432,9 @@
     formsSquare: formsSquare,
     clone: clone,
     isOddSquareLayers: isOddSquareLayers,
+    occupancyOf: occupancyOf,
+    emptyOccupancy: emptyOccupancy,
+    occupiedFromCounts: occupiedFromCounts,
+    writeOccupancy: writeOccupancy,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

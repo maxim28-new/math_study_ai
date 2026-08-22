@@ -9,6 +9,7 @@ from typing import Any
 RUNGS = ("do", "see", "why")
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]{2,47}$")
 SHRINK_MESSAGE = "再小一点。请把问题削短，不要告诉我答案。"
+REGULARITY_ASK = "你总结出什么规律了吗？"
 MAX_SAID = 80
 WINDOW = 8
 
@@ -182,6 +183,49 @@ def harvest_discovery(
     )
 
 
+_QUOTED = re.compile(r"[「『'\"“]([^」』'\"”]{2,16})[」』'\"”]")
+_WORD = re.compile(r"[^\w\u4e00-\u9fff]+")
+
+
+def _compact(text: str) -> str:
+    return _WORD.sub("", _fold(text))
+
+
+def looks_like_misconception(said: str, card: dict[str, Any] | None) -> bool:
+    if not isinstance(card, dict):
+        return False
+    compact_said = _compact(said)
+    for item in card.get("misconceptions") or []:
+        raw = str(item or "")
+        if leaks_insight(said, raw):
+            return True
+        for core in _QUOTED.findall(raw):
+            compact_core = _compact(core)
+            if compact_core and re.search(r"\d", compact_core) and compact_core in compact_said:
+                return True
+    return False
+
+
+def accept_regularity(
+    said: str,
+    card: dict[str, Any] | None,
+    topic: str = "",
+) -> dict[str, str] | None:
+    text = str(said or "").strip()
+    if len(text) < 4 or text.startswith("再小一点"):
+        return None
+    insight = str((card or {}).get("insight") or "")
+    if leaks_insight(text, insight):
+        return None
+    if looks_like_misconception(text, card):
+        return None
+    key = insight_key_of(card)
+    return normalize_discovery(
+        {"insight_key": key, "child_said": text, "topic": topic or str((card or {}).get("topic") or "")},
+        topic,
+    )
+
+
 def merge_discovery(lesson: Any, discovery: dict[str, str] | None) -> dict[str, Any]:
     current = normalize_lesson(lesson)
     row = normalize_discovery(discovery)
@@ -245,8 +289,7 @@ def shrink_prompt_block(
     if shrinks == 2:
         return (
             f"本轮孩子点了「再小一点」（第 2 档）。{ask_line}"
-            "问句必须更短。若刚从上一层掉下来，就问这一层的事。"
-            "已在 do 层就再削，并只改画板上的一件事。不要换题，不要给答案。"
+            f"问句必须正好是：「{REGULARITY_ASK}」不要加别的修饰，不要给答案。"
         )
     if other:
         names = "、".join(other)

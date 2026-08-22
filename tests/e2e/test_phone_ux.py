@@ -83,8 +83,9 @@ class PhoneUxTests(HeadlessPhoneTests):
             self._unlock(page)
             self._play_nth(page, "wordproblems", 2)
             kickoffs = [row for row in self.chat_posts if row["kickoff"]]
-            self.assertGreaterEqual(len(self.chat_posts), 1, self.chat_posts)
-            self.assertTrue(kickoffs or any("kickoff" in (row.get("keys") or []) for row in self.chat_posts), self.chat_posts)
+            self.assertFalse(kickoffs, kickoffs)
+            caption = page.locator("#tutorCaption").inner_text().strip()
+            self.assertIn("蓝格子", caption)
             before = len(self.chat_posts)
 
             page.locator("#boardDrawBtn").click()

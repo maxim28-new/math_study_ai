@@ -110,6 +110,9 @@ def build_agent_prompt(
         "shape": visible.get("shape"),
         "side": visible.get("side"),
         "item": visible.get("item"),
+        "occupancy": visible.get("occupancy"),
+        "row_counts": visible.get("row_counts"),
+        "tray_left": visible.get("tray_left"),
         "objects": [
             {"id": obj.get("id"), "type": obj.get("type"), "attrs": obj.get("attrs")}
             for obj in visible.get("objects") or []

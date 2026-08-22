@@ -90,6 +90,24 @@ class SemanticBoardTests(unittest.TestCase):
         self.assertIn("PA、PB 和 AB", question)
         self.assertNotIn("不要信任", question)
 
+    def test_snap_grid_question_uses_blue_tiles(self) -> None:
+        spec = board.normalize_board_v3(
+            {
+                "schema": 3,
+                "kind": "snap_grid",
+                "model": {"rows": 2, "cols": 8, "tray": 12},
+                "task": {"action": "arrange", "ask": "observe", "prompt": "哥哥有8张贴纸"},
+                "view": {"reveal": "empty_grid_and_tiles"},
+            }
+        )
+        question = board.first_question_for_v3(spec)
+        self.assertIn("蓝格子", question)
+        self.assertIn("上排", question)
+        self.assertIn("8", question)
+        self.assertIn("4", question)
+        self.assertNotIn("贴纸", question)
+        self.assertNotIn("哥哥", question)
+
     def test_normalizes_layer_sum_without_answer(self):
         spec = board.normalize_semantic_board(
             {
