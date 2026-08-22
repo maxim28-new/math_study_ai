@@ -122,7 +122,9 @@ class LessonStateTests(unittest.TestCase):
         self.assertIn("先摆成 8 和 4", one)
         self.assertNotIn("差的一半", one)
         second = lesson.apply_shrink(first)
-        self.assertIn("第 2 档", lesson.shrink_prompt_block(second, card, "shrink"))
+        two = lesson.shrink_prompt_block(second, card, "shrink")
+        self.assertIn("第 2 档", two)
+        self.assertIn(lesson.REGULARITY_ASK, two)
         third = lesson.apply_shrink(second)
         top = lesson.shrink_prompt_block(third, card, "shrink")
         self.assertIn("第 3 档", top)
@@ -133,6 +135,19 @@ class LessonStateTests(unittest.TestCase):
         self.assertIn("当前层：do", guide)
         self.assertIn("先摆成 8 和 4", guide)
         self.assertNotIn("不是整个差", guide)
+
+    def test_accept_regularity_keeps_child_words(self) -> None:
+        card = {
+            "insight_key": "equalize_by_half_diff",
+            "insight": "每移过去一张，两行的差距一次缩小2；移的是差的一半",
+            "misconceptions": ["看到相差4张就答'给4张'，只算了哥哥减少的没算弟弟增加的"],
+            "topic": "wordproblems",
+        }
+        got = lesson.accept_regularity("一张，两边差会少 2", card, "wordproblems")
+        self.assertEqual(got["child_said"], "一张，两边差会少 2")
+        self.assertIsNone(lesson.accept_regularity("给4张就行了吧", card, "wordproblems"))
+        self.assertIsNone(lesson.accept_regularity("两行的差距一次缩小2", card, "wordproblems"))
+        self.assertIsNone(lesson.accept_regularity("嗯", card, "wordproblems"))
 
 
 if __name__ == "__main__":

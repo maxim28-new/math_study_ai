@@ -56,4 +56,13 @@ assert.strictEqual(merged.discoveries.length, 1);
 assert.ok(L.lastChildText([{ role: "user", content: "移一张" }]).includes("移一张"));
 assert.strictEqual(L.SHRINK_MESSAGE.indexOf("再小一点") >= 0, true);
 
+const card = {
+  insight_key: "equalize_by_half_diff",
+  insight: insight,
+  misconceptions: ["看到相差4张就答'给4张'，只算了哥哥减少的没算弟弟增加的"],
+};
+assert.strictEqual(L.acceptRegularity("一张，两边差会少 2", card, "wordproblems").child_said, "一张，两边差会少 2");
+assert.strictEqual(L.acceptRegularity("给4张就行了吧", card, "wordproblems"), null);
+assert.ok(L.askedRegularity([{ role: "assistant", content: "你总结出什么规律了吗？" }]));
+
 console.log("lesson_state_test.js ok");

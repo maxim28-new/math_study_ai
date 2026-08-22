@@ -19,6 +19,7 @@ WRITE_TOOLS = {
     "lesson_record_claim",
     "lesson_mark_child_acceptance",
     "board_switch_view",
+    "board_set_rows",
 }
 
 READ_TOOLS = {
@@ -147,6 +148,17 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "把当前数学对象换成题卡允许的另一种看法。只能用 allowed_views 里的 id。失败时不要假装已经换图。",
         {"view_id": {"type": "string"}},
         ["view_id"],
+    ),
+    _fn(
+        "board_set_rows",
+        "按行写入点格占用。counts 是每一行已放的蓝块数，从左往右填。每行不能超过列数，总数不能超过托盘。失败时不要口头改数。",
+        {
+            "counts": {
+                "type": "array",
+                "items": {"type": "integer", "minimum": 0, "maximum": 8},
+            }
+        },
+        ["counts"],
     ),
 ]
 
@@ -467,6 +479,24 @@ def switch_view(workspace: dict[str, Any], args: dict[str, Any]) -> dict[str, An
     return _ok(workspace, view_id=view_id)
 
 
+def set_rows(workspace: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    raw = args.get("counts")
+    if not isinstance(raw, list):
+        return _fail("counts_required")
+    counts = []
+    for item in raw:
+        n = V.as_int(item)
+        if n is None:
+            return _fail("count_invalid")
+        counts.append(n)
+    result = WS.apply_row_counts(workspace, counts)
+    if not result.get("ok"):
+        extras = {key: value for key, value in result.items() if key not in {"ok", "error"}}
+        return _fail(str(result.get("error") or "set_rows_failed"), **extras)
+    occ = WS.occupancy_of(workspace) or {}
+    return _ok(workspace, counts=occ.get("counts"), tray_left=occ.get("tray_left"))
+
+
 EXECUTORS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "workspace_inspect": inspect,
     "workspace_inspect_visible": inspect_visible,
@@ -481,6 +511,7 @@ EXECUTORS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]]
     "lesson_record_claim": record_claim,
     "lesson_mark_child_acceptance": mark_child_acceptance,
     "board_switch_view": switch_view,
+    "board_set_rows": set_rows,
 }
 
 

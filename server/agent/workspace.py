@@ -172,7 +172,84 @@ def visible_snapshot(workspace: dict[str, Any]) -> dict[str, Any]:
         "marked": [oid for oid in V.visibility_ids(workspace, "marked") if oid not in hidden],
         "emphasis": [oid for oid in V.visibility_ids(workspace, "emphasis") if oid not in hidden],
     }
+    occupancy = occupancy_of(workspace)
+    if occupancy:
+        snapshot["occupancy"] = occupancy
+        snapshot["row_counts"] = occupancy.get("counts")
+        snapshot["tray_left"] = occupancy.get("tray_left")
     return snapshot
+
+
+def empty_occupancy(rows: int, tray: int) -> dict[str, Any]:
+    rows = max(1, min(8, int(rows or 1)))
+    tray = max(0, min(64, int(tray or 0)))
+    return {"counts": [0] * rows, "tray_left": tray, "occupied": []}
+
+
+def occupancy_of(workspace: dict[str, Any] | None) -> dict[str, Any] | None:
+    view = (workspace or {}).get("view") if isinstance(workspace, dict) else {}
+    raw = view.get("occupancy") if isinstance(view, dict) else None
+    if not isinstance(raw, dict):
+        return None
+    counts = []
+    for item in raw.get("counts") or []:
+        n = V.as_int(item)
+        if n is None:
+            continue
+        counts.append(max(0, min(8, n)))
+    occupied = []
+    for item in raw.get("occupied") or []:
+        if not isinstance(item, dict):
+            continue
+        r = V.as_int(item.get("r"))
+        c = V.as_int(item.get("c"))
+        if r is None or c is None:
+            continue
+        occupied.append({"r": r, "c": c})
+    tray_left = V.as_int(raw.get("tray_left"))
+    if tray_left is None:
+        tray_left = 0
+    return {"counts": counts, "tray_left": max(0, tray_left), "occupied": occupied}
+
+
+def occupied_from_counts(rows: int, cols: int, counts: list[int]) -> list[dict[str, int]]:
+    occupied: list[dict[str, int]] = []
+    for r, n in enumerate(counts[:rows]):
+        for c in range(max(0, min(cols, n))):
+            occupied.append({"r": r, "c": c})
+    return occupied
+
+
+def apply_row_counts(workspace: dict[str, Any], counts: list[int]) -> dict[str, Any]:
+    problem = workspace.get("problem") if isinstance(workspace.get("problem"), dict) else {}
+    if str(problem.get("board_kind") or "") != "snap_grid":
+        return {"ok": False, "error": "not_snap_grid"}
+    rows = V.as_int(problem.get("grid_rows")) or 0
+    cols = V.as_int(problem.get("grid_cols")) or 0
+    tray = V.as_int(problem.get("grid_tray")) or 0
+    if rows < 1 or cols < 1:
+        return {"ok": False, "error": "grid_missing"}
+    if len(counts) != rows:
+        return {"ok": False, "error": "row_count_mismatch", "needed": rows, "got": len(counts)}
+    cleaned: list[int] = []
+    for n in counts:
+        value = V.as_int(n)
+        if value is None or value < 0:
+            return {"ok": False, "error": "count_invalid"}
+        if value > cols:
+            return {"ok": False, "error": "row_overflow", "cols": cols, "got": value}
+        cleaned.append(value)
+    placed = sum(cleaned)
+    if placed > tray:
+        return {"ok": False, "error": "tray_exceeded", "tray": tray, "got": placed}
+    workspace.setdefault("view", {})
+    workspace["view"]["occupancy"] = {
+        "counts": cleaned,
+        "tray_left": tray - placed,
+        "occupied": occupied_from_counts(rows, cols, cleaned),
+    }
+    bump(workspace)
+    return {"ok": True}
 
 
 def inspect_payload(workspace: dict[str, Any], *, visible_only: bool = False) -> dict[str, Any]:
@@ -289,6 +366,16 @@ def seed_from_card(card: dict[str, Any] | None, topic: str, workspace_id: str | 
 
     if kind == "snap_grid":
         ws = _seed_shell(ws_id, topic, card, "snap_grid")
+        rows = V.as_int(model.get("rows")) or 2
+        cols = V.as_int(model.get("cols")) or 8
+        tray = V.as_int(model.get("tray"))
+        if tray is None:
+            tray = rows * cols
+        ws["problem"]["grid_rows"] = rows
+        ws["problem"]["grid_cols"] = cols
+        ws["problem"]["grid_tray"] = tray
+        ws["problem"]["item"] = "蓝块"
+        ws["view"]["occupancy"] = empty_occupancy(rows, tray)
         ws["objects"] = [{"id": "grid", "type": "group", "attrs": {"role": "snap_grid"}}]
         return ws
 

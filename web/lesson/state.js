@@ -8,6 +8,7 @@
   const L = root.XiaoouLesson || {};
 
   L.SHRINK_MESSAGE = "再小一点。请把问题削短，不要告诉我答案。";
+  L.REGULARITY_ASK = "你总结出什么规律了吗？";
 
   L.emptyLesson = function emptyLesson() {
     return { rung: "do", shrinks: 0, view: "", discoveries: [] };
@@ -104,6 +105,50 @@
       child_said: text,
       topic: topic || "",
     }, topic);
+  };
+
+  function compact(text) {
+    return fold(text).replace(/[^\w\u4e00-\u9fff]+/g, "");
+  }
+
+  L.looksLikeMisconception = function looksLikeMisconception(said, card) {
+    if (!card || typeof card !== "object") return false;
+    const compactSaid = compact(said);
+    return (card.misconceptions || []).some((item) => {
+      const raw = String(item || "");
+      if (L.leaksInsight(said, raw)) return true;
+      const quoted = raw.match(/[「『'"“]([^」』'"”]{2,16})[」』'"”]/g) || [];
+      return quoted.some((chunk) => {
+        const core = compact(chunk.replace(/^[「『'"“]|[」』'"”]$/g, ""));
+        return !!(core && /\d/.test(core) && compactSaid.indexOf(core) >= 0);
+      });
+    });
+  };
+
+  L.acceptRegularity = function acceptRegularity(said, card, topic) {
+    const text = String(said || "").trim();
+    if (text.length < 4 || text.indexOf("再小一点") === 0) return null;
+    const insight = card && card.insight ? String(card.insight) : "";
+    if (L.leaksInsight(text, insight)) return null;
+    if (L.looksLikeMisconception(text, card)) return null;
+    const key = String((card && card.insight_key) || "").trim();
+    if (!KEY_RE.test(key)) return null;
+    return L.normalizeDiscovery({
+      insight_key: key,
+      child_said: text,
+      topic: topic || (card && card.topic) || "",
+    }, topic);
+  };
+
+  L.askedRegularity = function askedRegularity(messages) {
+    const list = Array.isArray(messages) ? messages : [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const msg = list[i];
+      if (!msg || msg.role !== "assistant") continue;
+      const text = typeof msg.content === "string" ? msg.content : "";
+      return text.indexOf(L.REGULARITY_ASK) >= 0;
+    }
+    return false;
   };
 
   L.mergeDiscovery = function mergeDiscovery(lesson, discovery) {

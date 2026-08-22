@@ -71,9 +71,15 @@ class FrontendRegressionTests(unittest.TestCase):
 
     def test_explore_kickoff_follows_author_card(self):
         tutor = read("server/tutor.py")
+        app = read("web/app.js")
         self.assertIn("EXPLORE_KICKOFF_WITH_CARD", tutor)
         self.assertIn("不要所有主题都从 9 块摆正方形开始", tutor)
         self.assertIn("有题卡时以题卡为准", tutor)
+        self.assertIn("开场白已经由程序按题卡第一问写好", tutor)
+        self.assertIn("function playFixedOpening(", app)
+        apply = app[app.find("async function applyNewExploreCard"):app.find("async function resumeWaitingExplore")]
+        self.assertIn("playFixedOpening(card)", apply)
+        self.assertNotIn("streamAssistant(true)", apply)
 
     def test_activity_state_js_rules(self):
         proc = subprocess.run(
@@ -255,7 +261,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260819-lesson", html)
+        self.assertIn("v=20260822-board", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -287,7 +293,13 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn('id="discoveryStrip"', html)
         self.assertIn("/lesson/state.js", html)
         self.assertIn("board_switch_view", read("server/agent/tools.py"))
+        self.assertIn("board_set_rows", read("server/agent/tools.py"))
         self.assertIn("pair_rows", read("web/activity/snap-grid.js"))
+        self.assertIn("上排", read("web/activity/snap-grid.js"))
+        self.assertNotIn("哥哥", read("web/activity/snap-grid.js"))
+        self.assertIn("REGULARITY_ASK", read("web/lesson/state.js"))
+        self.assertIn("function acceptRegularity", read("web/lesson/state.js"))
+        self.assertIn("function maybeHarvestRegularity(", app)
         self.assertIn("拍给我", html)
         self.assertIn("发给小欧", html)
         self.assertNotIn('id="historyBtn"', html)
@@ -322,7 +334,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("pickSeedCard", start)
         self.assertIn("fetchAuthorCard", start)
         self.assertIn("friendlyAuthorError", start)
-        self.assertIn("alreadyStarted", start)
+        self.assertIn("playFixedOpening(card)", start)
         self.assertNotIn("warmAuthorJob", start)
         self.assertNotIn("DEFAULT_SNAP_GRID", start)
         self.assertIn("function rememberCurrentWorkspace(", app)
@@ -504,7 +516,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260819-lesson", html)
+        self.assertIn("v=20260822-board", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

@@ -146,6 +146,33 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertEqual(ws["view"]["representation"], "pair_rows")
         self.assertGreater(ws["version"], version)
 
+    def test_set_rows_writes_occupancy_and_rejects_impossible(self) -> None:
+        card = {
+            "hook": "哥哥有8张贴纸，弟弟只有4张",
+            "insight": "每移过去一张，差距一次缩小2",
+            "insight_key": "equalize_by_half_diff",
+            "allowed_views": ["snap_grid", "pair_rows"],
+            "first_question": "先摆再移",
+            "board": {
+                "schema": 3,
+                "kind": "snap_grid",
+                "model": {"rows": 2, "cols": 8, "tray": 12},
+                "task": {"action": "arrange", "ask": "observe", "prompt": "摆一摆"},
+                "view": {"reveal": "empty_grid_and_tiles"},
+            },
+        }
+        ws = WS.seed_from_card(card, "wordproblems")
+        self.assertEqual(ws["problem"]["item"], "蓝块")
+        self.assertEqual(ws["view"]["occupancy"]["counts"], [0, 0])
+        bad = tools.execute_tool("board_set_rows", ws, {"counts": [10, 2]})
+        self.assertFalse(bad["ok"], bad)
+        self.assertEqual(ws["view"]["occupancy"]["counts"], [0, 0])
+        ok = tools.execute_tool("board_set_rows", ws, {"counts": [8, 4]})
+        self.assertTrue(ok["ok"], ok)
+        self.assertEqual(ws["view"]["occupancy"]["counts"], [8, 4])
+        self.assertEqual(ws["view"]["occupancy"]["tray_left"], 0)
+        self.assertEqual(len(ws["view"]["occupancy"]["occupied"]), 12)
+
 
 if __name__ == "__main__":
     unittest.main()
