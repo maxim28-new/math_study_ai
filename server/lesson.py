@@ -8,10 +8,11 @@ from typing import Any
 
 RUNGS = ("do", "see", "why")
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]{2,47}$")
-SHRINK_MESSAGE = "再小一点。请把问题削短，不要告诉我答案。"
+SHRINK_MESSAGE = "太难了"
 REGULARITY_ASK = "你总结出什么规律了吗？"
 MAX_SAID = 80
 WINDOW = 8
+_SHRINK_PREFIXES = ("太难了", "再小一点", "再说简单点")
 
 SEED_INSIGHT_KEYS = {
     "糖果店的糖装在托盘里": "place_value_bundle_ten",
@@ -206,13 +207,18 @@ def looks_like_misconception(said: str, card: dict[str, Any] | None) -> bool:
     return False
 
 
+def is_shrink_talk(text: str) -> bool:
+    said = str(text or "").strip()
+    return any(said == prefix or said.startswith(prefix) for prefix in _SHRINK_PREFIXES)
+
+
 def accept_regularity(
     said: str,
     card: dict[str, Any] | None,
     topic: str = "",
 ) -> dict[str, str] | None:
     text = str(said or "").strip()
-    if len(text) < 4 or text.startswith("再小一点"):
+    if len(text) < 4 or is_shrink_talk(text):
         return None
     insight = str((card or {}).get("insight") or "")
     if leaks_insight(text, insight):
@@ -283,23 +289,25 @@ def shrink_prompt_block(
     other = [name for name in views if name and name != current["view"]]
     if shrinks <= 1:
         return (
-            f"本轮孩子点了「再小一点」（第 1 档）。{ask_line}"
-            "留在这一层，把问句削短。可以高亮一个对象。不要跳到 why，不要说出洞见或答案。"
+            f"本轮孩子说「太难了」（第 1 档）。{ask_line}"
+            "留在这一层，把问句削短、换成她能上手的一小步。可以高亮一个对象。"
+            "不要跳到 why，不要问规律，不要说出洞见或答案。"
         )
     if shrinks == 2:
         return (
-            f"本轮孩子点了「再小一点」（第 2 档）。{ask_line}"
-            f"问句必须正好是：「{REGULARITY_ASK}」不要加别的修饰，不要给答案。"
+            f"本轮孩子说「太难了」（第 2 档）。{ask_line}"
+            "问句再削短。已在 do 就再削，并可以动一次画板让她看清。"
+            "不要给答案，不要问有没有规律，不要跳到 why。"
         )
     if other:
         names = "、".join(other)
         return (
-            f"本轮孩子点了「再小一点」（第 3 档，到顶）。{ask_line}"
+            f"本轮孩子说「太难了」（第 3 档，到顶）。{ask_line}"
             f"不要给答案。用一句话问要不要换成另一种看法（允许：{names}）；"
             "孩子同意再调用 board_switch_view。不要口头假装已经换图。"
         )
     return (
-        f"本轮孩子点了「再小一点」（第 3 档，到顶）。{ask_line}"
+        f"本轮孩子说「太难了」（第 3 档，到顶）。{ask_line}"
         "不要给答案。用更小的数字问同一件事，例如 8 和 4 改成 6 和 2。"
     )
 

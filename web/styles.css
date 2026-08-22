@@ -794,6 +794,22 @@ button, input, select, textarea { font-family: inherit; }
   font-size: 14px;
   color: var(--ink-soft);
 }
+.workspace-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.easier-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #8a5a12;
+  background: var(--accent-soft);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.easier-btn.hidden { display: none; }
 .workspace-history-btn {
   border: none;
   border-radius: 999px;
@@ -1652,6 +1668,7 @@ button, input, select, textarea { font-family: inherit; }
 .app.layout-explore .chips,
 .app.layout-explore .quick-actions { display: none; }
 .app.layout-explore #drawBtn,
+.app.layout-bring #easierBtn,
 .app.layout-bring #hintBtn,
 .app.layout-bring #newQuestionBtn,
 .app.layout-bring #dockNewQuestionBtn { display: none !important; }

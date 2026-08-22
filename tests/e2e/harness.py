@@ -51,6 +51,7 @@ LAYOUT_JS = """() => {
   const plus = document.querySelector('#plusBtn');
   const send = document.querySelector('#doodleSendBtn');
   const dockNew = document.querySelector('#dockNewQuestionBtn');
+  const easier = document.querySelector('#easierBtn');
   const boardEl = host && (
     host.querySelector('.semantic-board')
     || host.querySelector('.snap-grid-stage')
@@ -80,6 +81,7 @@ LAYOUT_JS = """() => {
     sendVisible: vis(send),
     sendDisabled: !!(send && send.disabled),
     dockNewVisible: vis(dockNew),
+    easierVisible: vis(easier),
     startPlayVisible: vis(document.querySelector('#startPlayWrap')),
     fallbackVisible: vis(document.querySelector('.board-safe-fallback')),
     tray: (document.querySelector('#trayCount') || {}).textContent || '',

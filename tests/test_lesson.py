@@ -124,7 +124,11 @@ class LessonStateTests(unittest.TestCase):
         second = lesson.apply_shrink(first)
         two = lesson.shrink_prompt_block(second, card, "shrink")
         self.assertIn("第 2 档", two)
-        self.assertIn(lesson.REGULARITY_ASK, two)
+        self.assertIn("削短", two)
+        self.assertNotIn(lesson.REGULARITY_ASK, two)
+        self.assertTrue(lesson.is_shrink_talk("太难了"))
+        self.assertTrue(lesson.is_shrink_talk("再小一点。请把问题削短"))
+        self.assertFalse(lesson.is_shrink_talk("一张，两边差会少 2"))
         third = lesson.apply_shrink(second)
         top = lesson.shrink_prompt_block(third, card, "shrink")
         self.assertIn("第 3 档", top)
@@ -148,6 +152,7 @@ class LessonStateTests(unittest.TestCase):
         self.assertIsNone(lesson.accept_regularity("给4张就行了吧", card, "wordproblems"))
         self.assertIsNone(lesson.accept_regularity("两行的差距一次缩小2", card, "wordproblems"))
         self.assertIsNone(lesson.accept_regularity("嗯", card, "wordproblems"))
+        self.assertIsNone(lesson.accept_regularity("太难了", card, "wordproblems"))
 
 
 if __name__ == "__main__":
