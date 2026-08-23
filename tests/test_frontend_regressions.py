@@ -45,8 +45,12 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("MediaRecorder", app)
         self.assertIn("/api/transcribe", app)
         self.assertIn("按住说话", html)
+        self.assertIn("正在听", app)
+        self.assertIn("function finishVoiceTalk(", app)
         self.assertNotIn("点一下，跟小欧说", html)
         self.assertNotIn("说完再点一下", html)
+        self.assertNotIn("说完再点一下", app)
+        self.assertNotIn("再说长一点点", app)
 
     def test_web_is_kid_h5_chat_shell(self):
         html = read("web/index.html")
@@ -275,7 +279,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260823-hold", html)
+        self.assertIn("v=20260823-hold2", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -553,7 +557,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260823-hold", html)
+        self.assertIn("v=20260823-hold2", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

@@ -2961,6 +2961,7 @@ const voiceSession = {
   chunks: [],
   listening: false,
   holding: false,
+  tapLatch: false,
   busy: false,
   discard: false,
   timer: null,
@@ -3004,7 +3005,7 @@ function setVoiceUi(mode, message) {
   }
   const copy = {
     idle: "按住说话",
-    listening: message || "松开",
+    listening: message || (voiceSession.holding ? "松开" : "正在听"),
     busy: "听写中…",
     blocked: message || "还不能说",
     error: message || "再按住说",
@@ -3078,7 +3079,7 @@ async function transcribeVoiceBlob(blob) {
   setVoiceUi("busy");
   try {
     if (!blob || blob.size < 400) {
-      setVoiceUi("error", "再说长一点点，小欧才听得清。");
+      setVoiceUi("idle");
       syncVoiceClearButton();
       return;
     }
@@ -3153,10 +3154,10 @@ async function startVoiceTalk() {
     await transcribeVoiceBlob(blob);
   };
   rec.start(250);
-  setVoiceUi("listening", "0:00 · 说完再点一下");
+  setVoiceUi("listening", voiceSession.holding ? "松开" : "正在听");
   voiceSession.timer = setInterval(() => {
     const elapsed = Date.now() - voiceSession.startedAt;
-    setVoiceUi("listening", formatVoiceClock(elapsed) + " · 说完再点一下");
+    setVoiceUi("listening", voiceSession.holding ? "松开" : "正在听");
     if (elapsed >= 45000) stopVoiceTalk();
   }, 250);
 }
@@ -3211,18 +3212,42 @@ function undoLastVoice() {
   clearVoiceUndo();
 }
 
+function finishVoiceTalk() {
+  if (!voiceSession.listening) return;
+  const wait = 450 - (Date.now() - (voiceSession.startedAt || Date.now()));
+  if (wait > 0) {
+    setTimeout(() => {
+      if (voiceSession.listening) stopVoiceTalk();
+    }, wait);
+    return;
+  }
+  stopVoiceTalk();
+}
+
 function bindHoldSpeak(btn) {
   if (!btn) return;
   const onDown = async (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (voiceSession.busy || voiceSession.holding) return;
+    if (voiceSession.busy) return;
     e.preventDefault();
+    if (voiceSession.listening) {
+      voiceSession.holding = false;
+      voiceSession.tapLatch = false;
+      finishVoiceTalk();
+      return;
+    }
+    if (voiceSession.holding) return;
     voiceSession.holding = true;
+    voiceSession.tapLatch = false;
     try {
       await startVoiceTalk();
-      if (!voiceSession.holding && voiceSession.listening) stopVoiceTalk();
+      if (voiceSession.listening && !voiceSession.holding) {
+        voiceSession.tapLatch = true;
+        setVoiceUi("listening", "正在听");
+      }
     } catch (err) {
       voiceSession.holding = false;
+      voiceSession.tapLatch = false;
       stopVoiceTracks();
       voiceSession.listening = false;
       const denied = err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError");
@@ -3232,11 +3257,27 @@ function bindHoldSpeak(btn) {
   const onUp = () => {
     if (!voiceSession.holding) return;
     voiceSession.holding = false;
-    if (voiceSession.listening) stopVoiceTalk();
+    if (!voiceSession.listening) {
+      voiceSession.tapLatch = true;
+      return;
+    }
+    const recorded = Date.now() - (voiceSession.startedAt || Date.now());
+    if (recorded >= 350) {
+      finishVoiceTalk();
+      return;
+    }
+    voiceSession.tapLatch = true;
+    setVoiceUi("listening", "正在听");
+  };
+  const onCancel = () => {
+    if (!voiceSession.holding) return;
+    voiceSession.holding = false;
+    voiceSession.tapLatch = true;
+    if (voiceSession.listening) setVoiceUi("listening", "正在听");
   };
   btn.addEventListener("pointerdown", onDown);
   window.addEventListener("pointerup", onUp);
-  window.addEventListener("pointercancel", onUp);
+  window.addEventListener("pointercancel", onCancel);
   btn.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
