@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="小欧" />
   <title>小欧 · 手机版</title>
-  <link rel="stylesheet" href="/styles.css?v=20260823-dock" />
+  <link rel="stylesheet" href="/styles.css?v=20260823-voice" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#9709;</text></svg>" />
 </head>
@@ -153,10 +153,10 @@
               </span>
               <span class="voice-copy">
                 <span class="voice-label">点一下，跟小欧说</span>
-                <span class="voice-hint" id="voiceHint">说完再点一下，小欧帮你写成字</span>
+                <span class="voice-hint" id="voiceHint">说完再点一下。听错了就点旁边清空</span>
               </span>
             </button>
-            <button type="button" id="voiceUndoBtn" class="voice-clear-btn hidden" aria-label="清空刚才听写的字">清空</button>
+            <button type="button" id="voiceUndoBtn" class="voice-clear-btn" disabled aria-label="清空刚才听写的字">清空</button>
           </div>
         </div>
         <div class="input-row" id="inputRow">
@@ -314,17 +314,17 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/konva@9.3.22/konva.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" crossorigin="anonymous"></script>
-  <script src="/activity/state.js?v=20260823-dock"></script>
-  <script src="/activity/snap-grid.js?v=20260823-dock"></script>
-  <script src="/board/state.js?v=20260823-dock"></script>
-  <script src="/board/workspace.js?v=20260823-dock"></script>
-  <script src="/board/layer-pile.js?v=20260823-dock"></script>
-  <script src="/board/path-board.js?v=20260823-dock"></script>
-  <script src="/board/geometry-compass.js?v=20260823-dock"></script>
-  <script src="/board/color-sequence.js?v=20260823-dock"></script>
-  <script src="/terms/glossary.js?v=20260823-dock"></script>
-  <script src="/terms/scaffold.js?v=20260823-dock"></script>
-  <script src="/lesson/state.js?v=20260823-dock"></script>
-  <script src="/app.js?v=20260823-dock"></script>
+  <script src="/activity/state.js?v=20260823-voice"></script>
+  <script src="/activity/snap-grid.js?v=20260823-voice"></script>
+  <script src="/board/state.js?v=20260823-voice"></script>
+  <script src="/board/workspace.js?v=20260823-voice"></script>
+  <script src="/board/layer-pile.js?v=20260823-voice"></script>
+  <script src="/board/path-board.js?v=20260823-voice"></script>
+  <script src="/board/geometry-compass.js?v=20260823-voice"></script>
+  <script src="/board/color-sequence.js?v=20260823-voice"></script>
+  <script src="/terms/glossary.js?v=20260823-voice"></script>
+  <script src="/terms/scaffold.js?v=20260823-voice"></script>
+  <script src="/lesson/state.js?v=20260823-voice"></script>
+  <script src="/app.js?v=20260823-voice"></script>
 </body>
 </html>

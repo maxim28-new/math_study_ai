@@ -1,6 +1,7 @@
 """把孩子说的话转成文字。
 
-默认走本机 faster-whisper，避免云端往返。云端 Qwen-ASR 只作兜底。
+默认本机 SenseVoice（中文比 whisper 稳）。模型不在时退回 whisper。
+云端 Qwen-ASR 只作最后兜底。
 """
 
 from __future__ import annotations
@@ -9,23 +10,28 @@ import asyncio
 import base64
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import threading
 import wave
+from pathlib import Path
 from typing import Any
 
 import httpx
 
-from .config import is_local_asr_model, settings
+from .config import ROOT_DIR, is_local_asr_model, settings
 
 log = logging.getLogger(__name__)
 
 MAX_AUDIO_BYTES = 4 * 1024 * 1024
 _MIN_WAV_SECONDS = 0.25
+_SENSEVOICE_DIRNAME = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17"
+_TAG_RE = re.compile(r"<\|[^|]*\|>")
 
-_model = None
+_whisper = None
+_sensevoice = None
 _model_lock = threading.Lock()
 _preload_started = False
 
@@ -91,6 +97,31 @@ def build_transcribe_payload(audio_bytes: bytes, mime: str, model: str) -> dict:
         ],
         "asr_options": {"language": "zh", "enable_itn": True},
     }
+
+
+def clean_transcript(text: str) -> str:
+    cleaned = _TAG_RE.sub("", text or "")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned).strip()
+    return cleaned
+
+
+def sensevoice_dir() -> Path:
+    raw = (os.getenv("LLM_ASR_SENSEVOICE_DIR") or "").strip()
+    if raw:
+        return Path(raw)
+    return ROOT_DIR / ".cache" / _SENSEVOICE_DIRNAME
+
+
+def sensevoice_model_files() -> tuple[Path, Path] | None:
+    folder = sensevoice_dir()
+    tokens = folder / "tokens.txt"
+    if not tokens.is_file():
+        return None
+    for name in ("model.int8.onnx", "model.onnx"):
+        model = folder / name
+        if model.is_file():
+            return model, tokens
+    return None
 
 
 def _running_under_tests() -> bool:
@@ -171,21 +202,77 @@ def _wav_duration_seconds(path: str) -> float:
         return 0.0
 
 
-def _ensure_model():
-    global _model
-    if _model is not None:
-        return _model
+def _wav_to_samples(path: str):
+    import numpy as np
+
+    with wave.open(path, "rb") as handle:
+        rate = handle.getframerate() or 16000
+        channels = handle.getnchannels()
+        width = handle.getsampwidth()
+        raw = handle.readframes(handle.getnframes())
+    if width == 2:
+        data = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+    else:
+        data = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1)
+    return rate, data
+
+
+def prefer_sensevoice() -> bool:
+    engine = (settings.asr_local_engine or "auto").strip().lower()
+    if engine == "whisper":
+        return False
+    if engine == "sensevoice":
+        return True
+    return sensevoice_model_files() is not None
+
+
+def local_asr_label() -> str:
+    if prefer_sensevoice() and sensevoice_model_files():
+        return "SenseVoice"
+    return f"whisper {settings.asr_whisper_size}"
+
+
+def _ensure_sensevoice():
+    global _sensevoice
+    if _sensevoice is not None:
+        return _sensevoice
+    files = sensevoice_model_files()
+    if not files:
+        raise RuntimeError("sensevoice_missing")
+    model, tokens = files
+    import sherpa_onnx
+
     with _model_lock:
-        if _model is not None:
-            return _model
+        if _sensevoice is not None:
+            return _sensevoice
+        _sensevoice = sherpa_onnx.OfflineRecognizer.from_sense_voice(
+            model=str(model),
+            tokens=str(tokens),
+            num_threads=2,
+            language="zh",
+            use_itn=True,
+            provider="cpu",
+        )
+        return _sensevoice
+
+
+def _ensure_whisper():
+    global _whisper
+    if _whisper is not None:
+        return _whisper
+    with _model_lock:
+        if _whisper is not None:
+            return _whisper
         from faster_whisper import WhisperModel
 
-        _model = WhisperModel(
+        _whisper = WhisperModel(
             settings.asr_whisper_size,
             device="cpu",
             compute_type="int8",
         )
-        return _model
+        return _whisper
 
 
 def start_preload() -> None:
@@ -199,12 +286,39 @@ def start_preload() -> None:
 
     def _load() -> None:
         try:
-            _ensure_model()
+            if prefer_sensevoice():
+                _ensure_sensevoice()
+                log.info("local SenseVoice ready")
+                return
+            _ensure_whisper()
             log.info("local whisper ready (%s)", settings.asr_whisper_size)
         except Exception:
-            log.exception("local whisper preload failed")
+            log.exception("local asr preload failed")
 
     threading.Thread(target=_load, name="asr-preload", daemon=True).start()
+
+
+def _transcribe_sensevoice(wav_path: str) -> str:
+    recognizer = _ensure_sensevoice()
+    rate, samples = _wav_to_samples(wav_path)
+    stream = recognizer.create_stream()
+    stream.accept_waveform(rate, samples)
+    recognizer.decode_stream(stream)
+    return clean_transcript(getattr(stream.result, "text", "") or "")
+
+
+def _transcribe_whisper(wav_path: str) -> str:
+    model = _ensure_whisper()
+    segments, _info = model.transcribe(
+        wav_path,
+        language="zh",
+        beam_size=5,
+        best_of=5,
+        temperature=0.0,
+        vad_filter=False,
+        condition_on_previous_text=False,
+    )
+    return clean_transcript("".join(segment.text for segment in segments))
 
 
 def _transcribe_local(audio_bytes: bytes, mime: str) -> str:
@@ -212,18 +326,12 @@ def _transcribe_local(audio_bytes: bytes, mime: str) -> str:
     try:
         if _wav_duration_seconds(wav_path) < _MIN_WAV_SECONDS:
             return ""
-        model = _ensure_model()
-        segments, _info = model.transcribe(
-            wav_path,
-            language="zh",
-            beam_size=1,
-            best_of=1,
-            temperature=0.0,
-            vad_filter=True,
-            condition_on_previous_text=False,
-            initial_prompt="数学课，中文。",
-        )
-        return "".join(segment.text for segment in segments).strip()
+        if prefer_sensevoice():
+            try:
+                return _transcribe_sensevoice(wav_path)
+            except Exception:
+                log.exception("SenseVoice failed; trying whisper")
+        return _transcribe_whisper(wav_path)
     finally:
         try:
             os.unlink(wav_path)
@@ -254,7 +362,7 @@ async def transcribe_audio(audio_bytes: bytes, mime: str = "audio/webm") -> str:
         except ValueError:
             raise
         except Exception:
-            log.exception("local whisper failed")
+            log.exception("local asr failed")
             fallback = settings.asr_cloud_fallback
             if fallback and settings.api_key:
                 try:

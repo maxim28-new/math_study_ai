@@ -17,3 +17,6 @@ Thumbs.db
 
 # 无头浏览器走查截图（本地生成，不入库）
 tests/e2e/artifacts/
+
+# 本机听写模型（SenseVoice / whisper 权重）
+.cache/

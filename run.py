@@ -7,6 +7,7 @@ from typing import Optional
 
 import uvicorn
 
+from server.asr import local_asr_label
 from server.config import is_local_asr_model, settings
 
 
@@ -53,7 +54,7 @@ if __name__ == "__main__":
     if not settings.asr_model:
         print("  语音听写：关闭")
     elif is_local_asr_model(settings.asr_model):
-        print(f"  语音听写：本机 whisper {settings.asr_whisper_size}")
+        print(f"  语音听写：本机 {local_asr_label()}")
     else:
         print(f"  语音听写：云端 {settings.asr_model}")
     if settings.gate_enabled:
