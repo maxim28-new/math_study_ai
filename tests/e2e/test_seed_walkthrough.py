@@ -1,7 +1,7 @@
 """Headless walkthrough of the 18 Author-Agent seed cards.
 
 This VPS has no desktop, so Playwright drives Chromium in headless mode,
-unlocks the gate, taps 开始玩 / 我想说 / 换一题 like a phone, and screenshots
+unlocks the gate, taps 开始玩 / 按住说话 / 换一题 like a phone, and screenshots
 each seed. /api/chat is stubbed so the walk does not call the live Tutor model;
 the assertion is that each card mounts the right board and the three seeds
 in a topic stay distinct.

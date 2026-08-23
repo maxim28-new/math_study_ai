@@ -47,7 +47,7 @@ LAYOUT_JS = """() => {
   const vp = document.querySelector('#boardViewport');
   const host = document.querySelector('#stageHost');
   const app = document.querySelector('.app');
-  const talk = document.querySelector('#talkBtn');
+  const talk = document.querySelector('#voiceTalkBtn');
   const plus = document.querySelector('#plusBtn');
   const send = document.querySelector('#doodleSendBtn');
   const dockNew = document.querySelector('#dockNewQuestionBtn');
@@ -66,7 +66,9 @@ LAYOUT_JS = """() => {
   const vh = window.innerHeight;
   return {
     viewport: { w: window.innerWidth, h: vh },
-    talkOpen: !!(app && app.classList.contains('talk-open')),
+    talkOpen: !!(app && app.classList.contains('draft-open')),
+    holdLabel: (talk && talk.innerText || '').trim(),
+    captionBelowBoard: !!(capBox && vpBox && capBox.y > vpBox.y + 8),
     caption: (cap && cap.innerText || '').trim(),
     captionBox: capBox,
     captionClipped: !!(cap && cap.scrollHeight > cap.clientHeight + 2),
@@ -242,8 +244,10 @@ class HeadlessPhoneTests(unittest.TestCase):
         page.evaluate(
             """() => {
                 const app = document.querySelector('.app');
-                const btn = document.querySelector('#talkBtn');
-                if (app && btn && app.classList.contains('talk-open')) btn.click();
+                if (app) {
+                  app.classList.remove('draft-open');
+                  app.classList.remove('talk-open');
+                }
             }"""
         )
         page.wait_for_timeout(200)
@@ -259,11 +263,6 @@ class HeadlessPhoneTests(unittest.TestCase):
 
     def _open_talk(self, page) -> None:
         plus = page.locator("#plusBtn")
-        if plus.is_visible():
-            return
-        talk = page.locator("#talkBtn")
-        talk.wait_for(state="visible", timeout=8000)
-        talk.click()
         plus.wait_for(state="visible", timeout=8000)
 
     def _choose_topic(self, page, name: str) -> None:

@@ -50,9 +50,12 @@ class PhoneUxTests(HeadlessPhoneTests):
             self._play_nth(page, "wordproblems", 2)
             closed = self._layout(page)
             self.assertTrue(closed["talkVisible"], closed)
-            self.assertFalse(closed["plusVisible"], "加号仍藏在我想说后面")
+            self.assertIn("按住说话", closed.get("holdLabel") or "")
+            self.assertTrue(closed["plusVisible"], "加号应停在按住说话旁边")
+            self.assertTrue(closed.get("captionBelowBoard"), "画板应在字幕上面")
             self.assertFalse(closed.get("dockNewVisible"), "换一题应进家长设置，不占底栏")
-            self.assertTrue(closed["easierVisible"], "太难了应停在小欧说旁边，不必先点加号")
+            self.assertTrue(closed["easierVisible"], "太难了应停在小欧说旁边")
+            self.assertFalse(page.locator("#talkBtn").count())
             self._shot(page, "ux-talk-closed.png")
 
             self.assertEqual(page.locator("#easierBtn").inner_text().strip(), "太难了")
@@ -64,7 +67,6 @@ class PhoneUxTests(HeadlessPhoneTests):
 
             self._open_talk(page)
             opened = self._layout(page)
-            self.assertTrue(opened["talkOpen"], opened)
             self.assertTrue(opened["plusVisible"], opened)
             page.locator("#plusBtn").click()
             page.locator("#doodleSendBtn").wait_for(state="visible")
@@ -287,8 +289,9 @@ class PhoneUxTests(HeadlessPhoneTests):
                 self.assertGreater(closed["boardBox"]["h"], 24, (label, closed["boardBox"]))
                 self.assertTrue(closed["caption"], label)
                 self.assertTrue(closed["talkVisible"], label)
+                self.assertTrue(closed.get("captionBelowBoard"), (label, closed))
                 self.assertFalse(closed.get("dockNewVisible"), label)
-                self.assertFalse(closed["plusVisible"], label)
+                self.assertTrue(closed["plusVisible"], label)
                 self.assertTrue(opened["plusVisible"], label)
                 if "snap_grid" in label:
                     self.assertTrue(closed["tray"].strip(), (label, closed["tray"]))
@@ -297,7 +300,7 @@ class PhoneUxTests(HeadlessPhoneTests):
                 if label == "snap_grid_4x4":
                     self.assertFalse(
                         closed["boardClippedByViewport"],
-                        f"4×4 点格在收起我想说时应完整可见: {closed}",
+                        f"4×4 点格应完整可见: {closed}",
                     )
             (ARTIFACTS / "layout-probe.json").write_text(
                 json.dumps(rows, ensure_ascii=False, indent=2) + "\n",

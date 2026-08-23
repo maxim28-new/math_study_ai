@@ -26,6 +26,7 @@ const state = {
   queuedMilestone: null,
   stageSpec: null,
   talkOpen: false,
+  draftOpen: false,
   toastTimer: null,
   authorEngine: "glm",
   problemCard: null,
@@ -1968,19 +1969,42 @@ function closeHistorySheet() {
   }
 }
 
-function setTalkOpen(on) {
-  state.talkOpen = !!on;
+function setDraftOpen(on) {
+  state.draftOpen = !!on;
+  state.talkOpen = state.draftOpen;
   const app = $(".app");
-  if (app) app.classList.toggle("talk-open", state.talkOpen);
-  const talkBtn = $("#talkBtn");
-  if (talkBtn) {
-    talkBtn.textContent = state.talkOpen ? "收起来" : "我想说";
-    talkBtn.classList.toggle("is-active", state.talkOpen);
-    talkBtn.setAttribute("aria-pressed", state.talkOpen ? "true" : "false");
+  if (app) {
+    app.classList.toggle("draft-open", state.draftOpen);
+    app.classList.toggle("talk-open", state.draftOpen);
   }
-  if (!state.talkOpen) stopVoiceTalk({ discard: true });
-  else refreshVoiceAvailability();
+  refreshVoiceAvailability();
   syncVoiceClearButton();
+}
+
+function setTalkOpen(on) {
+  setDraftOpen(on);
+}
+
+function placeSpeakChrome() {
+  const caption = $("#captionBar");
+  const bring = $("#bringMount");
+  const voice = $("#voiceDock");
+  const input = $("#inputRow");
+  const img = $("#imgPreview");
+  const plus = $("#plusBtn");
+  if (!voice || !input) return;
+  if (state.mode === "explore" && caption) {
+    if (img) caption.appendChild(img);
+    caption.appendChild(input);
+    caption.appendChild(voice);
+    const row = voice.querySelector(".voice-row");
+    if (row && plus && plus.parentElement !== row) row.insertBefore(plus, row.firstChild);
+  } else if (bring) {
+    if (img) bring.appendChild(img);
+    bring.appendChild(voice);
+    bring.appendChild(input);
+    if (plus && plus.parentElement !== input) input.insertBefore(plus, input.firstChild);
+  }
 }
 
 function closeHelpSheet() {
@@ -2531,8 +2555,8 @@ function applyModeUI() {
     app.classList.toggle("layout-bring", !explore);
   }
   placeMessages();
-  if (!explore) setTalkOpen(true);
-  else if (!state.talkOpen) setTalkOpen(false);
+  if (!explore) setDraftOpen(true);
+  placeSpeakChrome();
 
   const exploreBtn = $("#exploreBtn");
   if (exploreBtn) exploreBtn.classList.add("hidden");
@@ -2543,7 +2567,7 @@ function applyModeUI() {
   }
 
   const input = $("#input");
-  if (input) input.placeholder = explore ? "说给你听，或打字…" : "拍题或打字告诉小欧…";
+  if (input) input.placeholder = explore ? "听好了，可以改字再发给小欧" : "拍题或打字告诉小欧…";
 
   const line = $("#topicLine");
   if (line) {
@@ -2558,8 +2582,7 @@ function applyModeUI() {
   if (modeSel) modeSel.value = state.mode;
 
   const started = explore && ($(".play-stage") && $(".play-stage").classList.contains("is-playing") || state.messages.length > 0);
-  const talkBtn = $("#talkBtn");
-  if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
+  if (app) app.classList.toggle("can-speak", !!(explore && started));
   const easierBtn = $("#easierBtn");
   if (easierBtn) easierBtn.classList.toggle("hidden", !explore || !started);
   syncBoardSendButton();
@@ -2638,6 +2661,7 @@ async function sendMessage(text) {
   renderContentInto(childBubble, content);
   $("#input").value = "";
   clearVoiceUndo();
+  if (state.mode === "explore") setDraftOpen(false);
   clearPendingImage();
   autoGrow($("#input"));
   saveSession();
@@ -2870,6 +2894,7 @@ function switchMode(mode) {
   state.mode = mode;
   state.messages = [];
   state.talkOpen = false;
+  state.draftOpen = false;
   clearPendingImage();
   clearActivitySession();
   saveSession();
@@ -2935,6 +2960,7 @@ const voiceSession = {
   stream: null,
   chunks: [],
   listening: false,
+  holding: false,
   busy: false,
   discard: false,
   timer: null,
@@ -2964,7 +2990,6 @@ function voiceBlockReason() {
 
 function setVoiceUi(mode, message) {
   const btn = $("#voiceTalkBtn");
-  const hint = $("#voiceHint");
   const label = btn ? btn.querySelector(".voice-label") : null;
   const micBtn = $("#micBtn");
   if (btn) {
@@ -2978,15 +3003,13 @@ function setVoiceUi(mode, message) {
     micBtn.disabled = mode === "blocked" || mode === "busy";
   }
   const copy = {
-    idle: ["点一下，跟小欧说", "说完再点一下。听错了就点旁边清空"],
-    listening: ["正在听…", message || "说完再点一下"],
-    busy: ["小欧在听写…", "马上写成字"],
-    blocked: ["现在还不能发语音", message || ""],
-    error: ["再试一次", message || "刚才没听清，听错就点清空"],
+    idle: "按住说话",
+    listening: message || "松开",
+    busy: "听写中…",
+    blocked: message || "还不能说",
+    error: message || "再按住说",
   };
-  const pair = copy[mode] || copy.idle;
-  if (label) label.textContent = pair[0];
-  if (hint) hint.textContent = pair[1];
+  if (label) label.textContent = copy[mode] || copy.idle;
 }
 
 function refreshVoiceAvailability() {
@@ -3085,12 +3108,11 @@ async function transcribeVoiceBlob(blob) {
       input.focus();
     }
     rememberVoiceUndo(before, input ? input.value : "");
+    setDraftOpen(true);
     setVoiceUi("idle");
-    const hint = $("#voiceHint");
-    if (hint) hint.textContent = "听好了，听错就点旁边清空";
     syncVoiceClearButton();
   } catch (e) {
-    setVoiceUi("error", "刚才没听清，听错就点清空。");
+    setVoiceUi("error", "没听清");
     syncVoiceClearButton();
   } finally {
     voiceSession.busy = false;
@@ -3187,17 +3209,41 @@ function undoLastVoice() {
   autoGrow(input);
   input.focus();
   clearVoiceUndo();
-  const hint = $("#voiceHint");
-  if (hint) hint.textContent = "已经清掉了，再说一次就好";
+}
+
+function bindHoldSpeak(btn) {
+  if (!btn) return;
+  const onDown = async (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (voiceSession.busy || voiceSession.holding) return;
+    e.preventDefault();
+    voiceSession.holding = true;
+    try {
+      await startVoiceTalk();
+      if (!voiceSession.holding && voiceSession.listening) stopVoiceTalk();
+    } catch (err) {
+      voiceSession.holding = false;
+      stopVoiceTracks();
+      voiceSession.listening = false;
+      const denied = err && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError");
+      setVoiceUi("error", denied ? "请允许麦克风" : "还不能录音");
+    }
+  };
+  const onUp = () => {
+    if (!voiceSession.holding) return;
+    voiceSession.holding = false;
+    if (voiceSession.listening) stopVoiceTalk();
+  };
+  btn.addEventListener("pointerdown", onDown);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+  btn.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
 function initVoice() {
   refreshVoiceAvailability();
   syncVoiceClearButton();
-  const talkBtn = $("#voiceTalkBtn");
-  if (talkBtn) talkBtn.addEventListener("click", toggleVoiceTalk);
-  const micBtn = $("#micBtn");
-  if (micBtn) micBtn.addEventListener("click", toggleVoiceTalk);
+  bindHoldSpeak($("#voiceTalkBtn"));
   const undo = $("#voiceUndoBtn");
   if (undo) undo.addEventListener("click", undoLastVoice);
   const input = $("#input");
@@ -3412,8 +3458,6 @@ function bindEvents() {
   if (hintBtn) hintBtn.addEventListener("click", askForEasier);
   const easierBtn = $("#easierBtn");
   if (easierBtn) easierBtn.addEventListener("click", askForEasier);
-  const talkBtn = $("#talkBtn");
-  if (talkBtn) talkBtn.addEventListener("click", () => setTalkOpen(!state.talkOpen));
   const historyClose = $("#historyClose");
   if (historyClose) historyClose.addEventListener("click", closeHistorySheet);
   const discoveryClose = $("#discoveryCardClose");
