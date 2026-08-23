@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator, Optional, Union
 
 import httpx
@@ -25,7 +26,14 @@ from . import gate
 from . import tutor
 from .agent import runtime as agent_runtime
 
-app = FastAPI(title="小欧 · 启发式数学老师")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    asr.start_preload()
+    yield
+
+
+app = FastAPI(title="小欧 · 启发式数学老师", lifespan=lifespan)
 
 # 允许微信小程序、GitHub Pages 等跨域调用 API（密钥仍在服务端 .env）
 app.add_middleware(

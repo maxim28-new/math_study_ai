@@ -945,6 +945,7 @@ async function sendDoodleToTutor() {
   if (state.streaming) return;
   const play = $(".play-stage");
   if (!play || !play.classList.contains("is-playing")) return;
+  closeAttachSheet();
   showStageToast("正在发给小欧…");
   resetDoodleView();
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -1215,7 +1216,34 @@ function applyMathWorkspace(ws) {
   if (handle && handle.getSnapshot) state.semanticBoardSnapshot = handle.getSnapshot();
   harvestLessonFromWorkspace(parsed);
   applySnapFromWorkspace(parsed);
+  applyBoardModelFromWorkspace(parsed);
   saveSession();
+}
+
+function applyBoardModelFromWorkspace(ws) {
+  const card = state.problemCard;
+  const problem = (ws && ws.problem) || {};
+  const kind = problem.board_kind || ((card && card.board) || {}).kind;
+  if (!card || !card.board) return;
+  if (kind === "path_count" && problem.path_model) {
+    const next = problem.path_model;
+    const cur = card.board.model || {};
+    const sameMoves = JSON.stringify(cur.moves || []) === JSON.stringify(next.moves || []);
+    if (cur.start === next.start && cur.target === next.target && sameMoves) return;
+    card.board.model = Object.assign({}, cur, {
+      start: next.start,
+      target: next.target,
+      moves: (next.moves || []).slice(),
+    });
+    mountBoardV3(card.board, card);
+    return;
+  }
+  if (kind === "color_sequence" && problem.sequence_count != null) {
+    const cur = card.board.model || {};
+    if (cur.count === problem.sequence_count) return;
+    card.board.model = Object.assign({}, cur, { count: problem.sequence_count });
+    mountBoardV3(card.board, card);
+  }
 }
 
 function harvestLessonFromWorkspace(ws) {
@@ -1946,7 +1974,7 @@ function setTalkOpen(on) {
   if (app) app.classList.toggle("talk-open", state.talkOpen);
   const talkBtn = $("#talkBtn");
   if (talkBtn) {
-    talkBtn.textContent = "我想说";
+    talkBtn.textContent = state.talkOpen ? "收起来" : "我想说";
     talkBtn.classList.toggle("is-active", state.talkOpen);
     talkBtn.setAttribute("aria-pressed", state.talkOpen ? "true" : "false");
   }
@@ -2531,17 +2559,9 @@ function applyModeUI() {
   const started = explore && ($(".play-stage") && $(".play-stage").classList.contains("is-playing") || state.messages.length > 0);
   const talkBtn = $("#talkBtn");
   if (talkBtn) talkBtn.classList.toggle("hidden", !explore || !started);
-  const boardSend = $("#doodleSendBtn");
-  if (boardSend) boardSend.classList.toggle("hidden", !explore || !started);
-  const dockNew = $("#dockNewQuestionBtn");
-  if (dockNew) dockNew.classList.toggle("hidden", !explore || !started);
   const easierBtn = $("#easierBtn");
   if (easierBtn) easierBtn.classList.toggle("hidden", !explore || !started);
   syncBoardSendButton();
-  const hintBtn = $("#hintBtn");
-  if (hintBtn) hintBtn.hidden = !explore;
-  const newQ = $("#newQuestionBtn");
-  if (newQ) newQ.hidden = !explore;
   const drawBtn = $("#drawBtn");
   if (drawBtn) drawBtn.hidden = explore;
   const attach = $("#attachBtn");
@@ -2832,11 +2852,9 @@ function setStreaming(on) {
   if (exploreBtn && state.config && state.config.configured) exploreBtn.disabled = on;
   const startBtn = $("#startPlayBtn");
   if (startBtn && state.config && state.config.configured) startBtn.disabled = on;
-  const newQ = $("#newQuestionBtn");
-  if (newQ) newQ.disabled = on;
-  const dockNew = $("#dockNewQuestionBtn");
-  if (dockNew) dockNew.disabled = on;
-  document.querySelectorAll(".quick-actions button, #hintBtn, #easierBtn").forEach((b) => (b.disabled = on));
+  const settingsNew = $("#settingsNewQuestionBtn");
+  if (settingsNew) settingsNew.disabled = on;
+  document.querySelectorAll(".quick-actions button, #easierBtn").forEach((b) => (b.disabled = on));
   syncBoardSendButton();
 }
 
@@ -3391,12 +3409,11 @@ function bindEvents() {
   }
   function requestNewQuestion() {
     closeAttachSheet();
+    closeDrawer();
     startExplore();
   }
-  const newQuestionBtn = $("#newQuestionBtn");
-  if (newQuestionBtn) newQuestionBtn.addEventListener("click", requestNewQuestion);
-  const dockNewQuestionBtn = $("#dockNewQuestionBtn");
-  if (dockNewQuestionBtn) dockNewQuestionBtn.addEventListener("click", requestNewQuestion);
+  const settingsNewQuestionBtn = $("#settingsNewQuestionBtn");
+  if (settingsNewQuestionBtn) settingsNewQuestionBtn.addEventListener("click", requestNewQuestion);
   const undoTileBtn = $("#undoTileBtn");
   if (undoTileBtn) {
     undoTileBtn.addEventListener("click", () => {

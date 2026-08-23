@@ -254,6 +254,18 @@
     if (kind === "color_sequence") {
       const ws = seedShell(wsId, topic, card, "color_sequence");
       ws.objects = [{ id: "pattern", type: "group", attrs: { role: "pattern" } }];
+      ws.problem.sequence_unit = Array.isArray(model.unit) ? model.unit.map(String) : [];
+      ws.problem.sequence_count = asInt(model.count);
+      return ws;
+    }
+    if (kind === "path_count") {
+      const ws = seedShell(wsId, topic, card, "path_count");
+      ws.objects = [{ id: "path_board", type: "group", attrs: { role: "path" } }];
+      ws.problem.path_model = {
+        start: asInt(model.start),
+        target: asInt(model.target),
+        moves: Array.isArray(model.moves) ? model.moves.map(asInt).filter((n) => n) : [],
+      };
       return ws;
     }
     if (kind === "snap_grid") {

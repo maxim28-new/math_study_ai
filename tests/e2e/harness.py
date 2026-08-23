@@ -248,6 +248,15 @@ class HeadlessPhoneTests(unittest.TestCase):
         )
         page.wait_for_timeout(200)
 
+    def _click_send_board(self, page) -> None:
+        self._open_talk(page)
+        plus = page.locator("#plusBtn")
+        plus.wait_for(state="visible", timeout=8000)
+        plus.click()
+        send = page.locator("#doodleSendBtn")
+        send.wait_for(state="visible", timeout=8000)
+        send.click()
+
     def _open_talk(self, page) -> None:
         plus = page.locator("#plusBtn")
         if plus.is_visible():
@@ -275,15 +284,8 @@ class HeadlessPhoneTests(unittest.TestCase):
         if wrap.is_visible():
             page.locator("#startPlayBtn").click()
             return
-        dock = page.locator("#dockNewQuestionBtn")
-        if dock.is_visible():
-            dock.click()
-            return
-        plus = page.locator("#plusBtn")
-        if not plus.is_visible():
-            self._open_talk(page)
-        plus.click()
-        nxt = page.locator("#newQuestionBtn")
+        page.locator("#gearBtn").click()
+        nxt = page.locator("#settingsNewQuestionBtn")
         nxt.wait_for(state="visible", timeout=8000)
         nxt.click()
 

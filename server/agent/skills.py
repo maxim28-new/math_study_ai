@@ -20,6 +20,7 @@ SKILL_CATALOG = """\
 顺序与周期：序列；长度/相交/全等：几何构造。
 若当前表示造成误解，可以调用 board_switch_view 换成题卡 allowed_views 里的另一种看法。
 点格要改行里的块数时，只能用 board_set_rows；失败就停在上一张图，不要口头改数。
+跳格子改终点/步长、颜色排队改朵数时，先 board_set_model，成功后再问新的图。
 不要口头假装画面已经换了。第一版没有第二看法时，继续用当前学具。
 
 ## test_conjecture

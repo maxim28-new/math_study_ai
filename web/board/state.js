@@ -50,7 +50,7 @@
   function normalizePathCount(model, task, view) {
     const start = asInt(model.start);
     const target = asInt(model.target);
-    if (start === null || target === null || start < 0 || target <= start || target - start > 12) return null;
+    if (start === null || target === null || start < 0 || target <= start || target - start > 24) return null;
     if (!Array.isArray(model.moves) || model.moves.length < 1 || model.moves.length > 4) return null;
     const span = target - start;
     const moves = [];
@@ -181,7 +181,7 @@
       const item = text(raw.model.item, 4, "花");
       const task = normalizeTask(raw.task, "predict", "color_at_end");
       if (!Array.isArray(unit) || unit.length < 2 || unit.length > 4
-        || count === null || count < 3 || count > 10 || count < unit.length
+        || count === null || count < 3 || count > 16 || count < unit.length
         || unit.some((color) => COLORS.indexOf(String(color)) < 0)
         || !item || !task
         || (raw.view.reveal !== "hide_last" && raw.view.reveal !== "all")) return null;

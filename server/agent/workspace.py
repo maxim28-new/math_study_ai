@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 from . import validators as V
+from .. import board as semantic_board
 from .. import lesson as lesson_state
 
 
@@ -177,6 +178,12 @@ def visible_snapshot(workspace: dict[str, Any]) -> dict[str, Any]:
         snapshot["occupancy"] = occupancy
         snapshot["row_counts"] = occupancy.get("counts")
         snapshot["tray_left"] = occupancy.get("tray_left")
+    path_model = path_model_of(workspace)
+    if path_model:
+        snapshot["path_model"] = path_model
+    count = sequence_count_of(workspace)
+    if count is not None:
+        snapshot["sequence_count"] = count
     return snapshot
 
 
@@ -250,6 +257,54 @@ def apply_row_counts(workspace: dict[str, Any], counts: list[int]) -> dict[str, 
     }
     bump(workspace)
     return {"ok": True}
+
+
+def path_model_of(workspace: dict[str, Any] | None) -> dict[str, Any] | None:
+    problem = (workspace or {}).get("problem") if isinstance(workspace, dict) else {}
+    raw = problem.get("path_model") if isinstance(problem, dict) else None
+    if not isinstance(raw, dict):
+        return None
+    return semantic_board.normalize_path_model(raw.get("start"), raw.get("target"), raw.get("moves"))
+
+
+def sequence_count_of(workspace: dict[str, Any] | None) -> int | None:
+    problem = (workspace or {}).get("problem") if isinstance(workspace, dict) else {}
+    if not isinstance(problem, dict):
+        return None
+    unit = problem.get("sequence_unit")
+    return semantic_board.normalize_sequence_count(unit, problem.get("sequence_count"))
+
+
+def apply_board_model(workspace: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    problem = workspace.get("problem") if isinstance(workspace.get("problem"), dict) else {}
+    kind = str(problem.get("board_kind") or "")
+    if kind == "path_count":
+        current = path_model_of(workspace) or {}
+        model = semantic_board.normalize_path_model(
+            patch.get("start", current.get("start")),
+            patch.get("target", current.get("target")),
+            patch.get("moves", current.get("moves")),
+        )
+        if not model:
+            return {"ok": False, "error": "path_invalid"}
+        if model == current:
+            return {"ok": True, "unchanged": True, "path_model": model}
+        problem["path_model"] = model
+        workspace["problem"] = problem
+        bump(workspace)
+        return {"ok": True, "path_model": model}
+    if kind == "color_sequence":
+        unit = problem.get("sequence_unit")
+        count = semantic_board.normalize_sequence_count(unit, patch.get("count", problem.get("sequence_count")))
+        if count is None:
+            return {"ok": False, "error": "sequence_invalid"}
+        if count == problem.get("sequence_count"):
+            return {"ok": True, "unchanged": True, "sequence_count": count}
+        problem["sequence_count"] = count
+        workspace["problem"] = problem
+        bump(workspace)
+        return {"ok": True, "sequence_count": count}
+    return {"ok": False, "error": "board_not_extensible"}
 
 
 def inspect_payload(workspace: dict[str, Any], *, visible_only: bool = False) -> dict[str, Any]:
@@ -357,11 +412,17 @@ def seed_from_card(card: dict[str, Any] | None, topic: str, workspace_id: str | 
     if kind == "color_sequence":
         ws = _seed_shell(ws_id, topic, card, "color_sequence")
         ws["objects"] = [{"id": "pattern", "type": "group", "attrs": {"role": "pattern"}}]
+        unit = model.get("unit") if isinstance(model.get("unit"), list) else []
+        ws["problem"]["sequence_unit"] = [str(color) for color in unit]
+        ws["problem"]["sequence_count"] = V.as_int(model.get("count"))
         return ws
 
     if kind == "path_count":
         ws = _seed_shell(ws_id, topic, card, "path_count")
         ws["objects"] = [{"id": "path_board", "type": "group", "attrs": {"role": "path"}}]
+        path_model = semantic_board.normalize_path_model(model.get("start"), model.get("target"), model.get("moves"))
+        if path_model:
+            ws["problem"]["path_model"] = path_model
         return ws
 
     if kind == "snap_grid":

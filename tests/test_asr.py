@@ -2,12 +2,35 @@
 
 from __future__ import annotations
 
+import io
+import os
+import shutil
 import unittest
+import wave
+from dataclasses import replace
 
 from fastapi.testclient import TestClient
 
 from server.app import app
-from server.asr import MAX_AUDIO_BYTES, build_data_uri, build_transcribe_payload, extract_transcript
+from server.asr import (
+    MAX_AUDIO_BYTES,
+    audio_to_wav_path,
+    build_data_uri,
+    build_transcribe_payload,
+    extract_transcript,
+)
+from server.config import is_local_asr_model, normalize_asr_model, settings
+
+
+def _silence_wav(seconds: float = 0.4) -> bytes:
+    frames = int(16000 * seconds)
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(b"\x00\x00" * frames)
+    return buf.getvalue()
 
 
 class AsrHelperTests(unittest.TestCase):
@@ -30,6 +53,34 @@ class AsrHelperTests(unittest.TestCase):
         payload = build_transcribe_payload(b"abc", "audio/webm", "qwen3-asr-flash")
         self.assertEqual([m["role"] for m in payload["messages"]], ["user"])
         self.assertEqual(payload["messages"][0]["content"][0]["type"], "input_audio")
+
+    def test_default_asr_is_local(self):
+        self.assertEqual(normalize_asr_model(None), "local")
+        self.assertEqual(normalize_asr_model(""), "local")
+        self.assertEqual(normalize_asr_model("off"), "")
+        self.assertEqual(normalize_asr_model("qwen3-asr-flash"), "qwen3-asr-flash")
+        self.assertTrue(is_local_asr_model("local"))
+        self.assertTrue(is_local_asr_model("faster-whisper"))
+        self.assertFalse(is_local_asr_model("qwen3-asr-flash"))
+
+    def test_voice_enabled_local_does_not_need_cloud_key(self):
+        local = replace(settings, asr_model="local", api_key="")
+        self.assertTrue(local.voice_enabled)
+        cloud = replace(settings, asr_model="qwen3-asr-flash", api_key="")
+        self.assertFalse(cloud.voice_enabled)
+        off = replace(settings, asr_model="")
+        self.assertFalse(off.voice_enabled)
+
+    def test_ffmpeg_rewrites_wav_to_16k_mono(self):
+        if not shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg not installed")
+        wav_path = audio_to_wav_path(_silence_wav(0.4), "audio/wav")
+        try:
+            with wave.open(wav_path, "rb") as handle:
+                self.assertEqual(handle.getnchannels(), 1)
+                self.assertEqual(handle.getframerate(), 16000)
+        finally:
+            os.unlink(wav_path)
 
 
 class AsrHttpTests(unittest.TestCase):

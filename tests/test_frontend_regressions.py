@@ -220,11 +220,9 @@ class FrontendRegressionTests(unittest.TestCase):
             'id="historySheet"',
             'id="historyMount"',
             'id="attachSheet"',
-            'id="hintBtn"',
+            'id="easierBtn"',
             'id="discoveryStrip"',
-            'id="dockNewQuestionBtn"',
-            'id="newQuestionBtn"',
-            'id="dockNewQuestionBtn"',
+            'id="settingsNewQuestionBtn"',
             'id="doodleCanvas"',
             'id="doodleToolbar"',
             'id="doodleSendBtn"',
@@ -259,7 +257,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".doodle-canvas", css)
         self.assertIn(".doodle-toolbar", css)
         self.assertIn(".child-dock", css)
-        self.assertIn("dock-new-btn", css)
+        self.assertIn("settingsNewQuestionBtn", html)
         self.assertIn("function remountStage(", app)
         self.assertIn("function requestNewQuestion(", app)
         self.assertIn("typeof snap.tray_left", app)
@@ -271,7 +269,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function startPlay(", app)
         self.assertIn("tutorCaption", app)
         self.assertIn("activity-stage", read("server/app.py"))
-        self.assertIn("v=20260822-easier", html)
+        self.assertIn("v=20260823-dock", html)
         self.assertIn("html2canvas", html)
         self.assertIn("function initDoodle(", app)
         self.assertIn('id="boardViewport"', html)
@@ -307,6 +305,11 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("/lesson/state.js", html)
         self.assertIn("board_switch_view", read("server/agent/tools.py"))
         self.assertIn("board_set_rows", read("server/agent/tools.py"))
+        self.assertIn("board_set_model", read("server/agent/tools.py"))
+        self.assertIn("function applyBoardModelFromWorkspace(", app)
+        self.assertIn('return "local"', read("server/config.py"))
+        self.assertIn("faster_whisper", read("server/asr.py"))
+        self.assertIn("LLM_ASR_MODEL=local", read(".env.example"))
         self.assertIn("pair_rows", read("web/activity/snap-grid.js"))
         self.assertIn("上排", read("web/activity/snap-grid.js"))
         self.assertNotIn("哥哥", read("web/activity/snap-grid.js"))
@@ -325,6 +328,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn(".say-panel", css)
         self.assertIn("小欧说", html)
         self.assertIn("我想说", html)
+        self.assertNotIn('id="dockNewQuestionBtn"', html)
+        self.assertNotIn('id="hintBtn"', html)
+        self.assertNotIn('id="newQuestionBtn"', html)
         self.assertIn("发画板", html)
         self.assertNotIn("小欧在说", html)
         self.assertNotIn("想跟小欧说", html)
@@ -533,7 +539,7 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertIn("function bumpAuthorGen(", app)
         self.assertIn("function upgradeLegacyArithmeticSeed(", app)
         self.assertNotIn('setCaption("点开始玩，把方块拖进格子")', hist)
-        self.assertIn("v=20260822-easier", html)
+        self.assertIn("v=20260823-dock", html)
 
     def test_workspace_keeps_full_prompt_and_history_available(self):
         css = read("web/styles.css")

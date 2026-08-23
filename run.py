@@ -7,7 +7,7 @@ from typing import Optional
 
 import uvicorn
 
-from server.config import settings
+from server.config import is_local_asr_model, settings
 
 
 def lan_ip() -> Optional[str]:
@@ -50,6 +50,12 @@ if __name__ == "__main__":
     if ip:
         print(f"  手机打开（同一 WiFi）： http://{ip}:{settings.port}")
         print("  把这个网址发给孩子，用浏览器打开即可；可「添加到主屏幕」。")
+    if not settings.asr_model:
+        print("  语音听写：关闭")
+    elif is_local_asr_model(settings.asr_model):
+        print(f"  语音听写：本机 whisper {settings.asr_whisper_size}")
+    else:
+        print(f"  语音听写：云端 {settings.asr_model}")
     if settings.gate_enabled:
         print("  访问门禁：已开启（验证码写在 .env 的 ACCESS_CODE，不要把码印在网址里）")
     else:

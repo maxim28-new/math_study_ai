@@ -35,8 +35,10 @@ class Settings:
     port: int
     # 公网访问验证码。默认 maxim；设为 off/disabled/none 则关闭门禁。
     access_code: str
-    # 语音听写模型。留空或 off 则关闭语音。
+    # 语音听写。local / faster-whisper 走本机；其它名字走云端；off 关闭。
     asr_model: str
+    asr_whisper_size: str
+    asr_cloud_fallback: str
     # 出题作者（强模型）。deepseek | glm
     author_engine: str
     author_reasoning_effort: str
@@ -58,8 +60,12 @@ class Settings:
 
     @property
     def voice_enabled(self) -> bool:
-        """是否开放语音听写（需要密钥 + 听写模型）。"""
-        return self.is_configured and bool(self.asr_model)
+        """本机 whisper 不需要云端听写密钥；云端听写仍要文字模型密钥。"""
+        if not self.asr_model:
+            return False
+        if is_local_asr_model(self.asr_model):
+            return True
+        return self.is_configured
 
     @property
     def is_vision_configured(self) -> bool:
@@ -138,6 +144,8 @@ def load_settings() -> Settings:
         port=int(os.getenv("PORT", "8000")),
         access_code=_load_access_code(),
         asr_model=_load_asr_model(),
+        asr_whisper_size=_load_whisper_size(),
+        asr_cloud_fallback=_load_asr_cloud_fallback(),
         author_engine=_load_author_engine(),
         author_reasoning_effort=_load_author_effort(),
         deepseek_api_key=os.getenv("DEEPSEEK_API_KEY", "").strip(),
@@ -168,8 +176,38 @@ def _load_author_effort() -> str:
     return raw
 
 
+LOCAL_ASR_MODELS = frozenset({"local", "faster-whisper", "whisper", "whisper-local"})
+_WHISPER_SIZES = frozenset(
+    {"tiny", "base", "small", "medium", "large-v2", "large-v3", "turbo"}
+)
+
+
+def is_local_asr_model(model: str) -> bool:
+    return (model or "").strip().lower() in LOCAL_ASR_MODELS
+
+
+def normalize_asr_model(raw: str | None) -> str:
+    if raw is None or str(raw).strip() == "":
+        return "local"
+    model = str(raw).strip()
+    if model.lower() in ("off", "disabled", "none"):
+        return ""
+    return model
+
+
 def _load_asr_model() -> str:
-    raw = os.getenv("LLM_ASR_MODEL")
+    return normalize_asr_model(os.getenv("LLM_ASR_MODEL"))
+
+
+def _load_whisper_size() -> str:
+    raw = os.getenv("LLM_ASR_WHISPER_SIZE", "base").strip().lower() or "base"
+    if raw not in _WHISPER_SIZES:
+        return "base"
+    return raw
+
+
+def _load_asr_cloud_fallback() -> str:
+    raw = os.getenv("LLM_ASR_CLOUD_FALLBACK")
     if raw is None or raw.strip() == "":
         return "qwen3-asr-flash"
     model = raw.strip()

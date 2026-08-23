@@ -20,6 +20,8 @@ BOARD_KINDS = (
     "color_sequence",
 )
 COLOR_SEQUENCE_COLORS = ("red", "blue", "yellow", "green", "orange", "purple")
+PATH_MAX_SPAN = 24
+COLOR_MAX_COUNT = 16
 COLOR_SEQUENCE_LABELS = {
     "red": "红",
     "blue": "蓝",
@@ -264,7 +266,7 @@ def normalize_board_v3(raw: Any) -> dict[str, Any] | None:
             not isinstance(unit_raw, list)
             or not 2 <= len(unit_raw) <= 4
             or count is None
-            or not 3 <= count <= 10
+            or not 3 <= count <= COLOR_MAX_COUNT
             or count < len(unit_raw)
             or any(str(color) not in COLOR_SEQUENCE_COLORS for color in unit_raw)
             or not item
@@ -346,23 +348,40 @@ def _normalize_layer_sum(raw: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _normalize_path_count(raw: dict[str, Any]) -> dict[str, Any] | None:
-    start = _int(raw.get("start"))
-    target = _int(raw.get("target"))
-    if start is None or target is None or start < 0 or target <= start or target - start > 12:
+def normalize_path_model(start: Any, target: Any, moves: Any) -> dict[str, Any] | None:
+    start_n = _int(start)
+    target_n = _int(target)
+    if start_n is None or target_n is None or start_n < 0 or target_n <= start_n:
         return None
-    values = raw.get("moves")
-    if not isinstance(values, list) or not 1 <= len(values) <= 4:
+    if target_n - start_n > PATH_MAX_SPAN:
         return None
-    moves: list[int] = []
-    span = target - start
-    for value in values:
+    if not isinstance(moves, list) or not 1 <= len(moves) <= 4:
+        return None
+    cleaned: list[int] = []
+    span = target_n - start_n
+    for value in moves:
         n = _int(value)
         if n is None or n <= 0 or n > span:
             return None
-        if n not in moves:
-            moves.append(n)
-    if not moves or str(raw.get("ask") or "") != "number_of_paths":
+        if n not in cleaned:
+            cleaned.append(n)
+    if not cleaned:
+        return None
+    return {"start": start_n, "target": target_n, "moves": sorted(cleaned)}
+
+
+def normalize_sequence_count(unit: Any, count: Any) -> int | None:
+    n = _int(count)
+    if not isinstance(unit, list) or n is None:
+        return None
+    if not 3 <= n <= COLOR_MAX_COUNT or n < len(unit):
+        return None
+    return n
+
+
+def _normalize_path_count(raw: dict[str, Any]) -> dict[str, Any] | None:
+    model = normalize_path_model(raw.get("start"), raw.get("target"), raw.get("moves"))
+    if not model or str(raw.get("ask") or "") != "number_of_paths":
         return None
     reveal = str(raw.get("reveal") or "rules_only")
     if reveal != "rules_only":
@@ -370,9 +389,9 @@ def _normalize_path_count(raw: dict[str, Any]) -> dict[str, Any] | None:
     return {
         "schema": SCHEMA_VERSION,
         "kind": "path_count",
-        "start": start,
-        "target": target,
-        "moves": sorted(moves),
+        "start": model["start"],
+        "target": model["target"],
+        "moves": model["moves"],
         "ask": "number_of_paths",
         "purpose": "explore_choices",
         "reveal": reveal,
