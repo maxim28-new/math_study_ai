@@ -37,6 +37,7 @@ class Settings:
     access_code: str
     # 语音听写。local / faster-whisper 走本机；其它名字走云端；off 关闭。
     asr_model: str
+    asr_local_engine: str
     asr_whisper_size: str
     asr_cloud_fallback: str
     # 出题作者（强模型）。deepseek | glm
@@ -144,6 +145,7 @@ def load_settings() -> Settings:
         port=int(os.getenv("PORT", "8000")),
         access_code=_load_access_code(),
         asr_model=_load_asr_model(),
+        asr_local_engine=_load_local_engine(),
         asr_whisper_size=_load_whisper_size(),
         asr_cloud_fallback=_load_asr_cloud_fallback(),
         author_engine=_load_author_engine(),
@@ -199,10 +201,17 @@ def _load_asr_model() -> str:
     return normalize_asr_model(os.getenv("LLM_ASR_MODEL"))
 
 
+def _load_local_engine() -> str:
+    raw = os.getenv("LLM_ASR_LOCAL_ENGINE", "auto").strip().lower() or "auto"
+    if raw in ("auto", "sensevoice", "whisper"):
+        return raw
+    return "auto"
+
+
 def _load_whisper_size() -> str:
-    raw = os.getenv("LLM_ASR_WHISPER_SIZE", "base").strip().lower() or "base"
+    raw = os.getenv("LLM_ASR_WHISPER_SIZE", "small").strip().lower() or "small"
     if raw not in _WHISPER_SIZES:
-        return "base"
+        return "small"
     return raw
 
 

@@ -730,14 +730,20 @@ button, input, select, textarea { font-family: inherit; }
   text-align: center;
 }
 .voice-clear-btn {
-  flex: 0 0 72px;
+  flex: 0 0 64px;
+  align-self: stretch;
   border: 1px solid rgba(234, 223, 206, .95);
   border-radius: 16px;
   background: #fff8ef;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 750;
   cursor: pointer;
+}
+.voice-clear-btn:disabled {
+  color: var(--ink-soft);
+  background: #f3f0ea;
+  cursor: default;
 }
 .voice-clear-btn.hidden { display: none; }
 .app.layout-bring .voice-clear-btn { border-radius: 22px; }
@@ -1691,7 +1697,11 @@ button, input, select, textarea { font-family: inherit; }
   box-shadow: 0 6px 12px rgba(63, 91, 214, .22);
 }
 .app.layout-explore.talk-open .voice-orb svg { width: 18px; height: 18px; }
-.app.layout-explore.talk-open .voice-hint { display: none; }
+.app.layout-explore.talk-open .voice-hint { display: block; font-size: 11px; }
+.app.layout-explore.talk-open .voice-clear-btn {
+  flex: 0 0 56px;
+  min-height: 40px;
+}
 .app.layout-explore.talk-open .voice-label { font-size: 14px; }
 .app.layout-explore.talk-open .talk-btn {
   min-height: 36px;

@@ -17,6 +17,7 @@ from server.asr import (
     audio_to_wav_path,
     build_data_uri,
     build_transcribe_payload,
+    clean_transcript,
     extract_transcript,
 )
 from server.config import is_local_asr_model, normalize_asr_model, settings
@@ -53,6 +54,10 @@ class AsrHelperTests(unittest.TestCase):
         payload = build_transcribe_payload(b"abc", "audio/webm", "qwen3-asr-flash")
         self.assertEqual([m["role"] for m in payload["messages"]], ["user"])
         self.assertEqual(payload["messages"][0]["content"][0]["type"], "input_audio")
+
+    def test_clean_transcript_strips_sensevoice_tags(self):
+        self.assertEqual(clean_transcript("<|zh|><|NEUTRAL|>三加五"), "三加五")
+        self.assertEqual(clean_transcript("  格子  "), "格子")
 
     def test_default_asr_is_local(self):
         self.assertEqual(normalize_asr_model(None), "local")

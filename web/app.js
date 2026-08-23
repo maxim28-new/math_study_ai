@@ -1980,6 +1980,7 @@ function setTalkOpen(on) {
   }
   if (!state.talkOpen) stopVoiceTalk({ discard: true });
   else refreshVoiceAvailability();
+  syncVoiceClearButton();
 }
 
 function closeHelpSheet() {
@@ -2977,11 +2978,11 @@ function setVoiceUi(mode, message) {
     micBtn.disabled = mode === "blocked" || mode === "busy";
   }
   const copy = {
-    idle: ["点一下，跟小欧说", "说完再点一下，小欧帮你写成字"],
+    idle: ["点一下，跟小欧说", "说完再点一下。听错了就点旁边清空"],
     listening: ["正在听…", message || "说完再点一下"],
     busy: ["小欧在听写…", "马上写成字"],
     blocked: ["现在还不能发语音", message || ""],
-    error: ["再试一次", message || "刚才没听清"],
+    error: ["再试一次", message || "刚才没听清，听错就点清空"],
   };
   const pair = copy[mode] || copy.idle;
   if (label) label.textContent = pair[0];
@@ -3055,6 +3056,7 @@ async function transcribeVoiceBlob(blob) {
   try {
     if (!blob || blob.size < 400) {
       setVoiceUi("error", "再说长一点点，小欧才听得清。");
+      syncVoiceClearButton();
       return;
     }
     const audio = await blobToBase64(blob);
@@ -3069,7 +3071,8 @@ async function transcribeVoiceBlob(blob) {
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.text) {
-      setVoiceUi("error", data.error || "刚才没听清，再说一次吧。");
+      setVoiceUi("error", data.error || "刚才没听清，听错就点清空。");
+      syncVoiceClearButton();
       return;
     }
     const input = $("#input");
@@ -3084,9 +3087,11 @@ async function transcribeVoiceBlob(blob) {
     rememberVoiceUndo(before, input ? input.value : "");
     setVoiceUi("idle");
     const hint = $("#voiceHint");
-    if (hint) hint.textContent = "听好了，说错就点旁边清空";
+    if (hint) hint.textContent = "听好了，听错就点旁边清空";
+    syncVoiceClearButton();
   } catch (e) {
-    setVoiceUi("error", "刚才没听清，再说一次吧。");
+    setVoiceUi("error", "刚才没听清，听错就点清空。");
+    syncVoiceClearButton();
   } finally {
     voiceSession.busy = false;
   }
@@ -3150,37 +3155,45 @@ async function toggleVoiceTalk() {
   }
 }
 
+function syncVoiceClearButton() {
+  const btn = $("#voiceUndoBtn");
+  const input = $("#input");
+  if (!btn) return;
+  btn.classList.remove("hidden");
+  const hasText = !!(input && String(input.value || "").trim());
+  btn.disabled = !hasText;
+}
+
 function rememberVoiceUndo(before, after) {
   voiceSession.lastBefore = before;
   voiceSession.lastAfter = after;
-  const btn = $("#voiceUndoBtn");
-  if (btn) btn.classList.remove("hidden");
+  syncVoiceClearButton();
 }
 
 function clearVoiceUndo() {
   voiceSession.lastBefore = null;
   voiceSession.lastAfter = "";
-  const btn = $("#voiceUndoBtn");
-  if (btn) btn.classList.add("hidden");
+  syncVoiceClearButton();
 }
 
 function undoLastVoice() {
   const input = $("#input");
-  if (!input || voiceSession.lastBefore == null) return;
-  if (input.value !== voiceSession.lastAfter) {
-    clearVoiceUndo();
-    return;
+  if (!input) return;
+  if (voiceSession.lastBefore != null && input.value === voiceSession.lastAfter) {
+    input.value = voiceSession.lastBefore;
+  } else {
+    input.value = "";
   }
-  input.value = voiceSession.lastBefore;
   autoGrow(input);
   input.focus();
   clearVoiceUndo();
   const hint = $("#voiceHint");
-  if (hint) hint.textContent = "已经撤掉刚才那句，再说一次就好";
+  if (hint) hint.textContent = "已经清掉了，再说一次就好";
 }
 
 function initVoice() {
   refreshVoiceAvailability();
+  syncVoiceClearButton();
   const talkBtn = $("#voiceTalkBtn");
   if (talkBtn) talkBtn.addEventListener("click", toggleVoiceTalk);
   const micBtn = $("#micBtn");
@@ -3190,7 +3203,11 @@ function initVoice() {
   const input = $("#input");
   if (input) {
     input.addEventListener("input", () => {
-      if (voiceSession.lastAfter && input.value !== voiceSession.lastAfter) clearVoiceUndo();
+      if (voiceSession.lastAfter && input.value !== voiceSession.lastAfter) {
+        voiceSession.lastBefore = null;
+        voiceSession.lastAfter = "";
+      }
+      syncVoiceClearButton();
     });
   }
 }
