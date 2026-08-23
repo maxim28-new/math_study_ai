@@ -76,6 +76,8 @@ class GateHelpersTests(unittest.TestCase):
         self.assertFalse(is_public_path("/api/config"))
         self.assertFalse(is_public_path("/api/chat"))
         self.assertFalse(is_public_path("/api/author"))
+        self.assertFalse(is_public_path("/v2"))
+        self.assertFalse(is_public_path("/v2/"))
 
 
 class AccessGateHttpTests(unittest.TestCase):
@@ -142,6 +144,12 @@ class AccessGateHttpTests(unittest.TestCase):
         with override_access_code(""):
             resp = self.client.get("/index.html")
         self.assertEqual(resp.status_code, 200)
+
+    def test_v2_workshop_redirects_to_gate_without_cookie(self):
+        with override_access_code("maxim"):
+            resp = self.client.get("/v2/")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.headers["location"], "/gate.html")
 
     def test_unlock_rate_limited_after_repeated_failures(self):
         with override_access_code("maxim"):

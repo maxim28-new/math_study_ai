@@ -47,6 +47,7 @@ if __name__ == "__main__":
     elif not settings.is_unified:
         print("  拍照 OCR ：未配置（可选填 LLM_VISION_*，或改用 unified 模式）")
     print(f"  本机打开： http://127.0.0.1:{settings.port}")
+    print(f"  V2 工坊： http://127.0.0.1:{settings.port}/v2/")
     ip = lan_ip()
     if ip:
         print(f"  手机打开（同一 WiFi）： http://{ip}:{settings.port}")

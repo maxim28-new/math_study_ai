@@ -20,3 +20,8 @@ tests/e2e/artifacts/
 
 # 本机听写模型（SenseVoice / whisper 权重）
 .cache/
+
+# V2 frontend
+v2/node_modules/
+v2/apps/web/dist/
+v2/**/*.tsbuildinfo

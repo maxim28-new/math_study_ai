@@ -1,0 +1,27 @@
+{
+  "name": "xiaoou-math-world-v2",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Xiaoou Math World V2 — voxel workshop probe",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --base /v2/",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "@types/three": "^0.170.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  }
+}
