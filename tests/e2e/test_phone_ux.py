@@ -51,10 +51,8 @@ class PhoneUxTests(HeadlessPhoneTests):
             closed = self._layout(page)
             self.assertTrue(closed["talkVisible"], closed)
             self.assertFalse(closed["plusVisible"], "加号仍藏在我想说后面")
-            self.assertTrue(closed["dockNewVisible"], "换一题应停在底栏，不必先点我想说")
+            self.assertFalse(closed.get("dockNewVisible"), "换一题应进家长设置，不占底栏")
             self.assertTrue(closed["easierVisible"], "太难了应停在小欧说旁边，不必先点加号")
-            self.assertTrue(closed["sendVisible"], closed)
-            self.assertFalse(closed["sendDisabled"], "操作界面也应能发画板")
             self._shot(page, "ux-talk-closed.png")
 
             self.assertEqual(page.locator("#easierBtn").inner_text().strip(), "太难了")
@@ -68,13 +66,15 @@ class PhoneUxTests(HeadlessPhoneTests):
             opened = self._layout(page)
             self.assertTrue(opened["talkOpen"], opened)
             self.assertTrue(opened["plusVisible"], opened)
-            self.assertTrue(opened["dockNewVisible"], opened)
-            self.assertFalse(opened["sendDisabled"], opened)
             page.locator("#plusBtn").click()
-            page.locator("#newQuestionBtn").wait_for(state="visible")
-            self.assertTrue(page.locator("#hintBtn").is_visible())
-            self.assertEqual(page.locator("#hintBtn").inner_text().strip(), "太难了")
+            page.locator("#doodleSendBtn").wait_for(state="visible")
+            self.assertEqual(page.locator("#doodleSendBtn").inner_text().strip(), "发画板")
+            self.assertFalse(page.locator("#newQuestionBtn").count())
             page.locator("#attachCancel").click()
+            page.locator("#gearBtn").click()
+            self.assertTrue(page.locator("#settingsNewQuestionBtn").is_visible())
+            self.assertEqual(page.locator("#settingsNewQuestionBtn").inner_text().strip(), "换一题")
+            page.locator("#drawerClose").click()
             page.locator("#historyOpenBtn").click()
             page.locator("#discoveryStrip").wait_for(state="attached")
             self._shot(page, "ux-talk-open-attach.png")
@@ -109,7 +109,7 @@ class PhoneUxTests(HeadlessPhoneTests):
                 timeout=8000,
             )
             self._shot(page, "ux-doodle-before-send.png")
-            page.locator("#doodleSendBtn").click()
+            self._click_send_board(page)
             deadline = time.time() + 10
             sent = []
             while time.time() < deadline:
@@ -179,7 +179,7 @@ class PhoneUxTests(HeadlessPhoneTests):
             self.assertNotEqual(tray_after, tray_before, (tray_before, tray_after))
             self.assertEqual(len(self.chat_posts), before, self.chat_posts)
             self.assertFalse(page.locator("#doodleSendBtn").is_disabled())
-            page.locator("#doodleSendBtn").click()
+            self._click_send_board(page)
             deadline = time.time() + 10
             sent = []
             while time.time() < deadline:
@@ -287,10 +287,9 @@ class PhoneUxTests(HeadlessPhoneTests):
                 self.assertGreater(closed["boardBox"]["h"], 24, (label, closed["boardBox"]))
                 self.assertTrue(closed["caption"], label)
                 self.assertTrue(closed["talkVisible"], label)
-                self.assertTrue(closed["dockNewVisible"], label)
+                self.assertFalse(closed.get("dockNewVisible"), label)
                 self.assertFalse(closed["plusVisible"], label)
                 self.assertTrue(opened["plusVisible"], label)
-                self.assertTrue(opened["dockNewVisible"], label)
                 if "snap_grid" in label:
                     self.assertTrue(closed["tray"].strip(), (label, closed["tray"]))
                 else:

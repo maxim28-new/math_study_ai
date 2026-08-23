@@ -120,6 +120,8 @@ def build_agent_prompt(
         "marked": visible.get("marked"),
         "emphasis": visible.get("emphasis"),
         "allowed_layers": (workspace.get("problem") or {}).get("allowed_layers") or [],
+        "path_model": visible.get("path_model"),
+        "sequence_count": visible.get("sequence_count"),
     }
     return (
         f"{base}\n\n{skills.SKILL_CATALOG}\n\n"

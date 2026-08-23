@@ -20,6 +20,7 @@ WRITE_TOOLS = {
     "lesson_mark_child_acceptance",
     "board_switch_view",
     "board_set_rows",
+    "board_set_model",
 }
 
 READ_TOOLS = {
@@ -159,6 +160,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             }
         },
         ["counts"],
+    ),
+    _fn(
+        "board_set_model",
+        "扩展或改当前画板的数学模型。跳格子可改 start/target/moves；颜色排队可改 count。成功后再对孩子说新的格子或朵数。失败不要假装画面已经变了。",
+        {
+            "start": {"type": "integer", "minimum": 0, "maximum": 40},
+            "target": {"type": "integer", "minimum": 1, "maximum": 40},
+            "moves": {
+                "type": "array",
+                "items": {"type": "integer", "minimum": 1, "maximum": 24},
+            },
+            "count": {"type": "integer", "minimum": 3, "maximum": 16},
+        },
     ),
 ]
 
@@ -497,6 +511,35 @@ def set_rows(workspace: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
     return _ok(workspace, counts=occ.get("counts"), tray_left=occ.get("tray_left"))
 
 
+def set_model(workspace: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    patch = {}
+    for key in ("start", "target", "count"):
+        if key in args:
+            n = V.as_int(args.get(key))
+            if n is None:
+                return _fail("model_invalid")
+            patch[key] = n
+    if "moves" in args:
+        raw = args.get("moves")
+        if not isinstance(raw, list):
+            return _fail("moves_invalid")
+        moves = []
+        for item in raw:
+            n = V.as_int(item)
+            if n is None:
+                return _fail("moves_invalid")
+            moves.append(n)
+        patch["moves"] = moves
+    if not patch:
+        return _fail("model_required")
+    result = WS.apply_board_model(workspace, patch)
+    if not result.get("ok"):
+        extras = {key: value for key, value in result.items() if key not in {"ok", "error"}}
+        return _fail(str(result.get("error") or "set_model_failed"), **extras)
+    extras = {key: value for key, value in result.items() if key not in {"ok", "error"}}
+    return _ok(workspace, **extras)
+
+
 EXECUTORS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]] = {
     "workspace_inspect": inspect,
     "workspace_inspect_visible": inspect_visible,
@@ -512,6 +555,7 @@ EXECUTORS: dict[str, Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]]]
     "lesson_mark_child_acceptance": mark_child_acceptance,
     "board_switch_view": switch_view,
     "board_set_rows": set_rows,
+    "board_set_model": set_model,
 }
 
 

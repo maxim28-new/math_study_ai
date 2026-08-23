@@ -173,6 +173,47 @@ class WorkspaceToolTests(unittest.TestCase):
         self.assertEqual(ws["view"]["occupancy"]["tray_left"], 0)
         self.assertEqual(len(ws["view"]["occupancy"]["occupied"]), 12)
 
+    def test_set_path_model_extends_target(self) -> None:
+        card = {
+            "hook": "从0跳到10",
+            "insight": "最后一跳只能从更近的级来",
+            "insight_key": "last_jump_recurrence",
+            "first_question": "到第10级有几种走法",
+            "board": {
+                "schema": 3,
+                "kind": "path_count",
+                "model": {"start": 0, "target": 10, "moves": [2, 5]},
+                "task": {"action": "enumerate", "ask": "number_of_paths", "prompt": "跳一跳"},
+                "view": {"reveal": "rules_only"},
+            },
+        }
+        ws = WS.seed_from_card(card, "algebra")
+        self.assertEqual(ws["problem"]["path_model"]["target"], 10)
+        snap = tools.execute_tool("board_set_model", ws, {"target": 11})
+        self.assertTrue(snap["ok"], snap)
+        self.assertEqual(ws["problem"]["path_model"]["target"], 11)
+        self.assertEqual(ws["problem"]["path_model"]["moves"], [2, 5])
+        too_far = tools.execute_tool("board_set_model", ws, {"target": 40})
+        self.assertFalse(too_far["ok"], too_far)
+        self.assertEqual(ws["problem"]["path_model"]["target"], 11)
+        grid = WS.seed_from_card(
+            {
+                "hook": "摆一摆",
+                "insight": "均分",
+                "first_question": "摆",
+                "board": {
+                    "schema": 3,
+                    "kind": "snap_grid",
+                    "model": {"rows": 2, "cols": 3, "tray": 6},
+                    "task": {"action": "arrange", "ask": "observe", "prompt": "摆"},
+                    "view": {"reveal": "empty_grid_and_tiles"},
+                },
+            },
+            "geometry",
+        )
+        refused = tools.execute_tool("board_set_model", grid, {"target": 11})
+        self.assertFalse(refused["ok"])
+
 
 if __name__ == "__main__":
     unittest.main()
