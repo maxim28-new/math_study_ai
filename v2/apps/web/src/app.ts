@@ -10,8 +10,6 @@ const FLIP_KEY = "xiaoou-v2-flip-rotate";
 
 export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
   const root = document.documentElement;
-  const app = document.getElementById("app");
-  const stage = document.getElementById("stage");
   const rotateGate = document.getElementById("rotateGate");
   const hintBar = document.getElementById("hintBar");
   const confirmBtn = document.getElementById("confirmLandscapeBtn");
@@ -69,21 +67,12 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
   const applyLayout = (): void => {
     const layout = currentLayout();
     const rotate = flipped && layout.rotate ? (layout.rotate === "cw" ? "ccw" : "cw") : layout.rotate;
+    root.style.setProperty("--play-w", `${layout.width}px`);
+    root.style.setProperty("--play-h", `${layout.height}px`);
     root.classList.toggle("is-landscape", layout.landscape);
     root.classList.toggle("is-portrait", !layout.landscape);
     root.classList.toggle("force-landscape-cw", rotate === "cw");
     root.classList.toggle("force-landscape-ccw", rotate === "ccw");
-    if (app && stage) {
-      const shellW = Math.max(app.clientWidth, 1);
-      const shellH = Math.max(app.clientHeight, 1);
-      if (rotate) {
-        root.style.setProperty("--force-sx", String(layout.width / shellW));
-        root.style.setProperty("--force-sy", String(layout.height / shellH));
-      } else {
-        root.style.removeProperty("--force-sx");
-        root.style.removeProperty("--force-sy");
-      }
-    }
     if (rotateGate) {
       rotateGate.hidden = layout.landscape;
     }

@@ -28,6 +28,18 @@ SHELL_JS = """() => {
     gateDisplay: getComputedStyle(document.getElementById('rotateGate')).display,
     hintHidden: !!(document.getElementById('hintBar')?.hidden),
     hintText: (document.getElementById('hintBar')?.innerText || '').trim(),
+    hintBox: (() => {
+      const el = document.getElementById('hintBar');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        offsetW: Math.round(el.offsetWidth),
+        offsetH: Math.round(el.offsetHeight),
+        aabbW: Math.round(r.width),
+        aabbH: Math.round(r.height),
+      };
+    })(),
+    stageLayout: stage ? { w: Math.round(stage.offsetWidth), h: Math.round(stage.offsetHeight) } : null,
     inner: { w: window.innerWidth, h: window.innerHeight },
     app: box(app),
     stage: box(stage),
@@ -129,9 +141,20 @@ class V2WorkshopPhoneTests(HeadlessPhoneTests):
         self.assertEqual(last["gateDisplay"], "none")
         self.assertFalse(last["hintHidden"], last)
         self.assertIn("按住一堆积木", last["hintText"])
+        self.assertIn("河", last["hintText"])
+        self.assertIn("桥", last["hintText"])
         self.assertIsNotNone(last["app"])
         self.assertLess(last["app"]["w"], last["app"]["h"])
         self.assertGreater(last["canvasBuf"]["w"], last["canvasBuf"]["h"])
+        self.assertIsNotNone(last["stageLayout"])
+        self.assertGreater(last["stageLayout"]["w"], last["stageLayout"]["h"])
+        hint = last["hintBox"]
+        self.assertIsNotNone(hint)
+        self.assertGreater(hint["offsetW"], hint["offsetH"] * 3)
+        self.assertGreater(hint["aabbH"], hint["aabbW"] * 3)
+        layout_aspect = hint["offsetW"] / max(hint["offsetH"], 1)
+        aabb_aspect = hint["aabbH"] / max(hint["aabbW"], 1)
+        self.assertLess(abs(layout_aspect - aabb_aspect) / layout_aspect, 0.35, hint)
 
     def test_portrait_shows_rotate_gate(self) -> None:
         page = self._launch()

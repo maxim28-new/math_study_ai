@@ -119,32 +119,80 @@ export class WorkshopRenderer {
     table.position.set(8, -0.21, 6);
     this.scene.add(table);
 
-    const river = new THREE.Mesh(
-      new THREE.BoxGeometry(2.4, 0.12, 5.2),
-      new THREE.MeshStandardMaterial({ color: 0x3f86ad, roughness: 0.28 }),
+    const pileMat = new THREE.Mesh(
+      new THREE.BoxGeometry(15.2, 0.1, 4.6),
+      new THREE.MeshStandardMaterial({ color: 0x7d9268, roughness: 0.88 }),
     );
-    river.position.set(8, 0.02, 9.4);
-    this.scene.add(river);
+    pileMat.position.set(8, 0.05, 2.35);
+    this.scene.add(pileMat);
 
-    this.addSlot("bridge_left", 3.4, 9.4, 5.2);
-    this.addSlot("bridge_right", 12.6, 9.4, 5.2);
+    this.addRiver();
+    this.addBridge("bridge_left", 3.55, 10, 1, "左桥");
+    this.addBridge("bridge_right", 12.45, 10, -1, "右桥");
+    this.scene.add(makeLabelSprite("积木", 8, 1.7, 4.55, 2.4));
   }
 
-  private addSlot(id: string, x: number, z: number, width: number): void {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.28, 3.8),
+  private addRiver(): void {
+    const channel = new THREE.Mesh(
+      new THREE.BoxGeometry(4.4, 0.42, 9.4),
+      new THREE.MeshStandardMaterial({ color: 0x3d6a7a, roughness: 0.7 }),
+    );
+    channel.position.set(8, -0.14, 9.1);
+    this.scene.add(channel);
+
+    const water = new THREE.Mesh(
+      new THREE.BoxGeometry(3.8, 0.18, 8.8),
       new THREE.MeshStandardMaterial({
-        color: 0xb07a45,
-        roughness: 0.55,
-        emissive: 0x3a2412,
-        emissiveIntensity: 0.35,
+        color: 0x2f8fbf,
+        roughness: 0.16,
+        metalness: 0.18,
+        emissive: 0x0a3a58,
+        emissiveIntensity: 0.25,
       }),
     );
-    mesh.position.set(x, 0.14, z);
-    mesh.userData.entity = { kind: "slot", id };
-    this.scene.add(mesh);
-    this.slotMeshes.set(id, mesh);
-    this.pickRoots.push(mesh);
+    water.position.set(8, 0.0, 9.1);
+    this.scene.add(water);
+  }
+
+  private addBridge(id: string, x: number, z: number, towardRiver: number, label: string): void {
+    const wood = new THREE.MeshStandardMaterial({ color: 0xc48a48, roughness: 0.58 });
+    const darkWood = new THREE.MeshStandardMaterial({ color: 0x6d4528, roughness: 0.62 });
+    const stone = new THREE.MeshStandardMaterial({ color: 0x8d8a84, roughness: 0.84 });
+
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.4, 3.2), wood);
+    deck.position.set(x + towardRiver * 0.55, 0.38, z);
+    deck.userData.entity = { kind: "slot", id };
+    this.scene.add(deck);
+    this.slotMeshes.set(id, deck);
+    this.pickRoots.push(deck);
+
+    const deckX = x + towardRiver * 0.55;
+    for (let i = 0; i < 7; i += 1) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 3.1), darkWood);
+      plank.position.set(deckX - 2.55 + i * 0.86, 0.6, z);
+      this.scene.add(plank);
+    }
+
+    for (const zOff of [-1.52, 1.52]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.4, 0.16), darkWood);
+      rail.position.set(deckX, 0.78, z + zOff);
+      this.scene.add(rail);
+      for (const xOff of [-2.5, 0, 2.5]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.78, 0.18), darkWood);
+        post.position.set(deckX + xOff, 0.78, z + zOff);
+        this.scene.add(post);
+      }
+    }
+
+    const bank = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.78, 3.7), stone);
+    bank.position.set(x - towardRiver * 2.2, 0.22, z);
+    this.scene.add(bank);
+
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 0.7), stone);
+    pier.position.set(deckX + towardRiver * 2.7, 0.08, z);
+    this.scene.add(pier);
+
+    this.scene.add(makeLabelSprite(label, deckX, 2.15, z - 2.45, 2.5));
   }
 
   private syncCubes(state: InteractionPrototypeState, visual: DragVisual | null): void {
@@ -245,10 +293,60 @@ export class WorkshopRenderer {
     }
     for (const [id, mesh] of this.slotMeshes) {
       const mat = mesh.material as THREE.MeshStandardMaterial;
-      mat.color.set(id === slotId ? 0xb8874d : 0x8a6844);
+      mat.color.set(id === slotId ? 0xe0b36a : 0xc48a48);
+      mat.emissive.set(id === slotId ? 0x5a3a12 : 0x000000);
+      mat.emissiveIntensity = id === slotId ? 0.28 : 0;
     }
     this.highlightedSlot = slotId;
   }
+}
+
+function makeLabelSprite(text: string, x: number, y: number, z: number, width: number): THREE.Sprite {
+  const canvas = document.createElement("canvas");
+  canvas.width = 384;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  const spriteMat = new THREE.SpriteMaterial({ transparent: true, depthTest: true });
+  if (ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const padX = 18;
+    const padY = 22;
+    ctx.fillStyle = "rgba(36, 48, 58, 0.9)";
+    roundRectPath(ctx, padX, padY, canvas.width - padX * 2, canvas.height - padY * 2, 28);
+    ctx.fill();
+    ctx.fillStyle = "#fff8ee";
+    ctx.font = "bold 56px 'PingFang SC', 'Noto Sans SC', 'WenQuanYi Zen Hei', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 2);
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    spriteMat.map = map;
+  } else {
+    spriteMat.color.set(0x24303a);
+  }
+  const sprite = new THREE.Sprite(spriteMat);
+  sprite.position.set(x, y, z);
+  sprite.scale.set(width, width * (128 / 384), 1);
+  return sprite;
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
 }
 
 function extraLift(group: PrototypeGroup, visual: DragVisual | null): number {

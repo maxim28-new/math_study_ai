@@ -1,8 +1,8 @@
 :root {
   color-scheme: light;
   font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
-  --force-sx: 1;
-  --force-sy: 1;
+  --play-w: 100%;
+  --play-h: 100%;
 }
 
 html,
@@ -41,12 +41,21 @@ body {
   touch-action: none;
 }
 
+html.force-landscape-cw #stage,
+html.force-landscape-ccw #stage {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: var(--play-w);
+  height: var(--play-h);
+}
+
 html.force-landscape-cw #stage {
-  transform: rotate(90deg) scale(var(--force-sx), var(--force-sy));
+  transform: translate(-50%, -50%) rotate(90deg);
 }
 
 html.force-landscape-ccw #stage {
-  transform: rotate(-90deg) scale(var(--force-sx), var(--force-sy));
+  transform: translate(-50%, -50%) rotate(-90deg);
 }
 
 #workshop {
@@ -149,12 +158,13 @@ html.is-landscape #rotateGate,
   right: 12px;
   bottom: calc(10px + env(safe-area-inset-bottom));
   margin: 0;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-radius: 14px;
-  background: rgba(36, 48, 58, 0.72);
+  background: rgba(36, 48, 58, 0.78);
   color: #fff8ee;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.45;
+  font-weight: 600;
   text-align: center;
   pointer-events: none;
 }

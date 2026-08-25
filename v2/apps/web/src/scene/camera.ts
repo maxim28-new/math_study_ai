@@ -2,9 +2,9 @@ import * as THREE from "three";
 
 const LOOK_AT = new THREE.Vector3(8, 0, 6);
 
-/** Landscape half-height: small enough that the table fills a phone on its side. */
+/** Landscape half-height: table fills a phone on its side without cropping piles. */
 export const WORKSHOP_VIEW = {
-  halfHeight: 6.2,
+  halfHeight: 5.6,
 } as const;
 
 export function orthoExtents(aspect: number): { halfWidth: number; halfHeight: number } {

@@ -8,16 +8,14 @@ import {
 } from "../apps/web/src/scene/picking.ts";
 
 describe("forced-landscape picking", () => {
-  it("maps the visual center back to the layout center after rotate+scale", () => {
-    const sx = 844 / 390;
-    const sy = 390 / 844;
-    // rotate(90deg) scale(sx, sy): x' = -sy*y, y' = sx*x
-    const matrix = { a: 0, b: sx, c: -sy, d: 0 };
+  it("maps the visual center back to the layout center after a uniform 90deg rotate", () => {
+    // rotate(90deg): x' = -y, y' = x
+    const matrix = { a: 0, b: 1, c: -1, d: 0 };
     const visual = { left: 0, top: 0, width: 390, height: 844 };
-    const local = clientToLocal(195, 422, visual, 390, 844, matrix);
-    expect(local.x).toBeCloseTo(195, 5);
-    expect(local.y).toBeCloseTo(422, 5);
-    const ndc = ndcFromLocal(local.x, local.y, 390, 844);
+    const local = clientToLocal(195, 422, visual, 844, 390, matrix);
+    expect(local.x).toBeCloseTo(422, 5);
+    expect(local.y).toBeCloseTo(195, 5);
+    const ndc = ndcFromLocal(local.x, local.y, 844, 390);
     expect(ndc.x).toBeCloseTo(0, 5);
     expect(ndc.y).toBeCloseTo(0, 5);
   });
