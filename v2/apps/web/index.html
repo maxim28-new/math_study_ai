@@ -7,10 +7,27 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>小欧数学世界</title>
+  <script>
+    (() => {
+      const type = screen.orientation && screen.orientation.type;
+      const landscape = (type && type.indexOf("landscape") === 0)
+        || (typeof orientation === "number" && Math.abs(orientation) === 90)
+        || innerWidth >= innerHeight;
+      document.documentElement.classList.add(landscape ? "is-landscape" : "is-portrait");
+    })();
+  </script>
 </head>
 <body>
+  <div id="rotateGate">
+    <div class="rotate-card">
+      <div class="rotate-icon" aria-hidden="true"></div>
+      <p class="rotate-title">把手机横过来</p>
+      <p class="rotate-copy">工坊是横着玩的。转过去以后，按住积木拖到桥上。</p>
+    </div>
+  </div>
   <div id="app">
     <canvas id="workshop" aria-label="桥梁工坊"></canvas>
+    <p id="hintBar" hidden>按住一堆积木，拖到两边的桥上。两座桥一样长，就过了。</p>
   </div>
   <script type="module" src="./src/main.ts"></script>
 </body>

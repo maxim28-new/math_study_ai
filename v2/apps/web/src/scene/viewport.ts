@@ -1,19 +1,21 @@
+import {
+  playSize,
+  readOrientationInput,
+  type PlaySize,
+} from "./orientation.ts";
+
 export interface ViewportSize {
   width: number;
   height: number;
 }
 
-export function readViewportSize(
-  canvas: Pick<HTMLCanvasElement, "clientWidth" | "clientHeight">,
+export function readPlayLayout(
+  fallback: ViewportSize,
   view: Pick<VisualViewport, "width" | "height"> | null = null,
-  fallback: ViewportSize = { width: 1280, height: 720 },
-): ViewportSize {
-  if (view && view.width > 0 && view.height > 0) {
-    return { width: view.width, height: view.height };
-  }
-  const width = canvas.clientWidth || fallback.width;
-  const height = canvas.clientHeight || fallback.height;
-  return { width: Math.max(width, 1), height: Math.max(height, 1) };
+  screenLike: { orientation?: { type?: string; angle?: number } } | null = null,
+  windowAngle?: number,
+): PlaySize {
+  return playSize(readOrientationInput(view, fallback, screenLike, windowAngle));
 }
 
 export function bindViewportResize(onResize: () => void): () => void {

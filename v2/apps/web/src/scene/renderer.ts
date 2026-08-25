@@ -126,16 +126,21 @@ export class WorkshopRenderer {
     river.position.set(8, 0.02, 9.4);
     this.scene.add(river);
 
-    this.addSlot("bridge_left", 3.4, 9.4, 4.6);
-    this.addSlot("bridge_right", 12.6, 9.4, 4.6);
+    this.addSlot("bridge_left", 3.4, 9.4, 5.2);
+    this.addSlot("bridge_right", 12.6, 9.4, 5.2);
   }
 
   private addSlot(id: string, x: number, z: number, width: number): void {
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(width, 0.16, 3.4),
-      new THREE.MeshStandardMaterial({ color: 0x8a6844, roughness: 0.7 }),
+      new THREE.BoxGeometry(width, 0.28, 3.8),
+      new THREE.MeshStandardMaterial({
+        color: 0xb07a45,
+        roughness: 0.55,
+        emissive: 0x3a2412,
+        emissiveIntensity: 0.35,
+      }),
     );
-    mesh.position.set(x, 0.08, z);
+    mesh.position.set(x, 0.14, z);
     mesh.userData.entity = { kind: "slot", id };
     this.scene.add(mesh);
     this.slotMeshes.set(id, mesh);

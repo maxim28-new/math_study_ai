@@ -81,12 +81,18 @@ class V2IsolationTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn('data-v2="workshop"', resp.text)
 
-    def test_v2_source_does_not_block_phones(self):
+    def test_v2_asks_phones_to_rotate_and_explains_the_task(self):
         html = read("v2/apps/web/index.html")
         css = read("v2/apps/web/src/styles.css")
+        js = read("v2/apps/web/src/app.ts")
+        self.assertIn("把手机横过来", html)
+        self.assertIn("按住一堆积木", html)
+        self.assertIn("id=\"rotateGate\"", html)
+        self.assertIn("id=\"hintBar\"", html)
         self.assertNotIn("把平板横过来", html)
-        self.assertNotIn("rotateHint", html)
         self.assertNotIn("orientation: portrait", css)
+        self.assertIn("is-landscape", js)
+        self.assertIn("force-landscape-cw", js)
 
     def test_v1_web_assets_do_not_import_v2(self):
         for rel in ("web/index.html", "web/styles.css", "web/app.js"):

@@ -2,20 +2,15 @@ import * as THREE from "three";
 
 const LOOK_AT = new THREE.Vector3(8, 0, 6);
 
+/** Landscape half-height: small enough that the table fills a phone on its side. */
 export const WORKSHOP_VIEW = {
-  minHalfWidth: 11,
-  minHalfHeight: 8.6,
+  halfHeight: 6.2,
 } as const;
 
 export function orthoExtents(aspect: number): { halfWidth: number; halfHeight: number } {
   const safe = aspect > 0.05 ? aspect : 1;
-  let halfHeight = WORKSHOP_VIEW.minHalfHeight;
-  let halfWidth = halfHeight * safe;
-  if (halfWidth < WORKSHOP_VIEW.minHalfWidth) {
-    halfWidth = WORKSHOP_VIEW.minHalfWidth;
-    halfHeight = halfWidth / safe;
-  }
-  return { halfWidth, halfHeight };
+  const halfHeight = WORKSHOP_VIEW.halfHeight;
+  return { halfWidth: halfHeight * safe, halfHeight };
 }
 
 export function createWorkshopCamera(aspect: number): THREE.OrthographicCamera {
@@ -28,7 +23,7 @@ export function createWorkshopCamera(aspect: number): THREE.OrthographicCamera {
     0.1,
     80,
   );
-  camera.position.set(18, 15.5, 18);
+  camera.position.set(16.5, 14, 16.5);
   camera.lookAt(LOOK_AT);
   camera.updateProjectionMatrix();
   return camera;
