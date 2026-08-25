@@ -7,6 +7,7 @@ import hmac
 import time
 from collections import defaultdict
 from typing import Optional
+from urllib.parse import quote, unquote
 
 COOKIE_NAME = "xiaoou_gate"
 COOKIE_MAX_AGE = 30 * 24 * 3600
@@ -59,6 +60,24 @@ def codes_match(given: str, expected: str) -> bool:
 
 def is_public_path(path: str) -> bool:
     return path in PUBLIC_PATHS
+
+
+def safe_next_path(raw: Optional[str]) -> str:
+    """Only allow same-origin relative paths after unlock."""
+    path = unquote(raw or "").strip() or "/"
+    if not path.startswith("/") or path.startswith("//") or "://" in path:
+        return "/"
+    if path.startswith("/gate.html"):
+        return "/"
+    return path
+
+
+def gate_location(request_path: str) -> str:
+    """Send browsers to the gate, then back to V2 if that is where they started."""
+    nxt = safe_next_path(request_path)
+    if nxt in ("/v2", "/v2/") or nxt.startswith("/v2/"):
+        return f"/gate.html?next={quote('/v2/')}"
+    return "/gate.html"
 
 
 def request_unlocked(access_code: str, cookie_value: Optional[str], header_code: str) -> bool:

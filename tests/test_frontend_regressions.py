@@ -11,6 +11,19 @@ def read(rel_path: str) -> str:
 
 
 class FrontendRegressionTests(unittest.TestCase):
+    def test_v1_web_assets_do_not_load_v2(self):
+        html = read("web/index.html")
+        css = read("web/styles.css")
+        app = read("web/app.js")
+        self.assertNotIn("/v2/", html)
+        self.assertNotIn("/v2/", css)
+        self.assertNotIn("/v2/", app)
+        self.assertNotIn("data-v2", html)
+        self.assertIn("小欧 · 手机版", html)
+        gate = read("web/gate.html")
+        self.assertIn('URLSearchParams(location.search).get("next")', gate)
+        self.assertIn("window.location.replace(next)", gate)
+
     def test_web_assets_are_cache_busted(self):
         html = read("web/index.html")
 

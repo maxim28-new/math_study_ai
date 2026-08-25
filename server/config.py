@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT_DIR / "web"
+V2_DIST_DIR = ROOT_DIR / "v2" / "apps" / "web" / "dist"
 
 # 优先加载项目根目录下的 .env（若存在）。
 load_dotenv(ROOT_DIR / ".env")

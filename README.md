@@ -383,6 +383,26 @@ math_study_ai/
 
 ---
 
+## V2 小欧数学世界（开发中）
+
+V1 入口仍是 `/`。V2 体素工坊走独立目录和 `/v2/`，不会改 `web/` 里的手机 H5。
+
+```bash
+cd v2
+npm install
+npm test
+npm run build
+```
+
+构建后重启 `python run.py`。公网（VPS）打开：
+
+- V1：`https://<公网域名>/`，先输入 `.env` 里的 `ACCESS_CODE`
+- V2 工坊：`https://<公网域名>/v2/`，同一套验证码；解锁后会回到工坊
+
+本机开发仍是 `http://127.0.0.1:8000/v2/`。当前是 Slice 0 交互探针，还没有正式数学规则引擎或 AI。
+
+---
+
 ## 隐私
 
 - 密钥只保存在你本机的 `.env` 文件里（已通过 `.gitignore` 排除，不会被提交）。

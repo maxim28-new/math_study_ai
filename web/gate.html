@@ -115,7 +115,11 @@
           err.textContent = data.error || "验证码不对";
           return;
         }
-        window.location.replace("/");
+        const raw = new URLSearchParams(location.search).get("next") || "/";
+        const next = raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("://")
+          ? raw
+          : "/";
+        window.location.replace(next);
       } catch (ex) {
         err.textContent = "网络有点问题，请再试一次。";
       } finally {

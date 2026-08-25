@@ -23,8 +23,10 @@ from . import author_jobs
 from . import config as teaching_config
 from .config import WEB_DIR, settings
 from . import gate
+from .gate import gate_location
 from . import tutor
 from .agent import runtime as agent_runtime
+from .v2.mount import mount_v2
 
 
 @asynccontextmanager
@@ -59,9 +61,13 @@ async def require_access_code(request, call_next):
     ) or gate.is_public_path(path):
         return await call_next(request)
     if request.method == "GET" and (
-        path == "/" or path.endswith(".html") or "text/html" in request.headers.get("accept", "")
+        path == "/"
+        or path == "/v2"
+        or path == "/v2/"
+        or path.endswith(".html")
+        or "text/html" in request.headers.get("accept", "")
     ):
-        return RedirectResponse(url="/gate.html", status_code=302)
+        return RedirectResponse(url=gate_location(path), status_code=302)
     return JSONResponse({"ok": False, "error": "请先输入验证码"}, status_code=401)
 
 
@@ -69,7 +75,7 @@ async def require_access_code(request, call_next):
 async def disable_frontend_cache(request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path == "/" or path.endswith((".html", ".css", ".js")):
+    if path == "/" or path.startswith("/v2") or path.endswith((".html", ".css", ".js")):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
     return response
@@ -478,6 +484,9 @@ def index() -> RedirectResponse:
     # 换 URL，避免浏览器继续用已经打开的旧桌面页。
     return RedirectResponse(url="/index.html?v=activity-stage", status_code=302)
 
+
+# V2 必须挂在根静态目录之前，否则 /v2 会被 V1 web/ 吃掉。
+mount_v2(app)
 
 # 其余静态资源（css / js）
 app.mount("/", StaticFiles(directory=WEB_DIR), name="static")
