@@ -81,6 +81,13 @@ class V2IsolationTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn('data-v2="workshop"', resp.text)
 
+    def test_v2_source_does_not_block_phones(self):
+        html = read("v2/apps/web/index.html")
+        css = read("v2/apps/web/src/styles.css")
+        self.assertNotIn("把平板横过来", html)
+        self.assertNotIn("rotateHint", html)
+        self.assertNotIn("orientation: portrait", css)
+
     def test_v1_web_assets_do_not_import_v2(self):
         for rel in ("web/index.html", "web/styles.css", "web/app.js"):
             text = read(rel)
