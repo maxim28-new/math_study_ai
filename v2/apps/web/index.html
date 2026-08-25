@@ -32,9 +32,11 @@
     </div>
   </div>
   <div id="app">
-    <canvas id="workshop" aria-label="桥梁工坊"></canvas>
-    <p id="hintBar" hidden>按住一堆积木，拖到两边的桥上。两座桥一样长，就过了。</p>
-    <button type="button" id="flipRotateBtn" hidden>画面反了</button>
+    <div id="stage">
+      <canvas id="workshop" aria-label="桥梁工坊"></canvas>
+      <p id="hintBar" hidden>按住一堆积木，拖到两边的桥上。两座桥一样长，就过了。</p>
+      <button type="button" id="flipRotateBtn" hidden>画面反了</button>
+    </div>
   </div>
   <script type="module" src="./src/main.ts"></script>
 </body>

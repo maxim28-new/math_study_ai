@@ -14,7 +14,10 @@ import {
   type GestureState,
 } from "./gestures.ts";
 import {
+  clientToLocal,
   clientToNdc,
+  ndcFromLocal,
+  parseCssMatrix,
   pickEntity,
   worldPointOnTable,
   type EntityHit,
@@ -43,9 +46,25 @@ export function bindWorkshopDrag(options: DragControllerOptions): () => void {
   let gesture: GestureState = { phase: "idle" };
   let session: PointerSession | null = null;
 
+  const ndcAt = (clientX: number, clientY: number): THREE.Vector2 => {
+    const stage = canvas.parentElement;
+    if (!stage) {
+      return clientToNdc(clientX, clientY, canvas.getBoundingClientRect());
+    }
+    const matrix = parseCssMatrix(getComputedStyle(stage).transform);
+    const local = clientToLocal(
+      clientX,
+      clientY,
+      stage.getBoundingClientRect(),
+      stage.clientWidth,
+      stage.clientHeight,
+      matrix,
+    );
+    return ndcFromLocal(local.x, local.y, stage.clientWidth, stage.clientHeight);
+  };
+
   const hitAt = (clientX: number, clientY: number): EntityHit | null => {
-    const ndc = clientToNdc(clientX, clientY, canvas.getBoundingClientRect());
-    return pickEntity(raycaster, options.camera, ndc, options.pickRoots());
+    return pickEntity(raycaster, options.camera, ndcAt(clientX, clientY), options.pickRoots());
   };
 
   const cellAt = (clientX: number, clientY: number): Cell | null => {
@@ -54,8 +73,7 @@ export function bindWorkshopDrag(options: DragControllerOptions): () => void {
   };
 
   const tablePoint = (clientX: number, clientY: number): THREE.Vector3 | null => {
-    const ndc = clientToNdc(clientX, clientY, canvas.getBoundingClientRect());
-    return worldPointOnTable(raycaster, options.camera, ndc, 0);
+    return worldPointOnTable(raycaster, options.camera, ndcAt(clientX, clientY), 0);
   };
 
   const dispatch = (command: PrototypeCommand): void => {

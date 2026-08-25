@@ -16,6 +16,11 @@ export interface PlaySize extends SizePair {
   rotate: "cw" | "ccw" | null;
 }
 
+export interface ChromeSize {
+  size: SizePair;
+  lastPortrait: SizePair | null;
+}
+
 export function normalizeAngle(angle: number): number {
   return ((angle % 360) + 360) % 360;
 }
@@ -30,14 +35,21 @@ export function pickAngle(...angles: Array<number | undefined>): number | undefi
   return nums.find(angleIsLandscape) ?? nums[0];
 }
 
-export function isLandscapeInput(input: OrientationInput): boolean {
-  if (input.forced || input.mediaLandscape) {
-    return true;
-  }
+export function deviceReportsLandscape(input: Pick<OrientationInput, "type" | "angle">): boolean {
   if (input.type?.startsWith("landscape")) {
     return true;
   }
   if (typeof input.angle === "number" && angleIsLandscape(input.angle)) {
+    return true;
+  }
+  return false;
+}
+
+export function isLandscapeInput(input: OrientationInput): boolean {
+  if (input.forced || input.mediaLandscape) {
+    return true;
+  }
+  if (deviceReportsLandscape(input)) {
     return true;
   }
   return input.width >= input.height;
@@ -57,8 +69,8 @@ export function playSize(input: OrientationInput): PlaySize {
   const stuck = landscape && windowIsPortrait;
   if (stuck) {
     return {
-      width: Math.max(input.height, 1),
-      height: Math.max(input.width, 1),
+      width: Math.max(input.width, input.height, 1),
+      height: Math.max(Math.min(input.width, input.height), 1),
       landscape,
       viewportStuck: true,
       rotate: rotateForStuckViewport(input.angle, true),
@@ -71,6 +83,30 @@ export function playSize(input: OrientationInput): PlaySize {
     viewportStuck: false,
     rotate: null,
   };
+}
+
+/**
+ * iOS Safari may expand innerWidth after a CSS fake-landscape. Keep the last
+ * portrait chrome size while we are forcing, unless the device itself reports
+ * a real landscape orientation.
+ */
+export function readChromeSize(
+  live: SizePair,
+  forcing: boolean,
+  lastPortrait: SizePair | null,
+  nativeLandscape = false,
+): ChromeSize {
+  if (live.width < live.height) {
+    const portrait = { width: live.width, height: live.height };
+    return { size: portrait, lastPortrait: portrait };
+  }
+  if (nativeLandscape) {
+    return { size: live, lastPortrait };
+  }
+  if (forcing && lastPortrait && lastPortrait.width < lastPortrait.height) {
+    return { size: lastPortrait, lastPortrait };
+  }
+  return { size: live, lastPortrait };
 }
 
 export function readOrientationInput(

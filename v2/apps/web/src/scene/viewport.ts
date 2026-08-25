@@ -1,5 +1,7 @@
 import {
+  deviceReportsLandscape,
   playSize,
+  readChromeSize,
   readOrientationInput,
   type PlaySize,
   type SizePair,
@@ -13,11 +15,34 @@ export function readPlayLayout(
   return playSize(readOrientationInput(windowSize, screenLike, extras));
 }
 
+export function resolvePlayLayout(
+  live: SizePair,
+  forcing: boolean,
+  lastPortrait: SizePair | null,
+  screenLike: { orientation?: { type?: string; angle?: number } } | null = null,
+  extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {},
+): { layout: PlaySize; lastPortrait: SizePair | null } {
+  const probe = readOrientationInput(live, screenLike, extras);
+  const nativeLandscape = deviceReportsLandscape(probe);
+  const chrome = readChromeSize(live, forcing, lastPortrait, nativeLandscape);
+  return {
+    layout: playSize(readOrientationInput(chrome.size, screenLike, extras)),
+    lastPortrait: chrome.lastPortrait,
+  };
+}
+
 export function bindViewportResize(onResize: () => void): () => void {
+  let frame = 0;
+  let timeout = 0;
   const delayed = (): void => {
-    onResize();
-    window.setTimeout(onResize, 80);
-    window.setTimeout(onResize, 320);
+    if (!frame) {
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        onResize();
+      });
+    }
+    window.clearTimeout(timeout);
+    timeout = window.setTimeout(onResize, 150);
   };
   const media = window.matchMedia("(orientation: landscape)");
   const onMedia = (): void => delayed();
@@ -31,6 +56,10 @@ export function bindViewportResize(onResize: () => void): () => void {
     media.addListener(onMedia);
   }
   return () => {
+    if (frame) {
+      window.cancelAnimationFrame(frame);
+    }
+    window.clearTimeout(timeout);
     window.removeEventListener("resize", delayed);
     window.removeEventListener("orientationchange", delayed);
     window.visualViewport?.removeEventListener("resize", delayed);

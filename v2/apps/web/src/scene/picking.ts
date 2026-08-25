@@ -14,11 +14,78 @@ export interface RectLike {
   height: number;
 }
 
-export function clientToNdc(clientX: number, clientY: number, rect: RectLike): THREE.Vector2 {
+export interface Matrix2D {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+}
+
+export function ndcFromLocal(x: number, y: number, width: number, height: number): THREE.Vector2 {
   return new THREE.Vector2(
-    ((clientX - rect.left) / rect.width) * 2 - 1,
-    -((clientY - rect.top) / rect.height) * 2 + 1,
+    (x / Math.max(width, 1)) * 2 - 1,
+    -((y / Math.max(height, 1)) * 2 - 1),
   );
+}
+
+export function clientToNdc(clientX: number, clientY: number, rect: RectLike): THREE.Vector2 {
+  return ndcFromLocal(clientX - rect.left, clientY - rect.top, rect.width, rect.height);
+}
+
+export function invertCenterDelta(dx: number, dy: number, matrix: Matrix2D): { x: number; y: number } {
+  const det = matrix.a * matrix.d - matrix.b * matrix.c;
+  if (Math.abs(det) < 1e-8) {
+    return { x: dx, y: dy };
+  }
+  return {
+    x: (matrix.d * dx - matrix.c * dy) / det,
+    y: (-matrix.b * dx + matrix.a * dy) / det,
+  };
+}
+
+export function clientToLocal(
+  clientX: number,
+  clientY: number,
+  visual: RectLike,
+  localWidth: number,
+  localHeight: number,
+  matrix: Matrix2D | null,
+): { x: number; y: number } {
+  const cx = visual.left + visual.width / 2;
+  const cy = visual.top + visual.height / 2;
+  let dx = clientX - cx;
+  let dy = clientY - cy;
+  if (matrix) {
+    const local = invertCenterDelta(dx, dy, matrix);
+    dx = local.x;
+    dy = local.y;
+  }
+  return {
+    x: dx + localWidth / 2,
+    y: dy + localHeight / 2,
+  };
+}
+
+export function parseCssMatrix(transform: string): Matrix2D | null {
+  if (!transform || transform === "none") {
+    return null;
+  }
+  const matrix3d = /matrix3d\(([^)]+)\)/.exec(transform);
+  if (matrix3d) {
+    const parts = matrix3d[1].split(",").map((part) => Number(part.trim()));
+    if (parts.length >= 6 && parts.every((part) => !Number.isNaN(part))) {
+      return { a: parts[0], b: parts[1], c: parts[4], d: parts[5] };
+    }
+  }
+  const match = /matrix\(([^)]+)\)/.exec(transform);
+  if (!match) {
+    return null;
+  }
+  const parts = match[1].split(",").map((part) => Number(part.trim()));
+  if (parts.length < 4 || parts.some((part) => Number.isNaN(part))) {
+    return null;
+  }
+  return { a: parts[0], b: parts[1], c: parts[2], d: parts[3] };
 }
 
 export function pickEntity(

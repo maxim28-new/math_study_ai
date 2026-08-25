@@ -95,6 +95,8 @@ class V2IsolationTests(unittest.TestCase):
         self.assertNotIn("orientation: portrait", css)
         self.assertIn("is-landscape", js)
         self.assertIn("force-landscape-cw", js)
+        self.assertIn("id=\"stage\"", html)
+        self.assertIn("resolvePlayLayout", js)
 
     def test_v1_web_assets_do_not_import_v2(self):
         for rel in ("web/index.html", "web/styles.css", "web/app.js"):
