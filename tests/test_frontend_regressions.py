@@ -20,6 +20,9 @@ class FrontendRegressionTests(unittest.TestCase):
         self.assertNotIn("/v2/", app)
         self.assertNotIn("data-v2", html)
         self.assertIn("小欧 · 手机版", html)
+        gate = read("web/gate.html")
+        self.assertIn('URLSearchParams(location.search).get("next")', gate)
+        self.assertIn("window.location.replace(next)", gate)
 
     def test_web_assets_are_cache_busted(self):
         html = read("web/index.html")

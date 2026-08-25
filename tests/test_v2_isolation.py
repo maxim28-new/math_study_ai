@@ -68,7 +68,7 @@ class V2IsolationTests(unittest.TestCase):
         with override_access_code("maxim"):
             locked = self.client.get("/v2/")
             self.assertEqual(locked.status_code, 302)
-            self.assertEqual(locked.headers["location"], "/gate.html")
+            self.assertEqual(locked.headers["location"], "/gate.html?next=/v2/")
             self.client.cookies.set(COOKIE_NAME, sign_cookie("maxim"))
             opened = self.client.get("/v2/")
         self.assertEqual(opened.status_code, 200)

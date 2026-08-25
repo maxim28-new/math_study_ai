@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import socket
 from typing import Optional
 
@@ -47,7 +48,11 @@ if __name__ == "__main__":
     elif not settings.is_unified:
         print("  拍照 OCR ：未配置（可选填 LLM_VISION_*，或改用 unified 模式）")
     print(f"  本机打开： http://127.0.0.1:{settings.port}")
-    print(f"  V2 工坊： http://127.0.0.1:{settings.port}/v2/")
+    print(f"  本机 V2 ： http://127.0.0.1:{settings.port}/v2/")
+    public = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if public:
+        print(f"  公网打开： {public}")
+        print(f"  公网 V2 ： {public}/v2/")
     ip = lan_ip()
     if ip:
         print(f"  手机打开（同一 WiFi）： http://{ip}:{settings.port}")

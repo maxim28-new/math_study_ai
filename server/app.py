@@ -23,6 +23,7 @@ from . import author_jobs
 from . import config as teaching_config
 from .config import WEB_DIR, settings
 from . import gate
+from .gate import gate_location
 from . import tutor
 from .agent import runtime as agent_runtime
 from .v2.mount import mount_v2
@@ -66,7 +67,7 @@ async def require_access_code(request, call_next):
         or path.endswith(".html")
         or "text/html" in request.headers.get("accept", "")
     ):
-        return RedirectResponse(url="/gate.html", status_code=302)
+        return RedirectResponse(url=gate_location(path), status_code=302)
     return JSONResponse({"ok": False, "error": "请先输入验证码"}, status_code=401)
 
 

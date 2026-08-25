@@ -13,7 +13,15 @@ from fastapi.testclient import TestClient
 from server import config
 from server.app import app
 from server.config import load_settings
-from server.gate import COOKIE_NAME, codes_match, is_public_path, sign_cookie, cookie_valid
+from server.gate import (
+    COOKIE_NAME,
+    codes_match,
+    cookie_valid,
+    gate_location,
+    is_public_path,
+    safe_next_path,
+    sign_cookie,
+)
 
 
 @contextmanager
@@ -78,6 +86,14 @@ class GateHelpersTests(unittest.TestCase):
         self.assertFalse(is_public_path("/api/author"))
         self.assertFalse(is_public_path("/v2"))
         self.assertFalse(is_public_path("/v2/"))
+
+    def test_gate_returns_to_v2_but_rejects_external_next(self):
+        self.assertEqual(gate_location("/"), "/gate.html")
+        self.assertEqual(gate_location("/index.html"), "/gate.html")
+        self.assertEqual(gate_location("/v2/"), "/gate.html?next=/v2/")
+        self.assertEqual(safe_next_path("/v2/"), "/v2/")
+        self.assertEqual(safe_next_path("https://evil.example/"), "/")
+        self.assertEqual(safe_next_path("//evil.example"), "/")
 
 
 class AccessGateHttpTests(unittest.TestCase):
@@ -149,7 +165,7 @@ class AccessGateHttpTests(unittest.TestCase):
         with override_access_code("maxim"):
             resp = self.client.get("/v2/")
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.headers["location"], "/gate.html")
+        self.assertEqual(resp.headers["location"], "/gate.html?next=/v2/")
 
     def test_unlock_rate_limited_after_repeated_failures(self):
         with override_access_code("maxim"):

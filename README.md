@@ -394,7 +394,12 @@ npm test
 npm run build
 ```
 
-构建后重启 `python run.py`，打开 `http://127.0.0.1:8000/v2/`。当前是 Slice 0 交互探针，还没有正式数学规则引擎或 AI。
+构建后重启 `python run.py`。公网（VPS）打开：
+
+- V1：`https://<公网域名>/`，先输入 `.env` 里的 `ACCESS_CODE`
+- V2 工坊：`https://<公网域名>/v2/`，同一套验证码；解锁后会回到工坊
+
+本机开发仍是 `http://127.0.0.1:8000/v2/`。当前是 Slice 0 交互探针，还没有正式数学规则引擎或 AI。
 
 ---
 
