@@ -87,6 +87,10 @@ class V2IsolationTests(unittest.TestCase):
         js = read("v2/apps/web/src/app.ts")
         self.assertIn("把手机横过来", html)
         self.assertIn("按住一堆积木", html)
+        self.assertIn("中间蓝的是河", html)
+        self.assertIn("两边木板是桥", html)
+        self.assertNotIn("scale(var(--force-sx)", css)
+        self.assertIn("translate(-50%, -50%) rotate(90deg)", css)
         self.assertIn("我已经横过来了", html)
         self.assertIn("id=\"confirmLandscapeBtn\"", html)
         self.assertIn("id=\"rotateGate\"", html)
@@ -95,6 +99,8 @@ class V2IsolationTests(unittest.TestCase):
         self.assertNotIn("orientation: portrait", css)
         self.assertIn("is-landscape", js)
         self.assertIn("force-landscape-cw", js)
+        self.assertIn("id=\"stage\"", html)
+        self.assertIn("resolvePlayLayout", js)
 
     def test_v1_web_assets_do_not_import_v2(self):
         for rel in ("web/index.html", "web/styles.css", "web/app.js"):

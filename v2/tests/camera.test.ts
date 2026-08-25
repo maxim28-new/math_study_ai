@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { orthoExtents, WORKSHOP_VIEW } from "../apps/web/src/scene/camera.ts";
-import { isLandscapeInput, pickAngle, playSize } from "../apps/web/src/scene/orientation.ts";
-import { readPlayLayout } from "../apps/web/src/scene/viewport.ts";
+import { isLandscapeInput, pickAngle, playSize, readChromeSize } from "../apps/web/src/scene/orientation.ts";
+import { readPlayLayout, resolvePlayLayout } from "../apps/web/src/scene/viewport.ts";
 
 describe("workshop camera fit", () => {
   it("keeps a phone landscape view zoomed in so the table fills the short side", () => {
@@ -44,5 +44,48 @@ describe("device orientation", () => {
     expect(layout.landscape).toBe(true);
     expect(layout.viewportStuck).toBe(false);
     expect(layout.rotate).toBeNull();
+  });
+
+  it("keeps forced rotate when CSS fake-landscape makes innerWidth look wide", () => {
+    const portrait = { type: "portrait-primary" as const, angle: 0 };
+    let last = readChromeSize({ width: 390, height: 844 }, false, null).lastPortrait;
+    const afterClick = resolvePlayLayout(
+      { width: 390, height: 844 },
+      false,
+      last,
+      { orientation: portrait },
+      { forced: true },
+    );
+    last = afterClick.lastPortrait;
+    const afterSafariLie = resolvePlayLayout(
+      { width: 844, height: 390 },
+      true,
+      last,
+      { orientation: portrait },
+      { forced: true, mediaLandscape: true },
+    );
+    expect(afterClick.layout).toMatchObject({
+      width: 844,
+      height: 390,
+      landscape: true,
+      viewportStuck: true,
+      rotate: "cw",
+    });
+    expect(afterSafariLie.layout).toEqual(afterClick.layout);
+  });
+
+  it("drops CSS rotate once the device and window are both landscape", () => {
+    const last = { width: 390, height: 844 };
+    const layout = resolvePlayLayout(
+      { width: 844, height: 390 },
+      true,
+      last,
+      { orientation: { type: "landscape-primary", angle: 90 } },
+      { forced: true, windowAngle: 90 },
+    ).layout;
+    expect(layout.viewportStuck).toBe(false);
+    expect(layout.rotate).toBeNull();
+    expect(layout.width).toBe(844);
+    expect(layout.height).toBe(390);
   });
 });

@@ -2,13 +2,14 @@ import { createInitialPrototypeState, type InteractionPrototypeState } from "./p
 import { createWorkshopCamera, resizeWorkshopCamera } from "./scene/camera.ts";
 import { bindWorkshopDrag } from "./scene/drag.ts";
 import { WorkshopRenderer, type DragVisual } from "./scene/renderer.ts";
-import { bindViewportResize, readPlayLayout } from "./scene/viewport.ts";
+import { bindViewportResize, resolvePlayLayout } from "./scene/viewport.ts";
+import type { SizePair } from "./scene/orientation.ts";
 
 const FORCE_KEY = "xiaoou-v2-force-landscape";
 const FLIP_KEY = "xiaoou-v2-flip-rotate";
 
 export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
-  const app = document.getElementById("app");
+  const root = document.documentElement;
   const rotateGate = document.getElementById("rotateGate");
   const hintBar = document.getElementById("hintBar");
   const confirmBtn = document.getElementById("confirmLandscapeBtn");
@@ -19,8 +20,9 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
   let dragBound = false;
   let forced = sessionStorage.getItem(FORCE_KEY) === "1";
   let flipped = sessionStorage.getItem(FLIP_KEY) === "1";
+  let lastPortrait: SizePair | null = null;
 
-  const first = currentLayout(forced);
+  const first = currentLayout();
   const renderer = new WorkshopRenderer(canvas);
   const camera = createWorkshopCamera(first.width / first.height);
 
@@ -63,21 +65,14 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
   let unbindDrag = (): void => undefined;
 
   const applyLayout = (): void => {
-    const layout = currentLayout(forced);
+    const layout = currentLayout();
     const rotate = flipped && layout.rotate ? (layout.rotate === "cw" ? "ccw" : "cw") : layout.rotate;
-    document.documentElement.classList.toggle("is-landscape", layout.landscape);
-    document.documentElement.classList.toggle("is-portrait", !layout.landscape);
-    document.documentElement.classList.toggle("force-landscape-cw", rotate === "cw");
-    document.documentElement.classList.toggle("force-landscape-ccw", rotate === "ccw");
-    if (app) {
-      if (rotate) {
-        app.style.width = `${layout.width}px`;
-        app.style.height = `${layout.height}px`;
-      } else {
-        app.style.removeProperty("width");
-        app.style.removeProperty("height");
-      }
-    }
+    root.style.setProperty("--play-w", `${layout.width}px`);
+    root.style.setProperty("--play-h", `${layout.height}px`);
+    root.classList.toggle("is-landscape", layout.landscape);
+    root.classList.toggle("is-portrait", !layout.landscape);
+    root.classList.toggle("force-landscape-cw", rotate === "cw");
+    root.classList.toggle("force-landscape-ccw", rotate === "ccw");
     if (rotateGate) {
       rotateGate.hidden = layout.landscape;
     }
@@ -117,22 +112,27 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
     }
     renderer.dispose();
   };
-}
 
-function currentLayout(forced: boolean) {
-  const win = window as Window & { orientation?: number };
-  const extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {
-    mediaLandscape: window.matchMedia("(orientation: landscape)").matches,
-  };
-  if (typeof win.orientation === "number") {
-    extras.windowAngle = win.orientation;
+  function currentLayout() {
+    const win = window as Window & { orientation?: number };
+    const forcing =
+      root.classList.contains("force-landscape-cw") || root.classList.contains("force-landscape-ccw");
+    const extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {};
+    if (typeof win.orientation === "number") {
+      extras.windowAngle = win.orientation;
+    }
+    if (forced) {
+      extras.forced = true;
+    } else if (window.matchMedia("(orientation: landscape)").matches) {
+      extras.mediaLandscape = true;
+    }
+    const vv = window.visualViewport;
+    const live = {
+      width: vv && vv.width > 0 ? vv.width : window.innerWidth,
+      height: vv && vv.height > 0 ? vv.height : window.innerHeight,
+    };
+    const resolved = resolvePlayLayout(live, forcing, lastPortrait, window.screen, extras);
+    lastPortrait = resolved.lastPortrait;
+    return resolved.layout;
   }
-  if (forced) {
-    extras.forced = true;
-  }
-  return readPlayLayout(
-    { width: window.innerWidth, height: window.innerHeight },
-    window.screen,
-    extras,
-  );
 }

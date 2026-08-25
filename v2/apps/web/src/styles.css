@@ -1,13 +1,19 @@
 :root {
   color-scheme: light;
   font-family: "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+  --play-w: 100%;
+  --play-h: 100%;
 }
 
 html,
 body {
+  position: fixed;
+  inset: 0;
   margin: 0;
   width: 100%;
   height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   overflow: hidden;
   background: #b7c7d4;
   touch-action: none;
@@ -17,7 +23,7 @@ body {
 }
 
 #app {
-  position: fixed;
+  position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -25,22 +31,31 @@ body {
   touch-action: none;
 }
 
-html.force-landscape-cw #app {
-  top: 0;
-  left: 0;
-  width: 100dvh;
-  height: 100dvw;
-  transform: rotate(90deg) translateY(-100%);
-  transform-origin: top left;
+#stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  transform-origin: center center;
+  touch-action: none;
 }
 
-html.force-landscape-ccw #app {
-  top: 0;
-  left: 0;
-  width: 100dvh;
-  height: 100dvw;
-  transform: rotate(-90deg) translateX(-100%);
-  transform-origin: top left;
+html.force-landscape-cw #stage,
+html.force-landscape-ccw #stage {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: var(--play-w);
+  height: var(--play-h);
+}
+
+html.force-landscape-cw #stage {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+html.force-landscape-ccw #stage {
+  transform: translate(-50%, -50%) rotate(-90deg);
 }
 
 #workshop {
@@ -143,12 +158,13 @@ html.is-landscape #rotateGate,
   right: 12px;
   bottom: calc(10px + env(safe-area-inset-bottom));
   margin: 0;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-radius: 14px;
-  background: rgba(36, 48, 58, 0.72);
+  background: rgba(36, 48, 58, 0.78);
   color: #fff8ee;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.45;
+  font-weight: 600;
   text-align: center;
   pointer-events: none;
 }
