@@ -10,9 +10,14 @@
   <script>
     (() => {
       const type = screen.orientation && screen.orientation.type;
+      const screenAngle = screen.orientation && screen.orientation.angle;
+      const angle = typeof orientation === "number" ? orientation : screenAngle;
+      const vv = window.visualViewport;
       const landscape = (type && type.indexOf("landscape") === 0)
-        || (typeof orientation === "number" && Math.abs(orientation) === 90)
-        || innerWidth >= innerHeight;
+        || (typeof angle === "number" && Math.abs(angle) === 90)
+        || innerWidth >= innerHeight
+        || (vv && vv.width >= vv.height)
+        || (window.matchMedia && matchMedia("(orientation: landscape)").matches);
       document.documentElement.classList.add(landscape ? "is-landscape" : "is-portrait");
     })();
   </script>
@@ -22,12 +27,14 @@
     <div class="rotate-card">
       <div class="rotate-icon" aria-hidden="true"></div>
       <p class="rotate-title">把手机横过来</p>
-      <p class="rotate-copy">工坊是横着玩的。转过去以后，按住积木拖到桥上。</p>
+      <p class="rotate-copy">工坊是横着玩的。转过去后画面会跟着转；如果没转，点下面按钮。</p>
+      <button type="button" id="confirmLandscapeBtn">我已经横过来了</button>
     </div>
   </div>
   <div id="app">
     <canvas id="workshop" aria-label="桥梁工坊"></canvas>
     <p id="hintBar" hidden>按住一堆积木，拖到两边的桥上。两座桥一样长，就过了。</p>
+    <button type="button" id="flipRotateBtn" hidden>画面反了</button>
   </div>
   <script type="module" src="./src/main.ts"></script>
 </body>

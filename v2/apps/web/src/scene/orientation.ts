@@ -1,13 +1,16 @@
-export interface OrientationInput {
-  type?: string;
-  angle?: number;
+export interface SizePair {
   width: number;
   height: number;
 }
 
-export interface PlaySize {
-  width: number;
-  height: number;
+export interface OrientationInput extends SizePair {
+  type?: string;
+  angle?: number;
+  mediaLandscape?: boolean;
+  forced?: boolean;
+}
+
+export interface PlaySize extends SizePair {
   landscape: boolean;
   viewportStuck: boolean;
   rotate: "cw" | "ccw" | null;
@@ -17,16 +20,35 @@ export function normalizeAngle(angle: number): number {
   return ((angle % 360) + 360) % 360;
 }
 
+export function angleIsLandscape(angle: number): boolean {
+  const abs = normalizeAngle(angle);
+  return abs === 90 || abs === 270;
+}
+
+export function pickAngle(...angles: Array<number | undefined>): number | undefined {
+  const nums = angles.filter((value): value is number => typeof value === "number");
+  return nums.find(angleIsLandscape) ?? nums[0];
+}
+
+export function pickWidestPair(pairs: SizePair[]): SizePair {
+  const usable = pairs.filter((pair) => pair.width > 0 && pair.height > 0);
+  if (usable.length === 0) {
+    return { width: 1, height: 1 };
+  }
+  return usable.reduce((best, cur) =>
+    cur.width / cur.height > best.width / best.height ? cur : best,
+  );
+}
+
 export function isLandscapeInput(input: OrientationInput): boolean {
+  if (input.forced || input.mediaLandscape) {
+    return true;
+  }
   if (input.type?.startsWith("landscape")) {
     return true;
   }
-  if (input.type?.startsWith("portrait")) {
-    return false;
-  }
-  if (typeof input.angle === "number") {
-    const angle = normalizeAngle(input.angle);
-    return angle === 90 || angle === 270;
+  if (typeof input.angle === "number" && angleIsLandscape(input.angle)) {
+    return true;
   }
   return input.width >= input.height;
 }
@@ -61,23 +83,27 @@ export function playSize(input: OrientationInput): PlaySize {
 }
 
 export function readOrientationInput(
-  view: Pick<VisualViewport, "width" | "height"> | null,
-  fallback: { width: number; height: number },
+  pairs: SizePair[],
   screenLike: { orientation?: { type?: string; angle?: number } } | null,
-  windowAngle?: number,
+  extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {},
 ): OrientationInput {
-  const width = view && view.width > 0 ? view.width : fallback.width;
-  const height = view && view.height > 0 ? view.height : fallback.height;
+  const size = pickWidestPair(pairs);
   const input: OrientationInput = {
-    width: Math.max(width, 1),
-    height: Math.max(height, 1),
+    width: size.width,
+    height: size.height,
   };
   if (screenLike?.orientation?.type) {
     input.type = screenLike.orientation.type;
   }
-  const angle = screenLike?.orientation?.angle ?? windowAngle;
+  const angle = pickAngle(extras.windowAngle, screenLike?.orientation?.angle);
   if (typeof angle === "number") {
     input.angle = angle;
+  }
+  if (extras.mediaLandscape) {
+    input.mediaLandscape = true;
+  }
+  if (extras.forced) {
+    input.forced = true;
   }
   return input;
 }

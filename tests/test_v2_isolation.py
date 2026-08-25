@@ -87,6 +87,8 @@ class V2IsolationTests(unittest.TestCase):
         js = read("v2/apps/web/src/app.ts")
         self.assertIn("把手机横过来", html)
         self.assertIn("按住一堆积木", html)
+        self.assertIn("我已经横过来了", html)
+        self.assertIn("id=\"confirmLandscapeBtn\"", html)
         self.assertIn("id=\"rotateGate\"", html)
         self.assertIn("id=\"hintBar\"", html)
         self.assertNotIn("把平板横过来", html)

@@ -59,6 +59,8 @@ html.force-landscape-ccw #app {
   justify-content: center;
   padding: 28px 22px;
   background: #8fa4b3;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 html.is-landscape #rotateGate,
@@ -101,10 +103,38 @@ html.is-landscape #rotateGate,
 }
 
 .rotate-copy {
-  margin: 0;
+  margin: 0 0 18px;
   font-size: 16px;
   line-height: 1.5;
   color: #eef4f8;
+}
+
+#confirmLandscapeBtn,
+#flipRotateBtn {
+  appearance: none;
+  border: 0;
+  border-radius: 14px;
+  min-height: 48px;
+  padding: 12px 18px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #24303a;
+  background: #fff8ee;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+#flipRotateBtn {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  min-height: 40px;
+  font-size: 14px;
+  background: rgba(255, 248, 238, 0.92);
+}
+
+#flipRotateBtn[hidden] {
+  display: none;
 }
 
 #hintBar {

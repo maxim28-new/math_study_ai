@@ -2,6 +2,7 @@ import {
   playSize,
   readOrientationInput,
   type PlaySize,
+  type SizePair,
 } from "./orientation.ts";
 
 export interface ViewportSize {
@@ -10,12 +11,11 @@ export interface ViewportSize {
 }
 
 export function readPlayLayout(
-  fallback: ViewportSize,
-  view: Pick<VisualViewport, "width" | "height"> | null = null,
+  pairs: SizePair[],
   screenLike: { orientation?: { type?: string; angle?: number } } | null = null,
-  windowAngle?: number,
+  extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {},
 ): PlaySize {
-  return playSize(readOrientationInput(view, fallback, screenLike, windowAngle));
+  return playSize(readOrientationInput(pairs, screenLike, extras));
 }
 
 export function bindViewportResize(onResize: () => void): () => void {
@@ -24,14 +24,28 @@ export function bindViewportResize(onResize: () => void): () => void {
     window.setTimeout(onResize, 80);
     window.setTimeout(onResize, 320);
   };
-  window.addEventListener("resize", onResize);
+  const media = window.matchMedia("(orientation: landscape)");
+  const onMedia = (): void => delayed();
+  window.addEventListener("resize", delayed);
   window.addEventListener("orientationchange", delayed);
-  window.visualViewport?.addEventListener("resize", onResize);
+  window.visualViewport?.addEventListener("resize", delayed);
   screen.orientation?.addEventListener("change", delayed);
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", onMedia);
+  } else {
+    media.addListener(onMedia);
+  }
+  const poll = window.setInterval(onResize, 250);
   return () => {
-    window.removeEventListener("resize", onResize);
+    window.removeEventListener("resize", delayed);
     window.removeEventListener("orientationchange", delayed);
-    window.visualViewport?.removeEventListener("resize", onResize);
+    window.visualViewport?.removeEventListener("resize", delayed);
     screen.orientation?.removeEventListener("change", delayed);
+    if (typeof media.removeEventListener === "function") {
+      media.removeEventListener("change", onMedia);
+    } else {
+      media.removeListener(onMedia);
+    }
+    window.clearInterval(poll);
   };
 }
