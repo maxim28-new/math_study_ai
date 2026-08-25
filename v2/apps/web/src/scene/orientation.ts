@@ -30,16 +30,6 @@ export function pickAngle(...angles: Array<number | undefined>): number | undefi
   return nums.find(angleIsLandscape) ?? nums[0];
 }
 
-export function pickWidestPair(pairs: SizePair[]): SizePair {
-  const usable = pairs.filter((pair) => pair.width > 0 && pair.height > 0);
-  if (usable.length === 0) {
-    return { width: 1, height: 1 };
-  }
-  return usable.reduce((best, cur) =>
-    cur.width / cur.height > best.width / best.height ? cur : best,
-  );
-}
-
 export function isLandscapeInput(input: OrientationInput): boolean {
   if (input.forced || input.mediaLandscape) {
     return true;
@@ -63,7 +53,8 @@ export function rotateForStuckViewport(angle: number | undefined, stuck: boolean
 
 export function playSize(input: OrientationInput): PlaySize {
   const landscape = isLandscapeInput(input);
-  const stuck = landscape ? input.width < input.height : input.width > input.height;
+  const windowIsPortrait = input.width < input.height;
+  const stuck = landscape && windowIsPortrait;
   if (stuck) {
     return {
       width: Math.max(input.height, 1),
@@ -83,14 +74,13 @@ export function playSize(input: OrientationInput): PlaySize {
 }
 
 export function readOrientationInput(
-  pairs: SizePair[],
+  windowSize: SizePair,
   screenLike: { orientation?: { type?: string; angle?: number } } | null,
   extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {},
 ): OrientationInput {
-  const size = pickWidestPair(pairs);
   const input: OrientationInput = {
-    width: size.width,
-    height: size.height,
+    width: Math.max(windowSize.width, 1),
+    height: Math.max(windowSize.height, 1),
   };
   if (screenLike?.orientation?.type) {
     input.type = screenLike.orientation.type;

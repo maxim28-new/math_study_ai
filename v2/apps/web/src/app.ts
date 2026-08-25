@@ -20,7 +20,7 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
   let forced = sessionStorage.getItem(FORCE_KEY) === "1";
   let flipped = sessionStorage.getItem(FLIP_KEY) === "1";
 
-  const first = currentLayout(canvas, app, forced);
+  const first = currentLayout(forced);
   const renderer = new WorkshopRenderer(canvas);
   const camera = createWorkshopCamera(first.width / first.height);
 
@@ -62,13 +62,22 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
 
   let unbindDrag = (): void => undefined;
 
-  const onResize = (): void => {
-    const layout = currentLayout(canvas, app, forced);
+  const applyLayout = (): void => {
+    const layout = currentLayout(forced);
     const rotate = flipped && layout.rotate ? (layout.rotate === "cw" ? "ccw" : "cw") : layout.rotate;
     document.documentElement.classList.toggle("is-landscape", layout.landscape);
     document.documentElement.classList.toggle("is-portrait", !layout.landscape);
     document.documentElement.classList.toggle("force-landscape-cw", rotate === "cw");
     document.documentElement.classList.toggle("force-landscape-ccw", rotate === "ccw");
+    if (app) {
+      if (rotate) {
+        app.style.width = `${layout.width}px`;
+        app.style.height = `${layout.height}px`;
+      } else {
+        app.style.removeProperty("width");
+        app.style.removeProperty("height");
+      }
+    }
     if (rotateGate) {
       rotateGate.hidden = layout.landscape;
     }
@@ -76,33 +85,29 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
       hintBar.hidden = !layout.landscape;
     }
     if (flipBtn) {
-      flipBtn.hidden = !(layout.landscape && (layout.viewportStuck || forced));
+      flipBtn.hidden = !(layout.landscape && layout.viewportStuck);
     }
     if (layout.landscape) {
       bindDrag();
     }
-    window.requestAnimationFrame(() => {
-      const width = app?.clientWidth || layout.width;
-      const height = app?.clientHeight || layout.height;
-      renderer.setSize(width, height);
-      resizeWorkshopCamera(camera, width / Math.max(height, 1));
-      requestDraw();
-    });
+    renderer.setSize(layout.width, layout.height);
+    resizeWorkshopCamera(camera, layout.width / Math.max(layout.height, 1));
+    requestDraw();
   };
 
   confirmBtn?.addEventListener("click", () => {
     forced = true;
     sessionStorage.setItem(FORCE_KEY, "1");
-    onResize();
+    applyLayout();
   });
   flipBtn?.addEventListener("click", () => {
     flipped = !flipped;
     sessionStorage.setItem(FLIP_KEY, flipped ? "1" : "0");
-    onResize();
+    applyLayout();
   });
 
-  const unbindViewport = bindViewportResize(onResize);
-  onResize();
+  const unbindViewport = bindViewportResize(applyLayout);
+  applyLayout();
 
   return () => {
     unbindDrag();
@@ -114,9 +119,8 @@ export function bootWorkshop(canvas: HTMLCanvasElement): () => void {
   };
 }
 
-function currentLayout(canvas: HTMLCanvasElement, app: HTMLElement | null, forced: boolean) {
+function currentLayout(forced: boolean) {
   const win = window as Window & { orientation?: number };
-  const vv = window.visualViewport;
   const extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {
     mediaLandscape: window.matchMedia("(orientation: landscape)").matches,
   };
@@ -127,12 +131,7 @@ function currentLayout(canvas: HTMLCanvasElement, app: HTMLElement | null, force
     extras.forced = true;
   }
   return readPlayLayout(
-    [
-      { width: window.innerWidth, height: window.innerHeight },
-      { width: vv?.width ?? 0, height: vv?.height ?? 0 },
-      { width: app?.clientWidth ?? 0, height: app?.clientHeight ?? 0 },
-      { width: canvas.clientWidth, height: canvas.clientHeight },
-    ],
+    { width: window.innerWidth, height: window.innerHeight },
     window.screen,
     extras,
   );

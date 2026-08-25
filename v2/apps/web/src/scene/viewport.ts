@@ -5,17 +5,12 @@ import {
   type SizePair,
 } from "./orientation.ts";
 
-export interface ViewportSize {
-  width: number;
-  height: number;
-}
-
 export function readPlayLayout(
-  pairs: SizePair[],
+  windowSize: SizePair,
   screenLike: { orientation?: { type?: string; angle?: number } } | null = null,
   extras: { windowAngle?: number; mediaLandscape?: boolean; forced?: boolean } = {},
 ): PlaySize {
-  return playSize(readOrientationInput(pairs, screenLike, extras));
+  return playSize(readOrientationInput(windowSize, screenLike, extras));
 }
 
 export function bindViewportResize(onResize: () => void): () => void {
@@ -35,7 +30,6 @@ export function bindViewportResize(onResize: () => void): () => void {
   } else {
     media.addListener(onMedia);
   }
-  const poll = window.setInterval(onResize, 250);
   return () => {
     window.removeEventListener("resize", delayed);
     window.removeEventListener("orientationchange", delayed);
@@ -46,6 +40,5 @@ export function bindViewportResize(onResize: () => void): () => void {
     } else {
       media.removeListener(onMedia);
     }
-    window.clearInterval(poll);
   };
 }
