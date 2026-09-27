@@ -82,6 +82,14 @@
     };
   };
 
+  L.advanceRung = function advanceRung(lesson) {
+    const current = L.normalizeLesson(lesson);
+    const order = ["do", "see", "why"];
+    const index = order.indexOf(current.rung);
+    if (index >= 0 && index < order.length - 1) current.rung = order[index + 1];
+    return current;
+  };
+
   L.applyShrink = function applyShrink(lesson) {
     const current = L.normalizeLesson(lesson);
     if (current.shrinks <= 0) {
@@ -155,6 +163,12 @@
       return text.indexOf(L.REGULARITY_ASK) >= 0;
     }
     return false;
+  };
+
+  L.shouldAskRegularity = function shouldAskRegularity(lesson, messages) {
+    const current = L.normalizeLesson(lesson);
+    if (current.rung !== "do" || current.shrinks >= 2) return false;
+    return !L.askedRegularity(messages);
   };
 
   L.mergeDiscovery = function mergeDiscovery(lesson, discovery) {

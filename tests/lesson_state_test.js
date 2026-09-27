@@ -18,8 +18,21 @@ why = L.applyShrink(why);
 assert.strictEqual(why.shrinks, 3);
 assert.strictEqual(L.applyShrink(why).shrinks, 3);
 
+const stepped = L.advanceRung(L.emptyLesson());
+assert.strictEqual(stepped.rung, "see");
+assert.strictEqual(L.advanceRung(stepped).rung, "why");
+assert.strictEqual(L.advanceRung(L.advanceRung(stepped)).rung, "why");
+assert.strictEqual(L.shouldAskRegularity(L.emptyLesson(), []), true);
+assert.strictEqual(L.shouldAskRegularity(stepped, []), false);
+assert.strictEqual(
+  L.shouldAskRegularity(L.emptyLesson(), [{ role: "assistant", content: L.REGULARITY_ASK }]),
+  false
+);
+
 const stay = L.applyShrink(L.applyShrink(L.emptyLesson()));
 assert.strictEqual(stay.rung, "do");
+assert.strictEqual(stay.shrinks, 2);
+assert.strictEqual(L.shouldAskRegularity(stay, []), false);
 
 const kept = L.resetForNewCard({
   rung: "see",

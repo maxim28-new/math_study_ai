@@ -20,10 +20,12 @@ from pydantic import BaseModel, Field
 from . import asr
 from . import author
 from . import author_jobs
+from . import board as board_spec
 from . import config as teaching_config
 from .config import WEB_DIR, settings
 from . import gate
 from .gate import gate_location
+from . import lesson as lesson_state
 from . import tutor
 from .agent import runtime as agent_runtime
 from .v2.mount import mount_v2
@@ -206,7 +208,11 @@ async def _transcribe(client: httpx.AsyncClient, content: list) -> str:
     return (data["choices"][0]["message"]["content"] or "").strip()
 
 
-async def _yield_stream_chunks(resp, show_reasoning: bool) -> AsyncGenerator[str, None]:
+async def _yield_stream_chunks(
+    resp,
+    show_reasoning: bool,
+    guard: lesson_state.InsightStreamGuard | None = None,
+) -> AsyncGenerator[str, None]:
     """把 OpenAI 兼容流式响应解析成 SSE 事件。"""
     async for line in resp.aiter_lines():
         if not line or not line.startswith("data:"):
@@ -227,7 +233,10 @@ async def _yield_stream_chunks(resp, show_reasoning: bool) -> AsyncGenerator[str
             yield _sse({"reasoning_delta": reasoning_piece})
         piece = delta.get("content")
         if piece:
-            yield _sse({"delta": piece})
+            if guard is not None:
+                piece = guard.feed(piece)
+            if piece:
+                yield _sse({"delta": piece})
 
 
 async def _prepare_split_messages(
@@ -333,7 +342,9 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     {"role": "user", "content": kickoff}
                 ]
 
-            use_agent = req.mode == "explore" and isinstance(card, dict) and isinstance(card.get("board"), dict)
+            use_agent = req.mode == "explore" and board_spec.agent_can_edit_board(card)
+            insight = str(card.get("insight") or "") if isinstance(card, dict) else ""
+            guard = lesson_state.InsightStreamGuard(insight)
             if use_agent:
                 client_ws = req.workspace if isinstance(req.workspace, dict) else None
                 if client_ws is None and req.workspace_id:
@@ -357,10 +368,19 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     ):
                         if event.get("board_patch") is None and "board_patch" in event:
                             event = {k: v for k, v in event.items() if k != "board_patch"}
+                        if event.get("delta"):
+                            piece = guard.feed(str(event["delta"]))
+                            if not piece:
+                                continue
+                            event = {**event, "delta": piece}
                         yield _sse(event)
+                    tail = guard.flush()
+                    if tail:
+                        yield _sse({"delta": tail})
                     yield _sse({"done": True})
                     return
                 except agent_runtime.ToolsUnsupportedError:
+                    guard = lesson_state.InsightStreamGuard(insight)
                     system_prompt = tutor.build_system_prompt(
                         req.topic, req.level, req.child_name, req.mode, card, req.seen_terms,
                         agent=False, lesson=req.lesson, lesson_event=req.lesson_event,
@@ -386,8 +406,11 @@ async def _stream_reply(req: ChatRequest) -> AsyncGenerator[str, None]:
                     yield _sse({"done": True})
                     return
 
-                async for chunk in _yield_stream_chunks(resp, show_reasoning):
+                async for chunk in _yield_stream_chunks(resp, show_reasoning, guard):
                     yield chunk
+                tail = guard.flush()
+                if tail:
+                    yield _sse({"delta": tail})
     except httpx.HTTPError as exc:
         yield _sse({"error": f"连接大模型时出错：{exc}"})
 

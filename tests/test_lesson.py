@@ -140,6 +140,30 @@ class LessonStateTests(unittest.TestCase):
         self.assertIn("先摆成 8 和 4", guide)
         self.assertNotIn("不是整个差", guide)
 
+    def test_advance_rung_moves_one_layer(self) -> None:
+        first = lesson.advance_rung(lesson.empty_lesson())
+        self.assertEqual(first["rung"], "see")
+        second = lesson.advance_rung(first)
+        self.assertEqual(second["rung"], "why")
+        self.assertEqual(lesson.advance_rung(second)["rung"], "why")
+
+    def test_redact_insight_before_the_child_hears_it(self) -> None:
+        insight = "每移过去一张，两行的差距一次缩小2"
+        leaked = "你看，每移过去一张，两行的差距一次缩小2，所以答案是一半。"
+        cleaned = lesson.redact_insight(leaked, insight)
+        self.assertFalse(lesson.leaks_insight(cleaned, insight))
+        self.assertIn("所以答案是一半", cleaned)
+        safe = "移一张，两边差会少 2。"
+        self.assertEqual(lesson.redact_insight(safe, insight), safe)
+        guard = lesson.InsightStreamGuard(insight)
+        self.assertEqual(guard.feed("移一张，"), "")
+        tail = guard.feed("两边差会少 2。") + guard.flush()
+        self.assertIn("差会少 2", tail)
+        leaked_guard = lesson.InsightStreamGuard(insight)
+        leaked_guard.feed(leaked)
+        spoken = leaked_guard.flush()
+        self.assertFalse(lesson.leaks_insight(spoken, insight))
+
     def test_accept_regularity_keeps_child_words(self) -> None:
         card = {
             "insight_key": "equalize_by_half_diff",

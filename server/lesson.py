@@ -146,6 +146,105 @@ def _fold(text: str) -> str:
     return re.sub(r"\s+", "", str(text or ""))
 
 
+def advance_rung(lesson: Any) -> dict[str, Any]:
+    """Move do → see → why. Shrink count stays; this is the child finishing a layer."""
+    current = normalize_lesson(lesson)
+    order = RUNGS
+    try:
+        index = order.index(current["rung"])
+    except ValueError:
+        index = 0
+    if index < len(order) - 1:
+        current["rung"] = order[index + 1]
+    return current
+
+
+def _fold_map(text: str) -> tuple[str, list[int]]:
+    folded: list[str] = []
+    origins: list[int] = []
+    for index, char in enumerate(text):
+        if char.isspace():
+            continue
+        folded.append(char)
+        origins.append(index)
+    return "".join(folded), origins
+
+
+def redact_insight(text: str, insight: str) -> str:
+    """Drop any stretch of the hidden insight before it reaches the child."""
+    raw = str(text or "")
+    folded_insight = _fold(insight)
+    if not raw or not folded_insight or not leaks_insight(raw, folded_insight):
+        return raw
+    folded_text, origins = _fold_map(raw)
+    spans: list[tuple[int, int]] = []
+    if folded_insight in folded_text:
+        start = 0
+        while True:
+            found = folded_text.find(folded_insight, start)
+            if found < 0:
+                break
+            spans.append((found, found + len(folded_insight)))
+            start = found + 1
+    elif folded_text in folded_insight and len(folded_text) >= 4:
+        spans.append((0, len(folded_text)))
+    elif len(folded_insight) >= WINDOW:
+        for offset in range(0, len(folded_insight) - WINDOW + 1):
+            window = folded_insight[offset : offset + WINDOW]
+            start = 0
+            while True:
+                found = folded_text.find(window, start)
+                if found < 0:
+                    break
+                spans.append((found, found + WINDOW))
+                start = found + 1
+    if not spans:
+        return raw
+    drop = {origins[pos] for start, end in spans for pos in range(start, end)}
+    kept = "".join(char for index, char in enumerate(raw) if index not in drop)
+    kept = re.sub(r"[ \t]{2,}", " ", kept)
+    kept = re.sub(r"\s+([，。！？、])", r"\1", kept).strip()
+    return kept or "我们先看你眼前这一步。"
+
+
+class InsightStreamGuard:
+    """Hold back the tail of a stream so a leaked insight can be removed before it is sent."""
+
+    def __init__(self, insight: str):
+        self.insight = str(insight or "")
+        self.buf = ""
+        self.sent = 0
+
+    def _hold(self) -> int:
+        if not self.insight:
+            return 0
+        return min(48, max(16, len(_fold(self.insight))))
+
+    def feed(self, piece: str) -> str:
+        if not self.insight:
+            return piece or ""
+        self.buf += piece or ""
+        self.buf = redact_insight(self.buf, self.insight)
+        if self.sent > len(self.buf):
+            self.sent = len(self.buf)
+        ready_end = max(0, len(self.buf) - self._hold())
+        if ready_end <= self.sent:
+            return ""
+        out = self.buf[self.sent:ready_end]
+        self.sent = ready_end
+        return out
+
+    def flush(self) -> str:
+        if not self.insight:
+            return ""
+        self.buf = redact_insight(self.buf, self.insight)
+        if self.sent > len(self.buf):
+            self.sent = len(self.buf)
+        out = self.buf[self.sent:]
+        self.sent = len(self.buf)
+        return out
+
+
 def leaks_insight(text: str, insight: str) -> bool:
     folded_text = _fold(text)
     folded_insight = _fold(insight)

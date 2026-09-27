@@ -24,6 +24,12 @@ class SemanticBoardTests(unittest.TestCase):
             with self.subTest(kind=raw["kind"]):
                 self.assertIsNone(board.normalize_board_v3(raw))
 
+    def test_static_diagram_is_not_an_editable_agent_board(self):
+        self.assertFalse(board.agent_can_edit_board({"board": {"kind": "static_diagram"}}))
+        self.assertTrue(board.agent_can_edit_board({"board": {"kind": "snap_grid"}}))
+        self.assertTrue(board.agent_can_edit_board({"board": {"kind": "layer_sum"}}))
+        self.assertFalse(board.agent_can_edit_board(None))
+
     def test_v3_color_sequence_question_uses_unit_colors(self):
         spec = board.normalize_board_v3(
             {
