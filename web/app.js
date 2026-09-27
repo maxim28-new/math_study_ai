@@ -1505,6 +1505,56 @@ function pickSeedCard(topic) {
   return key === state.topicKey ? topicCard(pick) : pick;
 }
 
+function takeReadyCard(topic) {
+  const key = topic || state.topicKey;
+  const row = (state.readyCards || {})[key];
+  if (!row || !row.card) return null;
+  delete state.readyCards[key];
+  if (row.level && row.level !== state.level) return null;
+  return row.card;
+}
+
+async function queueNextCard(topic) {
+  const key = topic || state.topicKey;
+  if (state.mode !== "explore") return;
+  const waiting = (state.readyCards || {})[key];
+  if (waiting && waiting.level === state.level) return;
+  state.prefetching = state.prefetching || {};
+  if (state.prefetching[key]) return;
+  state.prefetching[key] = true;
+  const level = state.level;
+  let stale = false;
+  try {
+    const res = await fetch("/api/author/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(authorBody(key)),
+    });
+    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    const jobId = data.job_id;
+    if (!jobId) return;
+    const done = await pollAuthorJob(
+      jobId,
+      Date.now() + AUTHOR_WAIT_MS,
+      () => !!(state.prefetching && state.prefetching[key] && state.level === level),
+    );
+    if (state.level !== level) {
+      stale = true;
+      return;
+    }
+    const liveHook = key === state.topicKey && state.problemCard ? state.problemCard.hook : "";
+    const card = cardFromJob(done, liveHook);
+    if (!card) return;
+    state.readyCards = state.readyCards || {};
+    state.readyCards[key] = { level, card };
+  } catch (e) {
+  } finally {
+    if (state.prefetching) delete state.prefetching[key];
+  }
+  if (stale) queueNextCard(key);
+}
+
 function abortChatStream() {
   const ac = state.chatAbort;
   state.chatAbort = null;
@@ -1941,6 +1991,7 @@ async function startPlay() {
   mountFromCard(card);
   playFixedOpening(card);
   applyModeUI();
+  queueNextCard(state.topicKey);
 }
 
 function placeMessages() {
@@ -2060,12 +2111,26 @@ function flushPendingMilestone() {
   sendActivityMilestone(pending.event, now);
 }
 
+function noteHandsOnDone(eventName) {
+  const done = { board_full: true, layer_completed: true, path_found: true };
+  if (!done[eventName] || !window.XiaoouLesson || !XiaoouLesson.advanceRung) return;
+  const lesson = XiaoouLesson.normalizeLesson(state.lesson);
+  if (lesson.rung !== "do") return;
+  const ask = XiaoouLesson.shouldAskRegularity
+    ? XiaoouLesson.shouldAskRegularity(lesson, state.messages)
+    : lesson.shrinks < 2 && !XiaoouLesson.askedRegularity(state.messages);
+  state.lesson = XiaoouLesson.advanceRung(lesson);
+  if (ask) state.pendingRegularityAsk = true;
+  saveSession();
+}
+
 function sendActivityMilestone(eventName, snapshot) {
   if (state.streaming) {
     state.queuedMilestone = { event: eventName, snapshot: snapshot };
     return;
   }
   if (!snapshot) return;
+  noteHandsOnDone(eventName);
   const modelText = XiaoouActivity.formatBoardNote(snapshot, eventName);
   const label = XiaoouActivity.childLabel(eventName, snapshot);
   state.messages.push({ role: "user", content: modelText });
@@ -2732,8 +2797,9 @@ async function startExplore() {
   const messages = $("#messages");
   if (messages) messages.innerHTML = "";
   saveSession();
-  const card = pickSeedCard(topic);
+  const card = takeReadyCard(topic) || pickSeedCard(topic);
   if (seq !== waitSeqFor(topic) || state.topicKey !== topic) return;
+  queueNextCard(topic);
   await applyNewExploreCard(card, { topic });
 }
 
@@ -2748,6 +2814,8 @@ async function streamAssistant(kickoff) {
   let reasoningAcc = "";
   const lessonEvent = state.pendingLessonEvent || "";
   state.pendingLessonEvent = "";
+  const wantRegularity = !!state.pendingRegularityAsk;
+  state.pendingRegularityAsk = false;
 
   try {
     const res = await fetch("/api/chat", {
@@ -2857,6 +2925,14 @@ async function streamAssistant(kickoff) {
         if (hasGrid) freezeLiveActivities();
         hydrateSnapGrids(tutorBubble, true);
       }
+      saveSession();
+    }
+    if (wantRegularity && window.XiaoouLesson && !XiaoouLesson.askedRegularity(state.messages)) {
+      const ask = XiaoouLesson.REGULARITY_ASK;
+      state.messages.push({ role: "assistant", content: ask });
+      const askBubble = addMessageEl("tutor");
+      askBubble.innerHTML = renderMarkdown(ask);
+      setCaption(ask);
       saveSession();
     }
     setStreaming(false);
@@ -3583,6 +3659,7 @@ function bindEvents() {
   $("#levelSelect").addEventListener("change", (e) => {
     state.level = e.target.value;
     saveSession();
+    queueNextCard(state.topicKey);
   });
   $("#thinkingSelect").addEventListener("change", (e) => {
     state.thinking = e.target.value === "on";

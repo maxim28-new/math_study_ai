@@ -503,6 +503,25 @@ def board_v3_from_legacy(
     return None
 
 
+AGENT_BOARD_KINDS = frozenset({
+    "snap_grid",
+    "layer_sum",
+    "path_count",
+    "color_sequence",
+    "geometry_compass",
+})
+
+
+def agent_can_edit_board(card: dict[str, Any] | None) -> bool:
+    """Tools may change these boards. A static diagram stays as the card drew it."""
+    if not isinstance(card, dict):
+        return False
+    board = card.get("board")
+    if not isinstance(board, dict):
+        return False
+    return str(board.get("kind") or "") in AGENT_BOARD_KINDS
+
+
 def first_question_for_v3(board: dict[str, Any]) -> str:
     normalized = normalize_board_v3(board)
     if not normalized:
